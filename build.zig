@@ -8,7 +8,6 @@ pub fn build(b: *std.Build) void {
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
     // for restricting supported target set are available.
-    _ = b.addModule("lexer", .{ .root_source_file = b.path("src/lexer.zig") });
 
     const target = b.standardTargetOptions(.{});
 
@@ -98,23 +97,22 @@ pub fn build(b: *std.Build) void {
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
 
-    const tests_mod = b.createModule(.{
-        .root_source_file = b.path("src/tests/tests.zig"),
-        .target = target,
-        .optimize = optimize,
+    const lib_unit_tests = b.addTest(.{
+        .root_module = lib_mod,
     });
 
-    const tests = b.addTest(.{
-        .root_module = tests_mod,
+    const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
+
+    const exe_unit_tests = b.addTest(.{
+        .root_module = exe_mod,
     });
 
-    const run_unit_tests = b.addRunArtifact(tests);
+    const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
 
     // Similar to creating the run step earlier, this exposes a `test` step to
     // the `zig build --help` menu, providing a way for the user to request
     // running the unit tests.
     const test_step = b.step("test", "Run unit tests");
-    // test_step.dependOn(&run_lib_unit_tests.step);
-    // test_step.dependOn(&run_exe_unit_tests.step);
-    test_step.dependOn(&run_unit_tests);
+    test_step.dependOn(&run_lib_unit_tests.step);
+    test_step.dependOn(&run_exe_unit_tests.step);
 }
