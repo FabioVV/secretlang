@@ -37,6 +37,10 @@ pub const Lexer = struct {
         return self.iterator.peek(bytes);
     }
 
+    pub fn lexNumber() void {}
+
+    pub fn lexAlphanumeric() void {}
+
     pub fn generateToken(self: *Lexer) !void {
         var token: Token = undefined;
         try self.removeWhitespace();
