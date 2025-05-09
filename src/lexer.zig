@@ -8,13 +8,31 @@ const unicode = std.unicode;
 const _token = @import("token.zig");
 const Token = _token.Token;
 const Tokens = _token.Tokens;
+const debug = @import("debug.zig");
 
 inline fn isSpace(char: u8) bool {
     return mem.indexOfScalar(u8, &ascii.whitespace, char) != null;
 }
 
+// trie
+pub fn identifyTypeOfAlphanumeric(identifier: []u8) Token {
+    switch (identifier[0]) {
+        'p' => {
+            if (mem.eql(u8, identifier, "print")) {
+                return Token.makeToken(Tokens.PRINT, "PRINT");
+            } else {
+                return Token.makeToken(Tokens.IDENT, identifier);
+            }
+        },
+        else => {
+            return Token.makeToken(Tokens.IDENT, identifier);
+        },
+    }
+}
+
 pub const Lexer = struct {
     content: []const u8,
+    errors: ?[]Token = null,
     iterator: unicode.Utf8Iterator,
     currentChar: ?u8 = null,
     currentSlice: ?[]const u8 = null,
@@ -29,10 +47,11 @@ pub const Lexer = struct {
 
     pub fn deinit() void {}
 
-    pub inline fn advance(self: *Lexer) ?u8 {
+    pub fn advance(self: *Lexer) ?u8 {
         if (self.iterator.nextCodepointSlice()) |char| {
             self.currentChar = char[0];
             self.currentSlice = char;
+            self.column = self.column + 1;
             return char[0];
         } else {
             self.currentChar = null;
@@ -41,15 +60,23 @@ pub const Lexer = struct {
         }
     }
 
-    pub inline fn peekNBytes(self: *Lexer, bytes: usize) []const u8 {
-        return self.iterator.peek(bytes);
+    pub fn peekNBytes(self: *Lexer, bytes: usize) u8 {
+        const peeked = self.iterator.peek(bytes);
+        if (peeked.len == 0) {
+            return 0;
+        }
+        return peeked[0];
     }
 
-    pub inline fn peek(self: *Lexer) u8 {
-        return self.iterator.peek(1)[0];
+    pub fn peek(self: *Lexer) u8 {
+        const peeked = self.iterator.peek(1);
+        if (peeked.len == 0) {
+            return 0;
+        }
+        return peeked[0];
     }
 
-    pub fn ignoreWhitespace(self: *Lexer) void {
+    pub fn eatWhitespace(self: *Lexer) void {
         while (isSpace(self.peek())) {
             _ = self.advance();
 
@@ -64,58 +91,65 @@ pub const Lexer = struct {
         }
     }
 
-    pub fn lexNumber(self: *Lexer, char: u8) !Token {
-        var fullNumber = std.ArrayList(u8).init(std.heap.page_allocator);
-        defer fullNumber.deinit();
+    pub fn lexNumber(self: *Lexer) !Token {
+        var numbers = std.ArrayList(u8).init(std.heap.page_allocator);
+        defer numbers.deinit();
 
-        try fullNumber.append(char);
+        try numbers.append(self.currentChar.?);
 
         while (ascii.isDigit(self.peek())) {
-            try fullNumber.append(self.advance().?);
+            try numbers.append(self.advance().?);
         }
 
-        if (self.peek() == '.' and ascii.isDigit(self.peek())) {
-            try fullNumber.append(self.advance().?); // Consume the .
+        if (self.peek() == '.') {
+            try numbers.append(self.advance().?); // Consume the .
+
+            if (!ascii.isDigit(self.peek())) {}
 
             while (ascii.isDigit(self.peek())) {
-                try fullNumber.append(self.advance().?);
+                try numbers.append(self.advance().?);
             }
         }
 
-        return Token.makeToken(Tokens.NUMBER, fullNumber.items);
+        const fullNumber = try numbers.toOwnedSlice();
+        return Token.makeToken(Tokens.NUMBER, fullNumber);
     }
 
     pub fn lexString(self: *Lexer) !Token {
-        var str = std.ArrayList(u8).init(std.heap.page_allocator);
-        defer str.deinit();
+        var chars = std.ArrayList(u8).init(std.heap.page_allocator);
+        defer chars.deinit();
 
         while (self.peek() != '"') {
-            if (self.peek() == '\n') {
-                // increment line here
+            if (self.peek() == '\n' or self.currentChar.? == '\n') {
+                self.line = self.line + 1;
             }
-            try str.append(self.advance().?);
+            try chars.append(self.advance().?);
         }
 
         if (self.currentChar == null) {
-            return Token.makeErrorToken("Unterminated string");
+            return Token.makeIllegalToken("Unterminated string");
         }
 
         _ = self.advance(); // ending "
-        return Token.makeToken(Tokens.STRING, str.items);
+        const str = try chars.toOwnedSlice();
+        return Token.makeToken(Tokens.STRING, str);
     }
 
-    pub fn lexAlphanumeric(self: *Lexer, char: u8) !Token {
-        var identifier = std.ArrayList(u8).init(std.heap.page_allocator);
-        defer identifier.deinit();
-        try identifier.append(char);
+    pub fn lexAlphanumeric(self: *Lexer) !Token {
+        var alphaNum = std.ArrayList(u8).init(std.heap.page_allocator);
+        defer alphaNum.deinit();
+        try alphaNum.append(self.currentChar.?);
 
         while (ascii.isAlphanumeric(self.peek())) {
-            try identifier.append(self.advance().?);
+            try alphaNum.append(self.advance().?);
         }
+
+        const identifier = try alphaNum.toOwnedSlice();
+        return identifyTypeOfAlphanumeric(identifier);
     }
 
     pub fn nextToken(self: *Lexer) !Token {
-        //self.ignoreWhitespace();
+        self.eatWhitespace();
 
         const ch: ?u8 = self.advance();
 
@@ -124,6 +158,9 @@ pub const Lexer = struct {
         }
 
         switch (ch.?) {
+            '.' => {
+                return Token.makeToken(Tokens.DOT, ".");
+            },
             '/' => {
                 return Token.makeToken(Tokens.FSLASH, "/");
             },
@@ -164,15 +201,12 @@ pub const Lexer = struct {
                 return try self.lexString();
             },
             else => {
-                // TODO: FINISH THIS (USE ELSE IF)
-                //if (ascii.isAlphanumeric(ch.?)) {
-                //    return self.lexAlphanumeric(ch.?);
-                //}
-
                 if (ascii.isDigit(ch.?)) {
-                    return try self.lexNumber(ch.?);
-                } else if (isSpace(ch.?)) {} else {
-                    return Token.makeErrorToken("ILLEGAL"); // Maybe add a better illegal msg
+                    return try self.lexNumber();
+                } else if (ascii.isAlphanumeric(ch.?)) {
+                    return try self.lexAlphanumeric();
+                } else {
+                    return Token.makeIllegalToken("ILLEGAL");
                 }
             },
         }
@@ -188,32 +222,46 @@ test "Lexer initialization" {
 
 test "Simple input tokenization" {
     const source =
-        \\/
-        \\+
-        \\-
-        \\*
+        \\ / + - *
+        \\10.10
+        \\11.50
+        \\1
+        \\2
+        \\print 10
+        \\ "a string"
+        \\
     ;
     var l: Lexer = try Lexer.init(source);
-    // const testArr: [6]Token = .{
-    //     Token{ .token_type = Tokens.NUMBER, .literal = "1" },
-    //     Token{ .token_type = Tokens.NUMBER, .literal = "2" },
-    //     Token{ .token_type = Tokens.NUMBER, .literal = "3" },
-    //     Token{ .token_type = Tokens.NUMBER, .literal = "4" },
-    //     Token{ .token_type = Tokens.QUOTE, .literal = "a string" },
-    //     Token{ .token_type = Tokens.FSLASH, .literal = "/" },
-    //     Token{ .token_type = Tokens.PLUS, .literal = "+" },
-    //     Token{ .token_type = Tokens.MINUS, .literal = "-" },
-    //    Token{ .token_type = Tokens.ASTERISK, .literal = "*" },
-    // };
+    const testArr: [11]Token = .{
+        Token{ .token_type = Tokens.FSLASH, .literal = "/" },
+        Token{ .token_type = Tokens.PLUS, .literal = "+" },
+        Token{ .token_type = Tokens.MINUS, .literal = "-" },
+        Token{ .token_type = Tokens.ASTERISK, .literal = "*" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "10.10" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "11.50" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "1" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "2" },
+        Token{ .token_type = Tokens.PRINT, .literal = "PRINT" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "10" },
+        Token{ .token_type = Tokens.STRING, .literal = "a string" },
+    };
+    _ = testArr[0];
+    var idx: usize = 0;
+    while (true) : (idx += 1) {
+        const actual = try l.nextToken();
 
-    while (l.nextToken()) |token| {
-        if (token.token_type == Tokens.EOF) {
+        if (actual.token_type == Tokens.EOF) {
             break; // Exit the loop on EOF
         }
-        print("{s}\n", .{token.literal});
-    } else |err| {
-        print("{any}\n", .{err});
+        debug.printToken(actual);
+        const expected = testArr[idx];
+        if (expected.token_type != actual.token_type) {
+            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+        if (!std.mem.eql(u8, expected.literal, actual.literal)) {
+            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
     }
-
-    try expect(1 == 1); // placeholder
 }
