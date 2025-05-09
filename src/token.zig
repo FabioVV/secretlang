@@ -24,6 +24,10 @@ pub const Tokens = enum {
 
     PRINT, // Print token, it will work as a function, accepts a single expression like: print 1 + 1 or print 1 or print "str" etc..
 
+    VAR, // variable declartion token
+
+    NIL, // Null value
+
     ILLEGAL, // Illegal token
     EOF, // end of file
 };

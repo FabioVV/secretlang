@@ -1,9 +1,25 @@
+const std = @import("std");
 const _token = @import("token.zig");
 const Token = _token.Token;
 const Tokens = _token.Tokens;
 
 const Program = struct {
-    nodes: []Node,
+    nodes: std.ArrayList(Node),
+
+    pub fn init() !Program {
+        const program = Program{
+            .nodes = std.ArrayList(Node).init(std.heap.page_allocator),
+        };
+        return program;
+    }
+
+    pub fn addNode(self: *Program, node: Node) !void {
+        try self.nodes.append(node);
+    }
+
+    pub fn deinit(self: *Program) void {
+        self.nodes.deinit();
+    }
 };
 
 const Node = union(enum) {

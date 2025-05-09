@@ -24,6 +24,20 @@ pub fn identifyTypeOfAlphanumeric(identifier: []u8) Token {
                 return Token.makeToken(Tokens.IDENT, identifier);
             }
         },
+        'v' => {
+            if (mem.eql(u8, identifier, "var")) {
+                return Token.makeToken(Tokens.VAR, "VAR");
+            } else {
+                return Token.makeToken(Tokens.IDENT, identifier);
+            }
+        },
+        'n' => {
+            if (mem.eql(u8, identifier, "nil")) {
+                return Token.makeToken(Tokens.NIL, "NIL");
+            } else {
+                return Token.makeToken(Tokens.IDENT, identifier);
+            }
+        },
         else => {
             return Token.makeToken(Tokens.IDENT, identifier);
         },
@@ -32,12 +46,12 @@ pub fn identifyTypeOfAlphanumeric(identifier: []u8) Token {
 
 pub const Lexer = struct {
     content: []const u8,
-    errors: ?[]Token = null,
+    errors: ?[]Token = null, // TODO: make use of this
     iterator: unicode.Utf8Iterator,
     currentChar: ?u8 = null,
     currentSlice: ?[]const u8 = null,
-    column: usize = 0,
-    line: usize = 0,
+    column: usize = 0, // TODO: sync with tokens for better error handling
+    line: usize = 0, // TODO: sync with tokens for better error handling
 
     pub fn init(content: []const u8) !Lexer {
         var iterator = (try unicode.Utf8View.init(content));
@@ -220,7 +234,7 @@ test "Lexer initialization" {
     try expect(mem.eql(u8, input, l.content));
 }
 
-test "Simple input tokenization" {
+test "Input tokenization" {
     const source =
         \\ / + - *
         \\10.10
@@ -231,6 +245,7 @@ test "Simple input tokenization" {
         \\ "a string"
         \\
     ;
+
     var l: Lexer = try Lexer.init(source);
     const testArr: [11]Token = .{
         Token{ .token_type = Tokens.FSLASH, .literal = "/" },
@@ -245,7 +260,78 @@ test "Simple input tokenization" {
         Token{ .token_type = Tokens.NUMBER, .literal = "10" },
         Token{ .token_type = Tokens.STRING, .literal = "a string" },
     };
-    _ = testArr[0];
+
+    var idx: usize = 0;
+    while (true) : (idx += 1) {
+        const actual = try l.nextToken();
+
+        if (actual.token_type == Tokens.EOF) {
+            break; // Exit the loop on EOF
+        }
+        debug.printToken(actual);
+        const expected = testArr[idx];
+        if (expected.token_type != actual.token_type) {
+            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+        if (!std.mem.eql(u8, expected.literal, actual.literal)) {
+            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+    }
+}
+
+test "Variable declaration tokenization" {
+    const source =
+        \\var a = 5
+        \\var b = 10
+        \\var c = 15
+        \\var d = 20.20
+        \\var e = "25"
+        \\var f = "3" + "0"
+        \\var g = nil
+    ;
+
+    var l: Lexer = try Lexer.init(source);
+    const testArr: [30]Token = .{
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "a" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "5" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "b" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "10" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "c" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "15" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "d" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "20.20" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "e" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.STRING, .literal = "25" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "f" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.STRING, .literal = "3" },
+        Token{ .token_type = Tokens.PLUS, .literal = "+" },
+        Token{ .token_type = Tokens.STRING, .literal = "0" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "g" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.NIL, .literal = "NIL" },
+    };
+
     var idx: usize = 0;
     while (true) : (idx += 1) {
         const actual = try l.nextToken();
