@@ -20,28 +20,24 @@ pub fn identifyTypeOfAlphanumeric(identifier: []u8) Token {
         'p' => {
             if (mem.eql(u8, identifier, "print")) {
                 return Token.makeToken(Tokens.PRINT, "PRINT");
-            } else {
-                return Token.makeToken(Tokens.IDENT, identifier);
             }
         },
         'v' => {
             if (mem.eql(u8, identifier, "var")) {
                 return Token.makeToken(Tokens.VAR, "VAR");
-            } else {
-                return Token.makeToken(Tokens.IDENT, identifier);
             }
         },
         'n' => {
             if (mem.eql(u8, identifier, "nil")) {
                 return Token.makeToken(Tokens.NIL, "NIL");
-            } else {
-                return Token.makeToken(Tokens.IDENT, identifier);
             }
         },
         else => {
             return Token.makeToken(Tokens.IDENT, identifier);
         },
     }
+
+    return Token.makeToken(Tokens.IDENT, identifier);
 }
 
 pub const Lexer = struct {
