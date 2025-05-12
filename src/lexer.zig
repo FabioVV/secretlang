@@ -201,6 +201,9 @@ pub const Lexer = struct {
                 return Token.makeToken(Tokens.RBRACE, "}");
             },
             '!' => {
+                if (self.peek() == '=') {
+                    return Token.makeToken(Tokens.NOT_EQUAL, "!=");
+                }
                 return Token.makeToken(Tokens.NOT, "!");
             },
             '=' => {

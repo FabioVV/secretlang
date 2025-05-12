@@ -4,17 +4,17 @@ const Token = _token.Token;
 const Tokens = _token.Tokens;
 
 pub const Program = struct {
-    nodes: std.ArrayList(Node),
+    nodes: std.ArrayList(Statement),
 
     pub fn init() !Program {
         const program = Program{
-            .nodes = std.ArrayList(Node).init(std.heap.page_allocator),
+            .nodes = std.ArrayList(Statement).init(std.heap.page_allocator),
         };
         return program;
     }
 
-    pub fn addNode(self: *Program, node: Node) !void {
-        try self.nodes.append(node);
+    pub fn addNode(self: *Program, stmt: Statement) !void {
+        try self.nodes.append(stmt);
     }
 
     pub fn deinit(self: *Program) void {
@@ -22,32 +22,59 @@ pub const Program = struct {
     }
 };
 
-pub const Node = union(enum) {
+pub const NumberExpression = struct {
+    token: Token,
+    value: f64,
+};
+
+pub const StringExpression = struct {
+    token: Token,
+    value: []const u8,
+};
+
+pub const Statement = union(enum) {
     var_stmt: VarStatement,
     r_stmt: ReturnStatement,
     e_stmt: ExpressionStatement,
+};
+
+pub const VarStatement = struct {
+    token: Token, // VAR token.
+    identifier: Identifier = undefined,
+    expression: *Expression = undefined, // the value being assigned to the var variable
 };
 
 pub const Identifier = struct {
     token: Token, // IDENT token.
     literal: []const u8,
 };
-pub const Expression = struct {
-    node: Node,
-};
-
-pub const VarStatement = struct {
-    token: Token, // VAR token.
-    identifier: Identifier = undefined,
-    expression: Expression = undefined, // the value being assigned to the var variable
-};
 
 pub const ReturnStatement = struct {
     token: Token, // RETURN token
-    expresssion: Expression = undefined, // the return value
+    expression: *Expression = undefined, // the return value
 };
 
 pub const ExpressionStatement = struct {
     token: Token,
-    expression: Expression = undefined,
+    expression: *Expression = undefined,
+};
+
+pub const BinaryExpression = struct {
+    token: Token,
+    left: *Expression = undefined,
+    right: *Expression = undefined,
+};
+
+pub const UnaryExpression = struct {
+    token: Token,
+    left: *Expression = undefined,
+    right: *Expression = undefined,
+};
+
+pub const Expression = union(enum) {
+    number_expr: NumberExpression,
+    string_expr: StringExpression,
+    identifier_expr: Identifier,
+    binary_expr: BinaryExpression,
+    unary_expr: UnaryExpression,
 };

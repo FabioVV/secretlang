@@ -15,6 +15,7 @@ pub const Tokens = enum {
     RBRACE, // }
     DOT, // .
 
+    NOT_EQUAL, // !=
     NOT, // !
     EQUAL, // =
     EQUAL_EQUAL, // ==
