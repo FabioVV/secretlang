@@ -32,6 +32,11 @@ pub fn identifyTypeOfAlphanumeric(identifier: []u8) Token {
                 return Token.makeToken(Tokens.NIL, "NIL");
             }
         },
+        'r' => {
+            if (mem.eql(u8, identifier, "return")) {
+                return Token.makeToken(Tokens.RETURN, "RETURN");
+            }
+        },
         else => {
             return Token.makeToken(Tokens.IDENT, identifier);
         },
@@ -150,7 +155,7 @@ pub const Lexer = struct {
         defer alphaNum.deinit();
         try alphaNum.append(self.currentChar.?);
 
-        while (ascii.isAlphanumeric(self.peek())) {
+        while (ascii.isAlphanumeric(self.peek()) or self.peek() == '_') {
             try alphaNum.append(self.advance().?);
         }
 

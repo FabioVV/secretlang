@@ -1,0 +1,5 @@
+
+1 - Maybe change lines like this to a single fn call like: parser.expect(...);
+if (!parser.expect(Tokens.EQUAL)) {
+            return null;
+        }

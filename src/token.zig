@@ -26,6 +26,8 @@ pub const Tokens = enum {
 
     VAR, // variable declartion token
 
+    RETURN, // return token
+
     NIL, // Null value
 
     ILLEGAL, // Illegal token

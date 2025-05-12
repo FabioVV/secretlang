@@ -3,71 +3,178 @@ const mem = std.mem;
 const proc = std.process;
 const expect = std.testing.expect;
 
+const debug = @import("debug.zig");
 const _token = @import("token.zig");
 const Token = _token.Token;
 const Tokens = _token.Tokens;
 const Lexer = @import("lexer.zig").Lexer;
 const AST = @import("ast.zig");
 
-const Parser = struct {
+const Precedence = enum(u32) {
+    NOPREC = 0,
+    EQUALS = 1,
+    LESS_GREATER = 2,
+    CONDITIONAL = 3,
+    SUM = 4,
+    PRODUCT = 5,
+    EXPONENT = 6,
+    PREFIX = 7,
+    POSTFIX = 8,
+    CALL = 9,
+};
+
+//const PrefixParseFn = *const fn (parser: *Parser) AST.Expression;
+//const InfixParseFn = *const fn (parser: *Parser, AST.Expression) AST.Expression;
+
+const PrefixParseFn = *const fn (*Parser) *AST.Expression;
+const InfixParseFn = *const fn (*Parser, *const anyopaque) *AST.Expression;
+
+pub fn parseIdentifierz(p: *Parser) *AST.Expression {
+    return &AST.Expression{ .node = AST.Identifier{ .token = p.cur_token, .literal = p.cur_token.literal } };
+}
+
+pub const Parser = struct {
     lexer: *Lexer,
     cur_token: Token = undefined,
     peek_token: Token = undefined,
+    prefix_fns: std.AutoHashMap(Tokens, PrefixParseFn) = undefined,
+    infix_fns: std.AutoHashMap(Tokens, InfixParseFn) = undefined,
 
     pub fn init(lexer: *Lexer) !Parser {
         var parser: Parser = Parser{ .lexer = lexer };
 
-        // Set both peek token and cur token
-        parser.cur_token = parser.peek_token;
-        parser.peek_token = try parser.lexer.nextToken();
+        parser.prefix_fns = std.AutoHashMap(Tokens, PrefixParseFn).init(std.heap.page_allocator);
+        parser.infix_fns = std.AutoHashMap(Tokens, InfixParseFn).init(std.heap.page_allocator);
+
+        try parser.registerPrefix(Tokens.IDENT, parseIdentifierz);
+
         return parser;
     }
 
-    pub fn nextToken(parser: *Parser) void {
+    pub fn registerPrefix(p: *Parser, token: Tokens, fn_: PrefixParseFn) !void {
+        try p.prefix_fns.put(token, fn_);
+    }
+
+    pub fn registerInfix(p: *Parser, token: Tokens, fn_: InfixParseFn) !void {
+        try p.infix_fns.put(token, fn_);
+    }
+
+    pub fn nextToken(parser: *Parser) !void {
         parser.cur_token = parser.peek_token;
         parser.peek_token = try parser.lexer.nextToken();
     }
 
-    pub fn parseProgram(parser: *Parser) *AST.Program {
-        const program: AST.program = try AST.Program.init();
+    pub inline fn currentIs(parser: *Parser, token: Token) bool {
+        return parser.cur_token.token_type == token.token_type;
+    }
+
+    pub inline fn peekIs(parser: *Parser, token_type: Tokens) bool {
+        return parser.peek_token.token_type == token_type;
+    }
+
+    pub fn expect(parser: *Parser, token_type: Tokens) bool {
+        if (parser.peekIs(token_type)) {
+            parser.nextToken() catch |err| {
+                std.debug.print("Error getting next token on parser: {any}", .{err});
+            };
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    pub fn parseProgram(parser: *Parser) !*AST.Program {
+        var program: AST.Program = try AST.Program.init();
+
+        try parser.nextToken();
+        try parser.nextToken();
 
         while (parser.peek_token.token_type != Tokens.EOF) {
             const node = parser.parseNode();
             if (node != null) {
-                program.addNode(node);
+                try program.addNode(node.?);
             }
-            parser.nextToken();
+            try parser.nextToken();
         }
 
         return &program;
     }
 
-    pub fn parserVarToken(parser: *Parser) ?AST.VarStatement {
-        const vstmt = AST.VarStatement{ .token = parser.cur_token };
+    pub fn parseVarToken(parser: *Parser) ?AST.VarStatement {
+        var vstmt = AST.VarStatement{ .token = parser.cur_token };
 
-        if (!parser.expectNext(Tokens.IDENT)) {
+        if (!parser.expect(Tokens.IDENT)) {
             return null;
         }
 
         vstmt.identifier = AST.Identifier{ .token = parser.cur_token, .literal = parser.cur_token.literal };
 
-        if (!parser.expectNext(Tokens.EQUAL)) {
+        if (!parser.expect(Tokens.EQUAL)) {
             return null;
         }
 
         return vstmt;
     }
 
+    pub fn parseReturnToken(parser: *Parser) ?AST.ReturnStatement {
+        const rstmt = AST.ReturnStatement{ .token = parser.cur_token };
+
+        parser.nextToken() catch |err| {
+            std.debug.print("Error getting next token on parser: {any}", .{err});
+        };
+
+        return rstmt;
+    }
+
+    pub fn parseExpressionStatement(parser: *Parser) ?AST.ExpressionStatement {
+        var estmt = AST.ExpressionStatement{ .token = parser.cur_token };
+
+        const expression = parser.parseExpression(Precedence.NOPREC);
+        if (expression == null) {
+            return null;
+        }
+        estmt.expression = expression.?;
+
+        return estmt;
+    }
+
+    pub fn parseIdentifier(parser: *Parser) ?AST.Identifier {
+        return AST.Identifier{ .token = parser.cur_token, .literal = parser.cur_token.literal };
+    }
+
+    pub fn parseExpression(parser: *Parser, prec: Precedence) ?AST.Expression {
+        const prefix = parser.prefix_fns.get(parser.cur_token.token_type) orelse return null;
+        _ = prec;
+
+        const left = prefix(@constCast(parser));
+
+        return left;
+    }
+
     pub fn parseNode(parser: *Parser) ?AST.Node {
-        switch (parser.cur_token.token_type) {
+        return switch (parser.cur_token.token_type) {
             Tokens.VAR => {
-                const var_stmt = parser.parserVarToken();
-                return AST.Node{ .var_stmt = var_stmt };
+                const var_stmt = parser.parseVarToken();
+                if (var_stmt == null) {
+                    return null;
+                }
+                return AST.Node{ .var_stmt = var_stmt.? };
+            },
+            Tokens.RETURN => {
+                const r_stmt = parser.parseReturnToken();
+                if (r_stmt == null) {
+                    return null;
+                }
+                return AST.Node{ .r_stmt = r_stmt.? };
             },
             else => {
-                return null;
+                const e_stmt = parser.parseExpressionStatement();
+                if (e_stmt == null) {
+                    return null;
+                }
+                return AST.Node{ .e_stmt = e_stmt.? };
             },
-        }
+        };
     }
 };
 
@@ -79,4 +186,18 @@ test "Parser initializtion" {
     var l: Lexer = try Lexer.init(input);
     const p: Parser = try Parser.init(&l);
     try expect(mem.eql(u8, l.content, p.lexer.content));
+}
+
+test "Var statement parsing" {
+    const input: []const u8 =
+        \\var my_name = "Fábio Gabriel Rodrigues Varela"
+    ;
+
+    var l: Lexer = try Lexer.init(input);
+    var p: Parser = try Parser.init(&l);
+    const program: *AST.Program = try p.parseProgram();
+
+    for (program.nodes.items) |node| {
+        debug.printVarStatement(node.var_stmt);
+    }
 }

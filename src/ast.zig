@@ -3,7 +3,7 @@ const _token = @import("token.zig");
 const Token = _token.Token;
 const Tokens = _token.Tokens;
 
-const Program = struct {
+pub const Program = struct {
     nodes: std.ArrayList(Node),
 
     pub fn init() !Program {
@@ -22,18 +22,32 @@ const Program = struct {
     }
 };
 
-const Node = union(enum) {
+pub const Node = union(enum) {
     var_stmt: VarStatement,
+    r_stmt: ReturnStatement,
+    e_stmt: ExpressionStatement,
 };
 
-const Identifier = struct {
+pub const Identifier = struct {
     token: Token, // IDENT token.
     literal: []const u8,
 };
-const Expression = struct {};
+pub const Expression = struct {
+    node: Node,
+};
 
-const VarStatement = struct {
+pub const VarStatement = struct {
     token: Token, // VAR token.
-    identifier: Identifier,
-    value: Expression, // the value being assigned to the var variable
+    identifier: Identifier = undefined,
+    expression: Expression = undefined, // the value being assigned to the var variable
+};
+
+pub const ReturnStatement = struct {
+    token: Token, // RETURN token
+    expresssion: Expression = undefined, // the return value
+};
+
+pub const ExpressionStatement = struct {
+    token: Token,
+    expression: Expression = undefined,
 };
