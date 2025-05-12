@@ -24,7 +24,8 @@ pub fn printVarStatement(stmt: AST.VarStatement) void {
 
     if (!DEBUG_PRINT_VAR_STATEMENT) return;
 
-    stdoutwriter.print("Token: {s} - Indentifier: {s} -> ?\n", .{ @tagName(stmt.token.token_type), stmt.identifier.literal }) catch |err| {
+    const val = stmt.expression.*.number_expr.value;
+    stdoutwriter.print("Token: {s} - Indentifier: {s} -> {d}\n", .{ @tagName(stmt.token.token_type), stmt.identifier.literal, val }) catch |err| {
         std.debug.print("Error debug printing var statement: {any}", .{err});
     };
 }

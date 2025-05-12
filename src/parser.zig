@@ -23,11 +23,22 @@ const Precedence = enum(u32) {
     CALL = 9,
 };
 
-const NudParseFn = *const fn (*Parser) *AST.Expression;
-const LedParseFn = *const fn (*Parser, *AST.Expression) *AST.Expression;
+const NudParseFn = *const fn (*Parser) AST.Expression;
+const LedParseFn = *const fn (*Parser, AST.Expression) AST.Expression;
 
-pub fn parseIdentifierz(p: *Parser) *AST.Expression {
-    return &AST.Expression{ .node = AST.Identifier{ .token = p.cur_token, .literal = p.cur_token.literal } };
+pub fn parseIdentifier(p: *Parser) AST.Expression {
+    return (AST.Expression{ .identifier_expr = AST.Identifier{ .token = p.cur_token, .literal = p.cur_token.literal } });
+}
+
+pub fn parseNumber(p: *Parser) AST.Expression {
+    var number = AST.NumberExpression{ .token = p.cur_token };
+
+    const result = std.fmt.parseFloat(f64, p.cur_token.literal) catch unreachable;
+    number.value = result;
+
+    //std.debug.print("{d}\n", .{number.value});
+
+    return (AST.Expression{ .number_expr = number });
 }
 
 pub const Parser = struct {
@@ -45,6 +56,7 @@ pub const Parser = struct {
         parser.led_handlers = std.AutoHashMap(Tokens, LedParseFn).init(std.heap.page_allocator);
         parser.binding_powers = std.AutoHashMap(Tokens, Precedence).init(std.heap.page_allocator);
 
+        // Setting up the binding power hashtable
         try parser.binding_powers.put(Tokens.EQUAL, Precedence.EQUALS);
         try parser.binding_powers.put(Tokens.NOT_EQUAL, Precedence.EQUALS);
         try parser.binding_powers.put(Tokens.LESST, Precedence.LESS_GREATER);
@@ -54,17 +66,10 @@ pub const Parser = struct {
         try parser.binding_powers.put(Tokens.FSLASH, Precedence.PRODUCT);
         try parser.binding_powers.put(Tokens.ASTERISK, Precedence.PRODUCT);
 
-        //try parser.registerPrefix(Tokens.IDENT, parseIdentifierz);
-
+        // Setting up the parsing fns hashtable
+        try parser.nud_handlers.put(Tokens.IDENT, parseIdentifier);
+        try parser.nud_handlers.put(Tokens.NUMBER, parseNumber);
         return parser;
-    }
-
-    pub fn registerPrefix(p: *Parser, token: Tokens, fn_: NudParseFn) !void {
-        try p.nud_handlers.put(token, fn_);
-    }
-
-    pub fn registerInfix(p: *Parser, token: Tokens, fn_: LedParseFn) !void {
-        try p.led_handlers.put(token, fn_);
     }
 
     pub fn advance(parser: *Parser) !void {
@@ -95,18 +100,18 @@ pub const Parser = struct {
         }
     }
 
-    pub fn parseProgram(parser: *Parser) !*AST.Program {
+    pub fn parseProgram(p: *Parser) !*AST.Program {
         var program: AST.Program = try AST.Program.init();
 
-        try parser.advance();
-        try parser.advance();
+        try p.advance();
+        try p.advance();
 
-        while (parser.peek_token.token_type != Tokens.EOF) {
-            const node = parser.parseNode();
+        while (p.peek_token.token_type != Tokens.EOF) {
+            const node = p.parseNode();
             if (node != null) {
                 try program.addNode(node.?);
             }
-            try parser.advance();
+            try p.advance();
         }
 
         return &program;
@@ -124,6 +129,12 @@ pub const Parser = struct {
         if (!parser.expect(Tokens.EQUAL)) {
             return null;
         }
+
+        parser.advance() catch |err| {
+            std.debug.print("Error getting next token on parser: {any}", .{err});
+        };
+
+        vstmt.expression = parser.parseExpression(Precedence.DEFAULT).?;
 
         return vstmt;
     }
@@ -150,26 +161,28 @@ pub const Parser = struct {
         return estmt;
     }
 
-    pub fn parseIdentifier(parser: *Parser) ?AST.Identifier {
-        return AST.Identifier{ .token = parser.cur_token, .literal = parser.cur_token.literal };
-    }
-
     pub fn parseExpression(parser: *Parser, prec: Precedence) ?*AST.Expression {
-        const prefix = parser.nud_handlers.get(parser.cur_token.token_type) orelse return null;
+        // Retrieve the prefix parse function for the current token
+        const prefix_fn = parser.nud_handlers.get(parser.cur_token.token_type) orelse return null;
 
-        var left = prefix(@constCast(parser));
+        // Call the prefix function to parse the left-hand side
+        var left = prefix_fn(@constCast(parser));
 
+        // Loop to handle infix operators
         while (@intFromEnum(prec) < @intFromEnum(parser.peekBindingPower())) {
-            const infix = parser.led_handlers.get(parser.peek_token.token_type) orelse return left;
+            const infix_fn = parser.led_handlers.get(parser.peek_token.token_type) orelse return &left;
 
+            // Advance to the next token
             parser.advance() catch |err| {
-                std.debug.print("Error getting next token on parser: {any}", .{err});
+                std.debug.print("Error getting next token on parser: {any}\n", .{err});
+                return null; // Handle the error appropriately
             };
 
-            left = infix(@constCast(parser), left);
+            // Call the infix function to parse the right-hand side
+            left = infix_fn(@constCast(parser), left);
         }
 
-        return left;
+        return &left;
     }
 
     pub fn parseNode(parser: *Parser) ?AST.Statement {
@@ -211,7 +224,7 @@ test "Parser initializtion" {
 
 test "Var statement parsing" {
     const input: []const u8 =
-        \\var my_name = "Fábio Gabriel Rodrigues Varela"
+        \\var age = 22
     ;
 
     var l: Lexer = try Lexer.init(input);
@@ -219,6 +232,7 @@ test "Var statement parsing" {
     const program: *AST.Program = try p.parseProgram();
 
     for (program.nodes.items) |node| {
-        debug.printVarStatement(node.var_stmt);
+        std.debug.print("{any}\n\n", .{node});
+        // debug.printVarStatement(node.var_stmt);
     }
 }

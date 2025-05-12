@@ -24,7 +24,7 @@ pub const Program = struct {
 
 pub const NumberExpression = struct {
     token: Token,
-    value: f64,
+    value: f64 = undefined,
 };
 
 pub const StringExpression = struct {
@@ -71,7 +71,15 @@ pub const UnaryExpression = struct {
     right: *Expression = undefined,
 };
 
-pub const Expression = union(enum) {
+pub const ExprTypes = enum {
+    number_expr,
+    string_expr,
+    identifier_expr,
+    binary_expr,
+    unary_expr,
+};
+
+pub const Expression = union(ExprTypes) {
     number_expr: NumberExpression,
     string_expr: StringExpression,
     identifier_expr: Identifier,

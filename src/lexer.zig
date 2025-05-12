@@ -127,6 +127,7 @@ pub const Lexer = struct {
         }
 
         const fullNumber = try numbers.toOwnedSlice();
+        //const num = std.fmt.parseFloat(f64, fullNumber);
         return Token.makeToken(Tokens.NUMBER, fullNumber);
     }
 
@@ -202,6 +203,7 @@ pub const Lexer = struct {
             },
             '!' => {
                 if (self.peek() == '=') {
+                    _ = self.advance();
                     return Token.makeToken(Tokens.NOT_EQUAL, "!=");
                 }
                 return Token.makeToken(Tokens.NOT, "!");
