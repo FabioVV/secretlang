@@ -26,21 +26,6 @@ const Precedence = enum(u32) {
 const NudParseFn = *const fn (*Parser) AST.Expression;
 const LedParseFn = *const fn (*Parser, AST.Expression) AST.Expression;
 
-pub fn parseIdentifier(p: *Parser) AST.Expression {
-    return (AST.Expression{ .identifier_expr = AST.Identifier{ .token = p.cur_token, .literal = p.cur_token.literal } });
-}
-
-pub fn parseNumber(p: *Parser) AST.Expression {
-    var number = AST.NumberExpression{ .token = p.cur_token };
-
-    const result = std.fmt.parseFloat(f64, p.cur_token.literal) catch unreachable;
-    number.value = result;
-
-    //std.debug.print("{d}\n", .{number.value});
-
-    return (AST.Expression{ .number_expr = number });
-}
-
 pub const Parser = struct {
     lexer: *Lexer,
     cur_token: Token = undefined,
@@ -52,6 +37,7 @@ pub const Parser = struct {
     pub fn init(lexer: *Lexer) !Parser {
         var parser: Parser = Parser{ .lexer = lexer };
 
+        // Initializing hashmaps
         parser.nud_handlers = std.AutoHashMap(Tokens, NudParseFn).init(std.heap.page_allocator);
         parser.led_handlers = std.AutoHashMap(Tokens, LedParseFn).init(std.heap.page_allocator);
         parser.binding_powers = std.AutoHashMap(Tokens, Precedence).init(std.heap.page_allocator);
@@ -69,7 +55,22 @@ pub const Parser = struct {
         // Setting up the parsing fns hashtable
         try parser.nud_handlers.put(Tokens.IDENT, parseIdentifier);
         try parser.nud_handlers.put(Tokens.NUMBER, parseNumber);
+
         return parser;
+    }
+
+    pub fn parseIdentifier(p: *Parser) AST.Expression {
+        return (AST.Expression{ .identifier_expr = AST.Identifier{ .token = p.cur_token, .literal = p.cur_token.literal } });
+    }
+
+    pub fn parseNumber(p: *Parser) AST.Expression {
+        var number = AST.NumberExpression{ .token = p.cur_token };
+
+        const result = std.fmt.parseFloat(f64, p.cur_token.literal) catch unreachable;
+        number.value = result;
+
+        //std.debug.print("{d}\n", .{number.value});
+        return (AST.Expression{ .number_expr = number });
     }
 
     pub fn advance(parser: *Parser) !void {
@@ -232,7 +233,7 @@ test "Var statement parsing" {
     const program: *AST.Program = try p.parseProgram();
 
     for (program.nodes.items) |node| {
-        std.debug.print("{any}\n\n", .{node});
-        // debug.printVarStatement(node.var_stmt);
+        //std.debug.print("{any}\n\n", .{node});
+        debug.printVarStatement(node.var_stmt);
     }
 }
