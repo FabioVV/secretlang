@@ -41,7 +41,7 @@ pub const Statement = union(enum) {
 pub const VarStatement = struct {
     token: Token, // VAR token.
     identifier: Identifier,
-    expression: ?Expression = null, // the value being assigned to the var variable
+    expression: *Expression, // the value being assigned to the var variable
 };
 
 pub const Identifier = struct {

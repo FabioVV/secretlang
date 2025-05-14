@@ -23,8 +23,14 @@ const Precedence = enum(u32) {
     CALL = 9,
 };
 
-const NudParseFn = *const fn (*Parser) AST.Expression;
-const LedParseFn = *const fn (*Parser, AST.Expression) AST.Expression;
+const ParserError = error{
+    InvalidNumber,
+    AllocationFailed,
+    // Add any other custom error types here
+};
+
+const NudParseFn = *const fn (*Parser) *AST.Expression;
+const LedParseFn = *const fn (*Parser, *AST.Expression) *AST.Expression;
 
 pub const Parser = struct {
     lexer: *Lexer,
@@ -33,9 +39,10 @@ pub const Parser = struct {
     nud_handlers: std.AutoHashMap(Tokens, NudParseFn) = undefined,
     led_handlers: std.AutoHashMap(Tokens, LedParseFn) = undefined,
     binding_powers: std.AutoHashMap(Tokens, Precedence) = undefined,
+    arena: std.heap.ArenaAllocator,
 
-    pub fn init(lexer: *Lexer) !Parser {
-        var parser: Parser = Parser{ .lexer = lexer };
+    pub fn init(lexer: *Lexer, allocator: std.mem.Allocator) !Parser {
+        var parser: Parser = Parser{ .lexer = lexer, .arena = std.heap.ArenaAllocator.init(allocator) };
 
         // Initializing hashmaps
         parser.nud_handlers = std.AutoHashMap(Tokens, NudParseFn).init(std.heap.page_allocator);
@@ -59,25 +66,43 @@ pub const Parser = struct {
         return parser;
     }
 
-    pub fn parseIdentifier(p: *Parser) AST.Expression {
-        return (AST.Expression{ .identifier_expr = AST.Identifier{ .token = p.cur_token, .literal = p.cur_token.literal } });
+    pub fn deinit(self: *const Parser) void {
+        self.arena.deinit();
     }
 
-    pub fn parseNumber(p: *Parser) AST.Expression {
-        const num_token = p.cur_token;
+    pub fn parseIdentifier(self: *Parser) *AST.Expression {
+        const expr = self.createExpressionNode().?;
+        expr.* = AST.Expression{ .identifier_expr = AST.Identifier{ .token = self.cur_token, .literal = self.cur_token.literal } };
+        return expr;
+    }
 
-        const result = std.fmt.parseFloat(f64, p.cur_token.literal) catch unreachable;
+    pub fn parseNumber(self: *Parser) *AST.Expression {
+        const num_token = self.cur_token;
+
+        const result = std.fmt.parseFloat(f64, self.cur_token.literal) catch unreachable;
         const num_exp = AST.NumberExpression{ .token = num_token, .value = result };
 
-        return AST.Expression{ .number_expr = num_exp };
+        const expr = self.createExpressionNode().?; // HANDLE THIS BETTER
+        expr.* = AST.Expression{ .number_expr = num_exp };
+
+        return expr;
     }
 
-    pub fn advance(parser: *Parser) !void {
+    pub fn createExpressionNode(self: *Parser) ?*AST.Expression {
+        const expr = self.arena.allocator().create(AST.Expression) catch |err| {
+            std.debug.print("Error when trying to create AST expression nodes: {any}\n", .{err});
+            return null;
+        };
+
+        return expr;
+    }
+
+    pub inline fn advance(parser: *Parser) !void {
         parser.cur_token = parser.peek_token;
         parser.peek_token = try parser.lexer.nextToken();
     }
 
-    pub fn peekBindingPower(parser: *Parser) Precedence {
+    pub inline fn peekBindingPower(parser: *Parser) Precedence {
         return parser.binding_powers.get(parser.cur_token.token_type) orelse Precedence.DEFAULT;
     }
 
@@ -134,7 +159,7 @@ pub const Parser = struct {
             std.debug.print("Error getting next token on parser: {any}", .{err});
         };
 
-        const expression = parser.parseExpression(Precedence.DEFAULT).?.*;
+        const expression = parser.parseExpression(Precedence.DEFAULT).?;
 
         return AST.VarStatement{ .token = var_token, .identifier = identifier, .expression = expression };
     }
@@ -170,7 +195,7 @@ pub const Parser = struct {
 
         // Loop to handle infix operators
         while (@intFromEnum(prec) < @intFromEnum(parser.peekBindingPower())) {
-            const infix_fn = parser.led_handlers.get(parser.peek_token.token_type) orelse return &left;
+            const infix_fn = parser.led_handlers.get(parser.peek_token.token_type) orelse return left;
 
             // Advance to the next token
             parser.advance() catch |err| {
@@ -182,7 +207,7 @@ pub const Parser = struct {
             left = infix_fn(@constCast(parser), left);
         }
 
-        return &left;
+        return left;
     }
 
     pub fn parseNode(parser: *Parser) ?AST.Statement {
@@ -218,17 +243,23 @@ test "Parser initializtion" {
     ;
 
     var l: Lexer = try Lexer.init(input);
-    const p: Parser = try Parser.init(&l);
+    const p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    defer p.deinit();
+
     try expect(mem.eql(u8, l.content, p.lexer.content));
 }
 
 test "Var statement parsing" {
     const input: []const u8 =
         \\var age = 22
+        \\var num = 50
+        \\var num_frac = 50.50
     ;
 
     var l: Lexer = try Lexer.init(input);
-    var p: Parser = try Parser.init(&l);
+    var p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    defer p.deinit();
+
     const program: *AST.Program = try p.parseProgram();
 
     for (program.nodes.items) |node| {
