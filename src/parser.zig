@@ -125,8 +125,8 @@ pub const Parser = struct {
         }
     }
 
-    pub fn parseProgram(p: *Parser) !*AST.Program {
-        var program: AST.Program = try AST.Program.init();
+    pub fn parseProgram(p: *Parser, allocator: std.mem.Allocator) !?*AST.Program {
+        const program = AST.Program.init(allocator) orelse return null;
 
         try p.advance();
         try p.advance();
@@ -134,12 +134,12 @@ pub const Parser = struct {
         while (p.peek_token.token_type != Tokens.EOF) {
             const node = p.parseNode();
             if (node != null) {
-                try program.addNode(node.?);
+                try program.*.addNode(node.?);
             }
             try p.advance();
         }
 
-        return &program;
+        return program;
     }
 
     pub fn parseVarToken(parser: *Parser) ?AST.VarStatement {
@@ -260,9 +260,17 @@ test "Var statement parsing" {
     var p: Parser = try Parser.init(&l, std.heap.page_allocator);
     defer p.deinit();
 
-    const program: *AST.Program = try p.parseProgram();
+    const program = try p.parseProgram(std.heap.page_allocator);
 
-    for (program.nodes.items) |node| {
+    if (program == null) {
+        std.debug.print("Error parsing program: program is null\n", .{});
+        //return null;
+        try expect(false);
+    }
+
+    defer program.?.deinit();
+
+    for (program.?.nodes.items) |node| {
         debug.printVarStatement(node.var_stmt);
     }
 }

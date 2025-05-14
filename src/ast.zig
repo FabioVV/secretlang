@@ -5,10 +5,18 @@ const Tokens = _token.Tokens;
 
 pub const Program = struct {
     nodes: std.ArrayList(Statement),
+    arena: std.heap.ArenaAllocator,
 
-    pub fn init() !Program {
-        const program = Program{
+    pub fn init(allocator: std.mem.Allocator) ?*Program {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        const program = arena.allocator().create(Program) catch |err| {
+            std.debug.print("Error allocating main AST for program: {any}", .{err});
+            return null;
+        };
+
+        program.* = Program{
             .nodes = std.ArrayList(Statement).init(std.heap.page_allocator),
+            .arena = arena,
         };
         return program;
     }
@@ -19,6 +27,7 @@ pub const Program = struct {
 
     pub fn deinit(self: *Program) void {
         self.nodes.deinit();
+        self.arena.deinit();
     }
 };
 
