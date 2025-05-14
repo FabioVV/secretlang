@@ -24,7 +24,7 @@ pub const Program = struct {
 
 pub const NumberExpression = struct {
     token: Token,
-    value: f64 = undefined,
+    value: f64,
 };
 
 pub const StringExpression = struct {
@@ -40,8 +40,8 @@ pub const Statement = union(enum) {
 
 pub const VarStatement = struct {
     token: Token, // VAR token.
-    identifier: Identifier = undefined,
-    expression: *Expression = undefined, // the value being assigned to the var variable
+    identifier: Identifier,
+    expression: ?Expression = null, // the value being assigned to the var variable
 };
 
 pub const Identifier = struct {

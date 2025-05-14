@@ -64,13 +64,12 @@ pub const Parser = struct {
     }
 
     pub fn parseNumber(p: *Parser) AST.Expression {
-        var number = AST.NumberExpression{ .token = p.cur_token };
+        const num_token = p.cur_token;
 
         const result = std.fmt.parseFloat(f64, p.cur_token.literal) catch unreachable;
-        number.value = result;
+        const num_exp = AST.NumberExpression{ .token = num_token, .value = result };
 
-        //std.debug.print("{d}\n", .{number.value});
-        return (AST.Expression{ .number_expr = number });
+        return AST.Expression{ .number_expr = num_exp };
     }
 
     pub fn advance(parser: *Parser) !void {
@@ -119,13 +118,13 @@ pub const Parser = struct {
     }
 
     pub fn parseVarToken(parser: *Parser) ?AST.VarStatement {
-        var vstmt = AST.VarStatement{ .token = parser.cur_token };
+        const var_token = parser.cur_token;
 
         if (!parser.expect(Tokens.IDENT)) {
             return null;
         }
 
-        vstmt.identifier = AST.Identifier{ .token = parser.cur_token, .literal = parser.cur_token.literal };
+        const identifier = AST.Identifier{ .token = parser.cur_token, .literal = parser.cur_token.literal };
 
         if (!parser.expect(Tokens.EQUAL)) {
             return null;
@@ -135,9 +134,9 @@ pub const Parser = struct {
             std.debug.print("Error getting next token on parser: {any}", .{err});
         };
 
-        vstmt.expression = parser.parseExpression(Precedence.DEFAULT).?;
+        const expression = parser.parseExpression(Precedence.DEFAULT).?.*;
 
-        return vstmt;
+        return AST.VarStatement{ .token = var_token, .identifier = identifier, .expression = expression };
     }
 
     pub fn parseReturnToken(parser: *Parser) ?AST.ReturnStatement {
@@ -233,7 +232,6 @@ test "Var statement parsing" {
     const program: *AST.Program = try p.parseProgram();
 
     for (program.nodes.items) |node| {
-        //std.debug.print("{any}\n\n", .{node});
         debug.printVarStatement(node.var_stmt);
     }
 }

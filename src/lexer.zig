@@ -8,51 +8,19 @@ const unicode = std.unicode;
 const _token = @import("token.zig");
 const Token = _token.Token;
 const Tokens = _token.Tokens;
+const Position = _token.Position;
 const debug = @import("debug.zig");
 
 inline fn isSpace(char: u8) bool {
     return mem.indexOfScalar(u8, &ascii.whitespace, char) != null;
 }
 
-// trie
-pub fn identifyTypeOfAlphanumeric(identifier: []u8) Token {
-    switch (identifier[0]) {
-        'p' => {
-            if (mem.eql(u8, identifier, "print")) {
-                return Token.makeToken(Tokens.PRINT, "PRINT");
-            }
-        },
-        'v' => {
-            if (mem.eql(u8, identifier, "var")) {
-                return Token.makeToken(Tokens.VAR, "VAR");
-            }
-        },
-        'n' => {
-            if (mem.eql(u8, identifier, "nil")) {
-                return Token.makeToken(Tokens.NIL, "NIL");
-            }
-        },
-        'r' => {
-            if (mem.eql(u8, identifier, "return")) {
-                return Token.makeToken(Tokens.RETURN, "RETURN");
-            }
-        },
-        else => {
-            return Token.makeToken(Tokens.IDENT, identifier);
-        },
-    }
-
-    return Token.makeToken(Tokens.IDENT, identifier);
-}
-
 pub const Lexer = struct {
     content: []const u8,
-    errors: ?[]Token = null, // TODO: make use of this
     iterator: unicode.Utf8Iterator,
     currentChar: ?u8 = null,
-    currentSlice: ?[]const u8 = null,
-    column: usize = 0, // TODO: sync with tokens for better error handling
-    line: usize = 0, // TODO: sync with tokens for better error handling
+    column: usize = 0,
+    line: usize = 0,
 
     pub fn init(content: []const u8) !Lexer {
         var iterator = (try unicode.Utf8View.init(content));
@@ -65,12 +33,10 @@ pub const Lexer = struct {
     pub fn advance(self: *Lexer) ?u8 {
         if (self.iterator.nextCodepointSlice()) |char| {
             self.currentChar = char[0];
-            self.currentSlice = char;
             self.column = self.column + 1;
             return char[0];
         } else {
             self.currentChar = null;
-            self.currentSlice = null;
             return null;
         }
     }
@@ -106,6 +72,45 @@ pub const Lexer = struct {
         }
     }
 
+    // trie
+    pub fn identifyTypeOfAlphanumeric(self: *Lexer, identifier: []u8) Token {
+        const pos = Position{ .column = self.column, .line = self.line };
+
+        return switch (identifier[0]) {
+            'p' => {
+                if (mem.eql(u8, identifier, "print")) {
+                    return Token.makeToken(Tokens.PRINT, "PRINT", pos);
+                }
+
+                return Token.makeToken(Tokens.IDENT, identifier, pos);
+            },
+            'v' => {
+                if (mem.eql(u8, identifier, "var")) {
+                    return Token.makeToken(Tokens.VAR, "VAR", pos);
+                }
+
+                return Token.makeToken(Tokens.IDENT, identifier, pos);
+            },
+            'n' => {
+                if (mem.eql(u8, identifier, "nil")) {
+                    return Token.makeToken(Tokens.NIL, "NIL", pos);
+                }
+
+                return Token.makeToken(Tokens.IDENT, identifier, pos);
+            },
+            'r' => {
+                if (mem.eql(u8, identifier, "return")) {
+                    return Token.makeToken(Tokens.RETURN, "RETURN", pos);
+                }
+
+                return Token.makeToken(Tokens.IDENT, identifier, pos);
+            },
+            else => {
+                return Token.makeToken(Tokens.IDENT, identifier, pos);
+            },
+        };
+    }
+
     pub fn lexNumber(self: *Lexer) !Token {
         var numbers = std.ArrayList(u8).init(std.heap.page_allocator);
         defer numbers.deinit();
@@ -126,9 +131,9 @@ pub const Lexer = struct {
             }
         }
 
+        const pos = Position{ .column = self.column, .line = self.line };
         const fullNumber = try numbers.toOwnedSlice();
-        //const num = std.fmt.parseFloat(f64, fullNumber);
-        return Token.makeToken(Tokens.NUMBER, fullNumber);
+        return Token.makeToken(Tokens.NUMBER, fullNumber, pos);
     }
 
     pub fn lexString(self: *Lexer) !Token {
@@ -142,13 +147,14 @@ pub const Lexer = struct {
             try chars.append(self.advance().?);
         }
 
+        const pos = Position{ .column = self.column, .line = self.line };
         if (self.currentChar == null) {
-            return Token.makeIllegalToken("Unterminated string");
+            return Token.makeIllegalToken("Unterminated string", pos);
         }
 
         _ = self.advance(); // ending "
         const str = try chars.toOwnedSlice();
-        return Token.makeToken(Tokens.STRING, str);
+        return Token.makeToken(Tokens.STRING, str, pos);
     }
 
     pub fn lexAlphanumeric(self: *Lexer) !Token {
@@ -161,61 +167,62 @@ pub const Lexer = struct {
         }
 
         const identifier = try alphaNum.toOwnedSlice();
-        return identifyTypeOfAlphanumeric(identifier);
+        return self.identifyTypeOfAlphanumeric(identifier);
     }
 
     pub fn nextToken(self: *Lexer) !Token {
         self.eatWhitespace();
 
         const ch: ?u8 = self.advance();
+        const pos = Position{ .column = self.column, .line = self.line };
 
         if (ch == null) {
-            return Token.makeToken(Tokens.EOF, "EOF");
+            return Token.makeToken(Tokens.EOF, "EOF", pos);
         }
 
         switch (ch.?) {
             '.' => {
-                return Token.makeToken(Tokens.DOT, ".");
+                return Token.makeToken(Tokens.DOT, ".", pos);
             },
             '/' => {
-                return Token.makeToken(Tokens.FSLASH, "/");
+                return Token.makeToken(Tokens.FSLASH, "/", pos);
             },
             '+' => {
-                return Token.makeToken(Tokens.PLUS, "+");
+                return Token.makeToken(Tokens.PLUS, "+", pos);
             },
             '-' => {
-                return Token.makeToken(Tokens.MINUS, "-");
+                return Token.makeToken(Tokens.MINUS, "-", pos);
             },
             '*' => {
-                return Token.makeToken(Tokens.ASTERISK, "*");
+                return Token.makeToken(Tokens.ASTERISK, "*", pos);
             },
             '(' => {
-                return Token.makeToken(Tokens.LPAREN, "(");
+                return Token.makeToken(Tokens.LPAREN, "(", pos);
             },
             ')' => {
-                return Token.makeToken(Tokens.RPAREN, ")");
+                return Token.makeToken(Tokens.RPAREN, ")", pos);
             },
             '{' => {
-                return Token.makeToken(Tokens.LBRACE, "{");
+                return Token.makeToken(Tokens.LBRACE, "{", pos);
             },
             '}' => {
-                return Token.makeToken(Tokens.RBRACE, "}");
+                return Token.makeToken(Tokens.RBRACE, "}", pos);
             },
             '!' => {
                 if (self.peek() == '=') {
                     _ = self.advance();
-                    return Token.makeToken(Tokens.NOT_EQUAL, "!=");
+                    return Token.makeToken(Tokens.NOT_EQUAL, "!=", pos);
                 }
-                return Token.makeToken(Tokens.NOT, "!");
+                return Token.makeToken(Tokens.NOT, "!", pos);
             },
             '=' => {
-                return Token.makeToken(Tokens.EQUAL, "=");
+                return Token.makeToken(Tokens.EQUAL, "=", pos);
             },
             '<' => {
-                return Token.makeToken(Tokens.LESST, "<");
+                return Token.makeToken(Tokens.LESST, "<", pos);
             },
             '>' => {
-                return Token.makeToken(Tokens.GREATERT, ">");
+                return Token.makeToken(Tokens.GREATERT, ">", pos);
             },
             '"' => {
                 return try self.lexString();
@@ -226,7 +233,7 @@ pub const Lexer = struct {
                 } else if (ascii.isAlphanumeric(ch.?)) {
                     return try self.lexAlphanumeric();
                 } else {
-                    return Token.makeIllegalToken("ILLEGAL");
+                    return Token.makeIllegalToken("ILLEGAL", pos);
                 }
             },
         }

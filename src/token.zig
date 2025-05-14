@@ -35,17 +35,21 @@ pub const Tokens = enum {
     EOF, // end of file
 };
 
+pub const Position = struct {
+    column: usize = 0,
+    line: usize = 0,
+};
+
 pub const Token = struct {
     token_type: Tokens,
     literal: []const u8,
-    column: usize = 0,
-    line: usize = 0,
+    position: Position = undefined, // Just to make our life easir during testing, this way we dont need to pass in a position every time we create a token by hand
 
-    pub fn makeToken(token_t: Tokens, literal: []const u8) Token {
-        return Token{ .token_type = token_t, .literal = literal };
+    pub fn makeToken(token_t: Tokens, literal: []const u8, position: Position) Token {
+        return Token{ .token_type = token_t, .literal = literal, .position = position };
     }
 
-    pub fn makeIllegalToken(message: []const u8) Token {
-        return Token{ .token_type = Tokens.ILLEGAL, .literal = message };
+    pub fn makeIllegalToken(message: []const u8, position: Position) Token {
+        return Token{ .token_type = Tokens.ILLEGAL, .literal = message, .position = position };
     }
 };
