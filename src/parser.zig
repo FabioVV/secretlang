@@ -58,8 +58,8 @@ pub const Parser = struct {
         parser.nud(Tokens.IDENT, parseIdentifier);
         parser.nud(Tokens.NUMBER, parseNumber);
 
-        //parser.nud(Tokens.NOT, parseNud);
-        //parser.nud(Tokens.MINUS, parseNud);
+        parser.nud(Tokens.NOT, parseNud);
+        parser.nud(Tokens.MINUS, parseNud);
 
         return parser;
     }
@@ -89,7 +89,22 @@ pub const Parser = struct {
         };
     }
 
-    //pub fn parseNud(self: *Parser) *AST.Expression {}
+    pub fn parseNud(self: *Parser) *AST.Expression {
+        const cur_token = self.cur_token;
+
+        self.advance() catch |err| {
+            std.debug.print("Error getting next token on parser: {any}", .{err});
+        };
+
+        const rightExpression = self.parseExpression(Precedence.PREFIX).?; // HANDLE THIS BETTER
+
+        const prefixExpr = AST.PrefixExpression{ .token = cur_token, .right = rightExpression };
+
+        const expr = self.createExpressionNode().?; // HANDLE THIS BETTER
+        expr.* = AST.Expression{ .prefix_expr = prefixExpr };
+
+        return expr;
+    }
 
     pub fn parseIdentifier(self: *Parser) *AST.Expression {
         const expr = self.createExpressionNode().?;
@@ -293,5 +308,29 @@ test "Var statement parsing" {
 
     for (program.?.nodes.items) |node| {
         debug.printVarStatement(node.var_stmt);
+    }
+}
+
+test "Prefix parsing" {
+    const input: []const u8 =
+        \\!5
+    ;
+
+    var l: Lexer = try Lexer.init(input);
+    var p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    defer p.deinit();
+
+    const program = try p.parseProgram(std.heap.page_allocator);
+
+    if (program == null) {
+        std.debug.print("Error parsing program: program is null\n", .{});
+        //return null;
+        try expect(false);
+    }
+
+    defer program.?.deinit();
+
+    for (program.?.nodes.items) |node| {
+        debug.printPrefixExpression(node.e_stmt.expression.*.prefix_expr);
     }
 }

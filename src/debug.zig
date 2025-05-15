@@ -7,7 +7,8 @@ const Tokens = _token.Tokens;
 const AST = @import("ast.zig");
 
 pub const DEBUG_PRINT_TOKENS: bool = false;
-pub const DEBUG_PRINT_VAR_STATEMENT: bool = true;
+pub const DEBUG_PRINT_VAR_STATEMENT: bool = false;
+pub const DEBUG_PRINT_PREFIX_EXPRESSION: bool = true;
 
 pub fn printToken(token: Token) void {
     const stdoutwriter = io.getStdOut().writer();
@@ -27,5 +28,16 @@ pub fn printVarStatement(stmt: AST.VarStatement) void {
     const val = stmt.expression.*.number_expr.value;
     stdoutwriter.print("Token: {s} - Indentifier: {s} -> {d}\n", .{ @tagName(stmt.token.token_type), stmt.identifier.literal, val }) catch |err| {
         std.debug.print("Error debug printing var statement: {any}", .{err});
+    };
+}
+
+pub fn printPrefixExpression(stmt: AST.PrefixExpression) void {
+    const stdoutwriter = io.getStdOut().writer();
+
+    if (!DEBUG_PRINT_PREFIX_EXPRESSION) return;
+
+    const val = stmt.right.*.number_expr.value;
+    stdoutwriter.print("Token: {s} - PrefixOperator: {s} -> {s}{d}\n", .{ @tagName(stmt.token.token_type), stmt.token.literal, stmt.token.literal, val }) catch |err| {
+        std.debug.print("Error debug prefix expression: {any}", .{err});
     };
 }

@@ -3,3 +3,8 @@
 if (!parser.expect(Tokens.EQUAL)) {
             return null;
         }
+
+
+
+
+2 - Create a single debug function that no mater which type of node it receives, it correctlys print the active stuff in it

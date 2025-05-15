@@ -19,8 +19,8 @@ pub const Lexer = struct {
     content: []const u8,
     iterator: unicode.Utf8Iterator,
     currentChar: ?u8 = null,
-    column: usize = 0,
-    line: usize = 0,
+    column: usize = 1,
+    line: usize = 1,
 
     pub fn init(content: []const u8) !Lexer {
         var iterator = (try unicode.Utf8View.init(content));
