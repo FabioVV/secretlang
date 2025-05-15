@@ -191,59 +191,59 @@ pub const Parser = struct {
         }
     }
 
-    pub fn parseProgram(p: *Parser, allocator: std.mem.Allocator) !?*AST.Program {
+    pub fn parseProgram(self: *Parser, allocator: std.mem.Allocator) !?*AST.Program {
         const program = AST.Program.init(allocator) orelse return null;
 
-        try p.advance();
-        try p.advance();
+        try self.advance();
+        try self.advance();
 
-        while (p.peek_token.token_type != Tokens.EOF) {
-            const node = p.parseNode();
+        while (self.peek_token.token_type != Tokens.EOF) {
+            const node = self.parseNode();
             if (node != null) {
                 try program.*.addNode(node.?);
             }
-            try p.advance();
+            try self.advance();
         }
 
         return program;
     }
 
-    pub fn parseVarToken(parser: *Parser) ?AST.VarStatement {
-        const var_token = parser.cur_token;
+    pub fn parseVarToken(self: *Parser) ?AST.VarStatement {
+        const var_token = self.cur_token;
 
-        if (!parser.expect(Tokens.IDENT, "identifier")) {
+        if (!self.expect(Tokens.IDENT, "identifier")) {
             return null;
         }
 
-        const identifier = AST.Identifier{ .token = parser.cur_token, .literal = parser.cur_token.literal };
+        const identifier = AST.Identifier{ .token = self.cur_token, .literal = self.cur_token.literal };
 
-        if (!parser.expect(Tokens.EQUAL, "=")) {
+        if (!self.expect(Tokens.EQUAL, "=")) {
             return null;
         }
 
-        parser.advance() catch |err| {
+        self.advance() catch |err| {
             std.debug.print("Error getting next token on parser: {any}", .{err});
         };
 
-        const expression = parser.parseExpression(Precedence.DEFAULT).?;
+        const expression = self.parseExpression(Precedence.DEFAULT).?;
 
         return AST.VarStatement{ .token = var_token, .identifier = identifier, .expression = expression };
     }
 
-    pub fn parseReturnToken(parser: *Parser) ?AST.ReturnStatement {
-        const rstmt = AST.ReturnStatement{ .token = parser.cur_token };
+    pub fn parseReturnToken(self: *Parser) ?AST.ReturnStatement {
+        const rstmt = AST.ReturnStatement{ .token = self.cur_token };
 
-        parser.advance() catch |err| {
+        self.advance() catch |err| {
             std.debug.print("Error getting next token on parser: {any}", .{err});
         };
 
         return rstmt;
     }
 
-    pub fn parseExpressionStatement(parser: *Parser) ?AST.ExpressionStatement {
-        var estmt = AST.ExpressionStatement{ .token = parser.cur_token };
+    pub fn parseExpressionStatement(self: *Parser) ?AST.ExpressionStatement {
+        var estmt = AST.ExpressionStatement{ .token = self.cur_token };
 
-        const expression = parser.parseExpression(Precedence.DEFAULT);
+        const expression = self.parseExpression(Precedence.DEFAULT);
         if (expression == null) {
             return null;
         }
@@ -252,48 +252,48 @@ pub const Parser = struct {
         return estmt;
     }
 
-    pub fn parseExpression(parser: *Parser, prec: Precedence) ?*AST.Expression {
+    pub fn parseExpression(self: *Parser, prec: Precedence) ?*AST.Expression {
         // Retrieve the prefix parse function for the current token
-        const prefix_fn = parser.nud_handlers.get(parser.cur_token.token_type) orelse return null;
+        const prefix_fn = self.nud_handlers.get(self.cur_token.token_type) orelse return null;
 
         // Call the prefix function to parse the left-hand side
-        var left = prefix_fn(@constCast(parser));
+        var left = prefix_fn(@constCast(self));
 
         // Loop to handle infix operators
-        while (@intFromEnum(prec) < @intFromEnum(parser.peekBindingPower())) {
-            const infix_fn = parser.led_handlers.get(parser.peek_token.token_type) orelse return left;
+        while (@intFromEnum(prec) < @intFromEnum(self.peekBindingPower())) {
+            const infix_fn = self.led_handlers.get(self.peek_token.token_type) orelse return left;
 
             // Advance to the next token
-            parser.advance() catch |err| {
+            self.advance() catch |err| {
                 std.debug.print("error getting next token on parser: {any}\n", .{err});
                 return null; // Handle the error appropriately
             };
 
             // Call the infix function to parse the right-hand side
-            left = infix_fn(@constCast(parser), left);
+            left = infix_fn(@constCast(self), left);
         }
 
         return left;
     }
 
-    pub fn parseNode(parser: *Parser) ?AST.Statement {
-        return switch (parser.cur_token.token_type) {
+    pub fn parseNode(self: *Parser) ?AST.Statement {
+        return switch (self.cur_token.token_type) {
             Tokens.VAR => {
-                const var_stmt = parser.parseVarToken();
+                const var_stmt = self.parseVarToken();
                 if (var_stmt == null) {
                     return null;
                 }
                 return AST.Statement{ .var_stmt = var_stmt.? };
             },
             Tokens.RETURN => {
-                const r_stmt = parser.parseReturnToken();
+                const r_stmt = self.parseReturnToken();
                 if (r_stmt == null) {
                     return null;
                 }
                 return AST.Statement{ .r_stmt = r_stmt.? };
             },
             else => {
-                const e_stmt = parser.parseExpressionStatement();
+                const e_stmt = self.parseExpressionStatement();
                 if (e_stmt == null) {
                     return null;
                 }
