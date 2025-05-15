@@ -8,7 +8,7 @@ const AST = @import("ast.zig");
 
 pub const DEBUG_PRINT_TOKENS: bool = false;
 pub const DEBUG_PRINT_VAR_STATEMENT: bool = false;
-pub const DEBUG_PRINT_PREFIX_EXPRESSION: bool = true;
+pub const DEBUG_PRINT_PREFIX_EXPRESSION: bool = false;
 
 pub fn printToken(token: Token) void {
     const stdoutwriter = io.getStdOut().writer();

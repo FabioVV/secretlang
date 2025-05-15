@@ -41,7 +41,13 @@ pub const StringExpression = struct {
     value: []const u8,
 };
 
-pub const Statement = union(enum) {
+pub const StmtTypes = enum {
+    var_stmt,
+    r_stmt,
+    e_stmt,
+};
+
+pub const Statement = union(StmtTypes) {
     var_stmt: VarStatement,
     r_stmt: ReturnStatement,
     e_stmt: ExpressionStatement,
@@ -68,7 +74,7 @@ pub const ExpressionStatement = struct {
     expression: *Expression = undefined,
 };
 
-pub const BinaryExpression = struct {
+pub const InfixExpression = struct {
     token: Token,
     left: *Expression = undefined,
     right: *Expression = undefined,
@@ -83,7 +89,7 @@ pub const ExprTypes = enum {
     number_expr,
     string_expr,
     identifier_expr,
-    binary_expr,
+    infix_expr,
     prefix_expr,
 };
 
@@ -91,6 +97,6 @@ pub const Expression = union(ExprTypes) {
     number_expr: NumberExpression,
     string_expr: StringExpression,
     identifier_expr: Identifier,
-    binary_expr: BinaryExpression,
+    infix_expr: InfixExpression,
     prefix_expr: PrefixExpression,
 };

@@ -6,6 +6,7 @@ const expect = std.testing.expect;
 const errorHandling = @import("error.zig");
 const debug = @import("debug.zig");
 const _token = @import("token.zig");
+const Position = _token.Position;
 const Token = _token.Token;
 const Tokens = _token.Tokens;
 const Lexer = @import("lexer.zig").Lexer;
@@ -27,6 +28,10 @@ const Precedence = enum(u32) {
 const NudParseFn = *const fn (*Parser) *AST.Expression;
 const LedParseFn = *const fn (*Parser, *AST.Expression) *AST.Expression;
 
+pub const ParserError = struct {
+    message: []const u8,
+};
+
 pub const Parser = struct {
     lexer: *Lexer,
     cur_token: Token = undefined,
@@ -34,10 +39,11 @@ pub const Parser = struct {
     nud_handlers: std.AutoHashMap(Tokens, NudParseFn) = undefined,
     led_handlers: std.AutoHashMap(Tokens, LedParseFn) = undefined,
     binding_powers: std.AutoHashMap(Tokens, Precedence) = undefined,
+    errors: std.ArrayList(ParserError),
     arena: std.heap.ArenaAllocator,
 
     pub fn init(lexer: *Lexer, allocator: std.mem.Allocator) !Parser {
-        var parser: Parser = Parser{ .lexer = lexer, .arena = std.heap.ArenaAllocator.init(allocator) };
+        var parser: Parser = Parser{ .lexer = lexer, .arena = std.heap.ArenaAllocator.init(allocator), .errors = std.ArrayList(ParserError).init(allocator) };
 
         // Initializing hashmaps
         parser.nud_handlers = std.AutoHashMap(Tokens, NudParseFn).init(std.heap.page_allocator);
@@ -69,7 +75,31 @@ pub const Parser = struct {
         self.nud_handlers.deinit();
         self.led_handlers.deinit();
         self.binding_powers.deinit();
+
+        for (self.errors.items) |err| {
+            std.heap.page_allocator.free(err.message);
+        }
+
+        self.errors.deinit();
     }
+
+    pub fn peekError(self: *Parser, token_literal: []const u8) void {
+        const token = self.peek_token;
+
+        const msg = std.fmt.allocPrint(std.heap.page_allocator, "error: line {d} column {d}: expected {s} but got {s} instead\n", .{ token.position.line, token.position.column, token_literal, token.literal }) catch |err| {
+            errorHandling.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        self.errors.append(ParserError{ .message = std.heap.page_allocator.dupe(u8, msg) catch |_err| {
+            errorHandling.exitWithError("unrecoverable error trying to dupe parse error message", _err);
+        } }) catch |err| {
+            errorHandling.exitWithError("unrecoverable error trying to append parse error message", err);
+        };
+    }
+
+    //pub fn noNudHandlerError(self: *Parser, token_literal: []const u8) void {}
+
+    //pub fn noLedHandlerError(self: *Parser, token_literal: []const u8) void {}
 
     pub inline fn bindingPower(self: *Parser, token_type: Tokens, prec: Precedence) void {
         self.binding_powers.put(token_type, prec) catch |err| {
@@ -126,37 +156,37 @@ pub const Parser = struct {
 
     pub fn createExpressionNode(self: *Parser) ?*AST.Expression {
         const expr = self.arena.allocator().create(AST.Expression) catch |err| {
-            std.debug.print("Error when trying to create AST expression nodes: {any}\n", .{err});
-            return null;
+            errorHandling.exitWithError("Unrecoverable error when trying to create expression node.", err);
         };
 
         return expr;
     }
 
-    pub inline fn advance(parser: *Parser) !void {
-        parser.cur_token = parser.peek_token;
-        parser.peek_token = try parser.lexer.nextToken();
+    pub inline fn advance(self: *Parser) !void {
+        self.cur_token = self.peek_token;
+        self.peek_token = try self.lexer.nextToken();
     }
 
-    pub inline fn peekBindingPower(parser: *Parser) Precedence {
-        return parser.binding_powers.get(parser.cur_token.token_type) orelse Precedence.DEFAULT;
+    pub inline fn peekBindingPower(self: *Parser) Precedence {
+        return self.binding_powers.get(self.cur_token.token_type) orelse Precedence.DEFAULT;
     }
 
-    pub inline fn currentIs(parser: *Parser, token: Token) bool {
-        return parser.cur_token.token_type == token.token_type;
+    pub inline fn currentIs(self: *Parser, token: Token) bool {
+        return self.cur_token.token_type == token.token_type;
     }
 
-    pub inline fn peekIs(parser: *Parser, token_type: Tokens) bool {
-        return parser.peek_token.token_type == token_type;
+    pub inline fn peekIs(self: *Parser, token_type: Tokens) bool {
+        return self.peek_token.token_type == token_type;
     }
 
-    pub fn expect(parser: *Parser, token_type: Tokens) bool {
-        if (parser.peekIs(token_type)) {
-            parser.advance() catch |err| {
+    pub fn expect(self: *Parser, token_type: Tokens, token_literal: []const u8) bool {
+        if (self.peekIs(token_type)) {
+            self.advance() catch |err| {
                 std.debug.print("Error getting next token on parser: {any}", .{err});
             };
             return true;
         } else {
+            self.peekError(token_literal);
             return false;
         }
     }
@@ -181,13 +211,13 @@ pub const Parser = struct {
     pub fn parseVarToken(parser: *Parser) ?AST.VarStatement {
         const var_token = parser.cur_token;
 
-        if (!parser.expect(Tokens.IDENT)) {
+        if (!parser.expect(Tokens.IDENT, "identifier")) {
             return null;
         }
 
         const identifier = AST.Identifier{ .token = parser.cur_token, .literal = parser.cur_token.literal };
 
-        if (!parser.expect(Tokens.EQUAL)) {
+        if (!parser.expect(Tokens.EQUAL, "=")) {
             return null;
         }
 
@@ -235,7 +265,7 @@ pub const Parser = struct {
 
             // Advance to the next token
             parser.advance() catch |err| {
-                std.debug.print("Error getting next token on parser: {any}\n", .{err});
+                std.debug.print("error getting next token on parser: {any}\n", .{err});
                 return null; // Handle the error appropriately
             };
 
@@ -309,6 +339,29 @@ test "Var statement parsing" {
     for (program.?.nodes.items) |node| {
         debug.printVarStatement(node.var_stmt);
     }
+}
+
+test "Var statement parsing errors len" {
+    const input: []const u8 =
+        \\var b 15
+        \\var a 55
+    ;
+
+    var l: Lexer = try Lexer.init(input);
+    var p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    defer p.deinit();
+
+    const program = try p.parseProgram(std.heap.page_allocator);
+
+    if (program == null) {
+        std.debug.print("Error parsing program: program is null\n", .{});
+        //return null;
+        try expect(false);
+    }
+
+    defer program.?.deinit();
+
+    if (p.errors.items.len > 0) try expect(true);
 }
 
 test "Prefix parsing" {

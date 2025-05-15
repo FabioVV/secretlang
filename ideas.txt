@@ -8,3 +8,17 @@ if (!parser.expect(Tokens.EQUAL)) {
 
 
 2 - Create a single debug function that no mater which type of node it receives, it correctlys print the active stuff in it
+
+
+
+2.1 - other ideas
+
+// some stupid ideas.....
+
+module math
+    @imports("math_helpers.ext") // imports as math_helpers.something
+    const mthp = @imports("math_helpers.ext") // imports as mthp.something
+
+end
+
+maybe allow submodules?
