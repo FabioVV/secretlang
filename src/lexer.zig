@@ -76,39 +76,33 @@ pub const Lexer = struct {
     pub fn identifyTypeOfAlphanumeric(self: *Lexer, identifier: []u8) Token {
         const pos = Position{ .column = self.column, .line = self.line };
 
-        return switch (identifier[0]) {
+        switch (identifier[0]) {
             'p' => {
                 if (mem.eql(u8, identifier, "print")) {
                     return Token.makeToken(Tokens.PRINT, "PRINT", pos);
                 }
-
-                return Token.makeToken(Tokens.IDENT, identifier, pos);
             },
             'v' => {
                 if (mem.eql(u8, identifier, "var")) {
                     return Token.makeToken(Tokens.VAR, "VAR", pos);
                 }
-
-                return Token.makeToken(Tokens.IDENT, identifier, pos);
             },
             'n' => {
                 if (mem.eql(u8, identifier, "nil")) {
                     return Token.makeToken(Tokens.NIL, "NIL", pos);
                 }
-
-                return Token.makeToken(Tokens.IDENT, identifier, pos);
             },
             'r' => {
                 if (mem.eql(u8, identifier, "return")) {
                     return Token.makeToken(Tokens.RETURN, "RETURN", pos);
                 }
-
-                return Token.makeToken(Tokens.IDENT, identifier, pos);
             },
             else => {
                 return Token.makeToken(Tokens.IDENT, identifier, pos);
             },
-        };
+        }
+
+        return Token.makeToken(Tokens.IDENT, identifier, pos);
     }
 
     pub fn lexNumber(self: *Lexer) !Token {

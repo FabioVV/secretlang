@@ -74,10 +74,9 @@ pub const BinaryExpression = struct {
     right: *Expression = undefined,
 };
 
-pub const UnaryExpression = struct {
+pub const PrefixExpression = struct {
     token: Token,
-    left: *Expression = undefined,
-    right: *Expression = undefined,
+    right: *Expression,
 };
 
 pub const ExprTypes = enum {
@@ -85,7 +84,7 @@ pub const ExprTypes = enum {
     string_expr,
     identifier_expr,
     binary_expr,
-    unary_expr,
+    prefix_expr,
 };
 
 pub const Expression = union(ExprTypes) {
@@ -93,5 +92,5 @@ pub const Expression = union(ExprTypes) {
     string_expr: StringExpression,
     identifier_expr: Identifier,
     binary_expr: BinaryExpression,
-    unary_expr: UnaryExpression,
+    prefix_expr: PrefixExpression,
 };

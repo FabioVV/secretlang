@@ -3,6 +3,7 @@ const mem = std.mem;
 const proc = std.process;
 const expect = std.testing.expect;
 
+const errorHandling = @import("error.zig");
 const debug = @import("debug.zig");
 const _token = @import("token.zig");
 const Token = _token.Token;
@@ -21,12 +22,6 @@ const Precedence = enum(u32) {
     PREFIX = 7,
     POSTFIX = 8,
     CALL = 9,
-};
-
-const ParserError = error{
-    InvalidNumber,
-    AllocationFailed,
-    // Add any other custom error types here
 };
 
 const NudParseFn = *const fn (*Parser) *AST.Expression;
@@ -50,25 +45,51 @@ pub const Parser = struct {
         parser.binding_powers = std.AutoHashMap(Tokens, Precedence).init(std.heap.page_allocator);
 
         // Setting up the binding power hashtable
-        try parser.binding_powers.put(Tokens.EQUAL, Precedence.EQUALS);
-        try parser.binding_powers.put(Tokens.NOT_EQUAL, Precedence.EQUALS);
-        try parser.binding_powers.put(Tokens.LESST, Precedence.LESS_GREATER);
-        try parser.binding_powers.put(Tokens.GREATERT, Precedence.LESS_GREATER);
-        try parser.binding_powers.put(Tokens.PLUS, Precedence.SUM);
-        try parser.binding_powers.put(Tokens.MINUS, Precedence.SUM);
-        try parser.binding_powers.put(Tokens.FSLASH, Precedence.PRODUCT);
-        try parser.binding_powers.put(Tokens.ASTERISK, Precedence.PRODUCT);
+        parser.bindingPower(Tokens.EQUAL, Precedence.EQUALS);
+        parser.bindingPower(Tokens.NOT_EQUAL, Precedence.EQUALS);
+        parser.bindingPower(Tokens.LESST, Precedence.LESS_GREATER);
+        parser.bindingPower(Tokens.GREATERT, Precedence.LESS_GREATER);
+        parser.bindingPower(Tokens.PLUS, Precedence.SUM);
+        parser.bindingPower(Tokens.MINUS, Precedence.SUM);
+        parser.bindingPower(Tokens.FSLASH, Precedence.PRODUCT);
+        parser.bindingPower(Tokens.ASTERISK, Precedence.PRODUCT);
 
-        // Setting up the parsing fns hashtable
-        try parser.nud_handlers.put(Tokens.IDENT, parseIdentifier);
-        try parser.nud_handlers.put(Tokens.NUMBER, parseNumber);
+        // Setting up the parsing functions
+        parser.nud(Tokens.IDENT, parseIdentifier);
+        parser.nud(Tokens.NUMBER, parseNumber);
+
+        //parser.nud(Tokens.NOT, parseNud);
+        //parser.nud(Tokens.MINUS, parseNud);
 
         return parser;
     }
 
-    pub fn deinit(self: *const Parser) void {
+    pub fn deinit(self: *Parser) void {
         self.arena.deinit();
+        self.nud_handlers.deinit();
+        self.led_handlers.deinit();
+        self.binding_powers.deinit();
     }
+
+    pub inline fn bindingPower(self: *Parser, token_type: Tokens, prec: Precedence) void {
+        self.binding_powers.put(token_type, prec) catch |err| {
+            errorHandling.exitWithError("Error registering binding power", err);
+        };
+    }
+
+    pub inline fn nud(self: *Parser, token_type: Tokens, func: NudParseFn) void {
+        self.nud_handlers.put(token_type, func) catch |err| {
+            errorHandling.exitWithError("Error registering nud(prefix) parse function", err);
+        };
+    }
+
+    pub inline fn led(self: *Parser, token_type: Tokens, func: NudParseFn) void {
+        self.led_handlers.put(token_type, func) catch |err| {
+            errorHandling.exitWithError("Error registering led(infix) parse function", err);
+        };
+    }
+
+    //pub fn parseNud(self: *Parser) *AST.Expression {}
 
     pub fn parseIdentifier(self: *Parser) *AST.Expression {
         const expr = self.createExpressionNode().?;
@@ -243,7 +264,7 @@ test "Parser initializtion" {
     ;
 
     var l: Lexer = try Lexer.init(input);
-    const p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    var p: Parser = try Parser.init(&l, std.heap.page_allocator);
     defer p.deinit();
 
     try expect(mem.eql(u8, l.content, p.lexer.content));
