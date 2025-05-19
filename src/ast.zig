@@ -31,27 +31,11 @@ pub const Program = struct {
     }
 };
 
-pub const NumberExpression = struct {
-    token: Token,
-    value: f64,
-};
+pub const NumberExpression = struct { token: Token, value: f64 };
 
-pub const StringExpression = struct {
-    token: Token,
-    value: []const u8,
-};
+pub const StringExpression = struct { token: Token, value: []const u8 };
 
-pub const StmtTypes = enum {
-    var_stmt,
-    r_stmt,
-    e_stmt,
-};
-
-pub const Statement = union(StmtTypes) {
-    var_stmt: VarStatement,
-    r_stmt: ReturnStatement,
-    e_stmt: ExpressionStatement,
-};
+pub const BooleanExpression = struct { token: Token, value: bool };
 
 pub const VarStatement = struct {
     token: Token, // VAR token.
@@ -85,6 +69,18 @@ pub const PrefixExpression = struct {
     right: *Expression,
 };
 
+pub const StmtTypes = enum {
+    var_stmt,
+    r_stmt,
+    e_stmt,
+};
+
+pub const Statement = union(StmtTypes) {
+    var_stmt: VarStatement,
+    r_stmt: ReturnStatement,
+    e_stmt: ExpressionStatement,
+};
+
 pub const ExprTypes = enum {
     number_expr,
     string_expr,
@@ -94,6 +90,7 @@ pub const ExprTypes = enum {
 };
 
 pub const Expression = union(ExprTypes) {
+    boolean_expr: BooleanExpression,
     number_expr: NumberExpression,
     string_expr: StringExpression,
     identifier_expr: Identifier,

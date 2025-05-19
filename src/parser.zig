@@ -63,9 +63,20 @@ pub const Parser = struct {
         // Setting up the parsing functions
         parser.nud(Tokens.IDENT, parseIdentifier);
         parser.nud(Tokens.NUMBER, parseNumber);
+        parser.nud(Tokens.TRUE, parseBoolean);
+        parser.nud(Tokens.FALSE, parseBoolean);
 
         parser.nud(Tokens.NOT, parseNud);
         parser.nud(Tokens.MINUS, parseNud);
+
+        parser.led(Tokens.PLUS, parseLed);
+        parser.led(Tokens.MINUS, parseLed);
+        parser.led(Tokens.SLASH, parseLed);
+        parser.led(Tokens.ASTERISK, parseLed);
+        parser.led(Tokens.EQUAL, parseLed);
+        parser.led(Tokens.NOT_EQUAL, parseLed);
+        parser.led(Tokens.LESST, parseLed);
+        parser.led(Tokens.GREATERT, parseLed);
 
         return parser;
     }
@@ -136,6 +147,23 @@ pub const Parser = struct {
         return expr;
     }
 
+    pub fn parseLed(self: *Parser, left_expr: *AST.Expression) *AST.Expression {
+        const cur_token = self.cur_token;
+        const prec = self.curBindingPower();
+
+        const infixExpr = AST.InfixExpression{ .token = cur_token, .left = left_expr };
+
+        self.advance() catch |err| {
+            std.debug.print("Error getting next token on parser: {any}", .{err});
+        };
+
+        const rightExpression = self.parseExpression(prec).?; // HANDLE THIS BETTER
+        infixExpr.right = rightExpression;
+
+        const expr = self.createExpressionNode().?; // HANDLE THIS BETTER
+        expr.* = AST.Expression{ .infix_expr = infixExpr };
+    }
+
     pub fn parseIdentifier(self: *Parser) *AST.Expression {
         const expr = self.createExpressionNode().?;
         expr.* = AST.Expression{ .identifier_expr = AST.Identifier{ .token = self.cur_token, .literal = self.cur_token.literal } };
@@ -154,6 +182,12 @@ pub const Parser = struct {
         return expr;
     }
 
+    pub fn parseBoolean(self: *Parser) *AST.Expression {
+        const expr = self.createExpressionNode().?;
+        expr.* = AST.Expression{ .boolean_expr = AST.BooleanExpression{ .token = self.cur_token, .value = self.currentIs(Tokens.TRUE) } };
+        return expr;
+    }
+
     pub fn createExpressionNode(self: *Parser) ?*AST.Expression {
         const expr = self.arena.allocator().create(AST.Expression) catch |err| {
             errorHandling.exitWithError("Unrecoverable error when trying to create expression node.", err);
@@ -168,11 +202,15 @@ pub const Parser = struct {
     }
 
     pub inline fn peekBindingPower(self: *Parser) Precedence {
+        return self.binding_powers.get(self.peek_token.token_type) orelse Precedence.DEFAULT;
+    }
+
+    pub inline fn curBindingPower(self: *Parser) Precedence {
         return self.binding_powers.get(self.cur_token.token_type) orelse Precedence.DEFAULT;
     }
 
-    pub inline fn currentIs(self: *Parser, token: Token) bool {
-        return self.cur_token.token_type == token.token_type;
+    pub inline fn currentIs(self: *Parser, token_type: Tokens) bool {
+        return self.cur_token.token_type == token_type;
     }
 
     pub inline fn peekIs(self: *Parser, token_type: Tokens) bool {

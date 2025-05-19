@@ -97,6 +97,16 @@ pub const Lexer = struct {
                     return Token.makeToken(Tokens.RETURN, "RETURN", pos);
                 }
             },
+            't' => {
+                if (mem.eql(u8, identifier, "true")) {
+                    return Token.makeToken(Tokens.TRUE, "TRUE", pos);
+                }
+            },
+            'f' => {
+                if (mem.eql(u8, identifier, "false")) {
+                    return Token.makeToken(Tokens.FALSE, "FALSE", pos);
+                }
+            },
             else => {
                 return Token.makeToken(Tokens.IDENT, identifier, pos);
             },

@@ -30,6 +30,8 @@ pub const Tokens = enum {
     RETURN, // return token
 
     NIL, // Null value
+    TRUE, // True bool value
+    FALSE, // False bool value
 
     ILLEGAL, // Illegal token
     EOF, // end of file
