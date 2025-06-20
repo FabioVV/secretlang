@@ -82,6 +82,7 @@ pub const Statement = union(StmtTypes) {
 };
 
 pub const ExprTypes = enum {
+    boolean_expr,
     number_expr,
     string_expr,
     identifier_expr,

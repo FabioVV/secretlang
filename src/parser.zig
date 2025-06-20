@@ -71,7 +71,7 @@ pub const Parser = struct {
 
         parser.led(Tokens.PLUS, parseLed);
         parser.led(Tokens.MINUS, parseLed);
-        parser.led(Tokens.SLASH, parseLed);
+        parser.led(Tokens.FSLASH, parseLed);
         parser.led(Tokens.ASTERISK, parseLed);
         parser.led(Tokens.EQUAL, parseLed);
         parser.led(Tokens.NOT_EQUAL, parseLed);
@@ -124,7 +124,7 @@ pub const Parser = struct {
         };
     }
 
-    pub inline fn led(self: *Parser, token_type: Tokens, func: NudParseFn) void {
+    pub inline fn led(self: *Parser, token_type: Tokens, func: LedParseFn) void {
         self.led_handlers.put(token_type, func) catch |err| {
             errorHandling.exitWithError("Error registering led(infix) parse function", err);
         };
@@ -151,7 +151,7 @@ pub const Parser = struct {
         const cur_token = self.cur_token;
         const prec = self.curBindingPower();
 
-        const infixExpr = AST.InfixExpression{ .token = cur_token, .left = left_expr };
+        var infixExpr = AST.InfixExpression{ .token = cur_token, .left = left_expr };
 
         self.advance() catch |err| {
             std.debug.print("Error getting next token on parser: {any}", .{err});
@@ -162,6 +162,8 @@ pub const Parser = struct {
 
         const expr = self.createExpressionNode().?; // HANDLE THIS BETTER
         expr.* = AST.Expression{ .infix_expr = infixExpr };
+
+        return expr;
     }
 
     pub fn parseIdentifier(self: *Parser) *AST.Expression {
