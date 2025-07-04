@@ -69,6 +69,8 @@ pub const Parser = struct {
         parser.nud(Tokens.NOT, parseNud);
         parser.nud(Tokens.MINUS, parseNud);
 
+        parser.nud(Tokens.LPAREN, parseGroupExpression);
+
         parser.led(Tokens.PLUS, parseLed);
         parser.led(Tokens.MINUS, parseLed);
         parser.led(Tokens.FSLASH, parseLed);
@@ -98,6 +100,20 @@ pub const Parser = struct {
         const token = self.peek_token;
 
         const msg = std.fmt.allocPrint(std.heap.page_allocator, "error: line {d} column {d}: expected {s} but got {s} instead\n", .{ token.position.line, token.position.column, token_literal, token.literal }) catch |err| {
+            errorHandling.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        self.errors.append(ParserError{ .message = std.heap.page_allocator.dupe(u8, msg) catch |_err| {
+            errorHandling.exitWithError("unrecoverable error trying to dupe parse error message", _err);
+        } }) catch |err| {
+            errorHandling.exitWithError("unrecoverable error trying to append parse error message", err);
+        };
+    }
+
+    pub fn currentNull(self: *Parser) void {
+        const token = self.cur_token;
+
+        const msg = std.fmt.allocPrint(std.heap.page_allocator, "error: line {d} column {d}: expected an expression but got EOF instead\n", .{ token.position.line, token.position.column }) catch |err| {
             errorHandling.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
@@ -162,6 +178,30 @@ pub const Parser = struct {
 
         const expr = self.createExpressionNode().?; // HANDLE THIS BETTER
         expr.* = AST.Expression{ .infix_expr = infixExpr };
+
+        return expr;
+    }
+
+    pub fn parseGroupExpression(self: *Parser) *AST.Expression {
+        self.advance() catch |err| {
+            std.debug.print("Error getting next token on parser: {any}", .{err});
+        };
+
+        const expr = self.createExpressionNode().?;
+
+        const expression = self.parseExpression(Precedence.DEFAULT);
+
+        if (expression == null) {
+            self.currentNull();
+            return expr;
+        }
+
+        expr.* = expression.?.*;
+
+
+        if (!self.expect(Tokens.RPAREN, ")")) {
+            return expr;
+        }
 
         return expr;
     }
@@ -231,14 +271,27 @@ pub const Parser = struct {
         }
     }
 
+    pub fn expectCurrent(self: *Parser, token_type: Tokens, token_literal: []const u8) bool {
+        if (self.currentIs(token_type)) {
+            self.advance() catch |err| {
+                std.debug.print("Error getting next token on parser: {any}", .{err});
+            };
+            return true;
+        } else {
+            self.peekError(token_literal);
+            return false;
+        }
+    }
+
     pub fn parseProgram(self: *Parser, allocator: std.mem.Allocator) !?*AST.Program {
         const program = AST.Program.init(allocator) orelse return null;
 
         try self.advance();
         try self.advance();
 
-        while (self.peek_token.token_type != Tokens.EOF) {
+        while (self.cur_token.token_type != Tokens.EOF) {
             const node = self.parseNode();
+
             if (node != null) {
                 try program.*.addNode(node.?);
             }
@@ -293,23 +346,21 @@ pub const Parser = struct {
     }
 
     pub fn parseExpression(self: *Parser, prec: Precedence) ?*AST.Expression {
-        // Retrieve the prefix parse function for the current token
         const prefix_fn = self.nud_handlers.get(self.cur_token.token_type) orelse return null;
 
-        // Call the prefix function to parse the left-hand side
+        // call the prefix function to parse the left-hand side
         var left = prefix_fn(@constCast(self));
 
-        // Loop to handle infix operators
+        // infix stuff
         while (@intFromEnum(prec) < @intFromEnum(self.peekBindingPower())) {
             const infix_fn = self.led_handlers.get(self.peek_token.token_type) orelse return left;
 
-            // Advance to the next token
             self.advance() catch |err| {
                 std.debug.print("error getting next token on parser: {any}\n", .{err});
-                return null; // Handle the error appropriately
+                return null;
             };
 
-            // Call the infix function to parse the right-hand side
+            // call the infix function to parse the right-hand side
             left = infix_fn(@constCast(self), left);
         }
 
@@ -401,7 +452,10 @@ test "Var statement parsing errors len" {
 
     defer program.?.deinit();
 
-    if (p.errors.items.len > 0) try expect(true);
+    if (p.errors.items.len > 0) {
+        //std.debug.print("\n{s}\n", .{p.errors.items[0].message});
+        try expect(true);
+    }
 }
 
 test "Prefix parsing" {

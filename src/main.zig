@@ -1,1 +1,8 @@
-pub fn main() !void {}
+const REPL = @import("repl.zig");
+
+
+pub fn main() !void {
+
+    try REPL.launchRepl();
+
+}
