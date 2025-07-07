@@ -40,7 +40,7 @@ pub const BooleanExpression = struct { token: Token, value: bool };
 pub const VarStatement = struct {
     token: Token, // VAR token.
     identifier: Identifier,
-    expression: *Expression, // the value being assigned to the var variable
+    expression: ?*Expression, // the value being assigned to the var variable
 };
 
 pub const Identifier = struct {
@@ -50,23 +50,23 @@ pub const Identifier = struct {
 
 pub const ReturnStatement = struct {
     token: Token, // RETURN token
-    expression: *Expression = undefined, // the return value
+    expression: ?*Expression = undefined, // the return value
 };
 
 pub const ExpressionStatement = struct {
     token: Token,
-    expression: *Expression = undefined,
+    expression: ?*Expression = undefined,
 };
 
 pub const InfixExpression = struct {
     token: Token,
-    left: *Expression = undefined,
-    right: *Expression = undefined,
+    left: ?*Expression = undefined,
+    right: ?*Expression = undefined,
 };
 
 pub const PrefixExpression = struct {
     token: Token,
-    right: *Expression,
+    right: ?*Expression,
 };
 
 pub const StmtTypes = enum {

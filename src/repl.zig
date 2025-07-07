@@ -14,23 +14,21 @@ const Parser = @import("parser.zig").Parser;
 const AST = @import("ast.zig");
 
 fn printNodes(stmt: AST.Statement) void {
-    switch(stmt){
+    switch (stmt) {
         AST.Statement.var_stmt => |varStmt| {
             printExpression(varStmt.expression);
         },
         AST.Statement.r_stmt => |returnStmt| {
             printExpression(returnStmt.expression);
-
         },
         AST.Statement.e_stmt => |exprStmt| {
             printExpression(exprStmt.expression);
-
         },
     }
 }
 
-fn printExpression(expr: *AST.Expression) void {
-    switch (expr.*) {
+fn printExpression(expr: ?*AST.Expression) void {
+    switch (expr.?.*) {
         AST.Expression.boolean_expr => |boolExpr| {
             std.debug.print("{}\n", .{boolExpr.value});
         },
@@ -59,12 +57,11 @@ pub fn launchRepl() !void {
     const stdin = std.io.getStdIn().reader();
     const stdout = std.io.getStdOut().writer();
 
-    while(true) {
+    while (true) {
         var buf: [512]u8 = undefined;
         try stdout.print(">> ", .{});
 
-        if(try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |input_text|{
-
+        if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |input_text| {
             var l: Lexer = try Lexer.init(input_text);
             var p: Parser = try Parser.init(&l, std.heap.page_allocator);
             defer p.deinit();
@@ -72,23 +69,20 @@ pub fn launchRepl() !void {
             const program = try p.parseProgram(std.heap.page_allocator);
             defer program.?.deinit();
 
-
             if (program == null) {
                 try stdout.print("Error parsing program: program is null\n", .{});
             }
-
 
             if (p.errors.items.len > 0) {
                 for (p.errors.items) |err| {
                     try stdout.print("\n{s}\n", .{err.message});
                 }
+                continue;
             }
-
 
             for (program.?.nodes.items) |node| {
                 printNodes(node);
             }
         }
-
     }
 }

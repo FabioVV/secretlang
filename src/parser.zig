@@ -25,8 +25,10 @@ const Precedence = enum(u32) {
     CALL = 9,
 };
 
-const NudParseFn = *const fn (*Parser) *AST.Expression;
-const LedParseFn = *const fn (*Parser, *AST.Expression) *AST.Expression;
+const SyncTokens = &[_]Tokens{ .EOF, .VAR, .RBRACE, .RETURN }; // Tokens that can be used as a stop point during sync if parser encounters an error
+
+const NudParseFn = *const fn (*Parser) ?*AST.Expression;
+const LedParseFn = *const fn (*Parser, ?*AST.Expression) ?*AST.Expression;
 
 pub const ParserError = struct {
     message: []const u8,
@@ -96,6 +98,20 @@ pub const Parser = struct {
         self.errors.deinit();
     }
 
+    pub fn currentError(self: *Parser, token_literal: []const u8) void {
+        const token = self.cur_token;
+
+        const msg = std.fmt.allocPrint(std.heap.page_allocator, "error: line {d} column {d}: expected {s} but got {s} instead\n", .{ token.position.line, token.position.column, token_literal, token.literal }) catch |err| {
+            errorHandling.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        self.errors.append(ParserError{ .message = std.heap.page_allocator.dupe(u8, msg) catch |_err| {
+            errorHandling.exitWithError("unrecoverable error trying to dupe parse error message", _err);
+        } }) catch |err| {
+            errorHandling.exitWithError("unrecoverable error trying to append parse error message", err);
+        };
+    }
+
     pub fn peekError(self: *Parser, token_literal: []const u8) void {
         const token = self.peek_token;
 
@@ -110,7 +126,20 @@ pub const Parser = struct {
         };
     }
 
-    pub fn currentNull(self: *Parser) void {
+    pub fn sync(self: *Parser) void {
+        while (self.cur_token.token_type != Tokens.EOF) {
+            for (SyncTokens) |st| {
+                if (st == self.cur_token.token_type) {
+                    return;
+                }
+            }
+            self.advance() catch |err| {
+                std.debug.print("Error getting next token on parser during error sync: {any}", .{err});
+            };
+        }
+    }
+
+    pub fn currentTokenIsNull(self: *Parser) void {
         const token = self.cur_token;
 
         const msg = std.fmt.allocPrint(std.heap.page_allocator, "error: line {d} column {d}: expected an expression but got EOF instead\n", .{ token.position.line, token.position.column }) catch |err| {
@@ -146,14 +175,18 @@ pub const Parser = struct {
         };
     }
 
-    pub fn parseNud(self: *Parser) *AST.Expression {
+    pub fn parseNud(self: *Parser) ?*AST.Expression {
         const cur_token = self.cur_token;
 
         self.advance() catch |err| {
             std.debug.print("Error getting next token on parser: {any}", .{err});
         };
 
-        const rightExpression = self.parseExpression(Precedence.PREFIX).?; // HANDLE THIS BETTER
+        if (!self.expectCurrentTokenIs(Tokens.NUMBER, "number")) {
+            return null;
+        }
+
+        const rightExpression = self.parseExpression(Precedence.PREFIX) orelse null; // HANDLE THIS BETTER
 
         const prefixExpr = AST.PrefixExpression{ .token = cur_token, .right = rightExpression };
 
@@ -163,7 +196,7 @@ pub const Parser = struct {
         return expr;
     }
 
-    pub fn parseLed(self: *Parser, left_expr: *AST.Expression) *AST.Expression {
+    pub fn parseLed(self: *Parser, left_expr: ?*AST.Expression) ?*AST.Expression {
         const cur_token = self.cur_token;
         const prec = self.curBindingPower();
 
@@ -173,7 +206,11 @@ pub const Parser = struct {
             std.debug.print("Error getting next token on parser: {any}", .{err});
         };
 
-        const rightExpression = self.parseExpression(prec).?; // HANDLE THIS BETTER
+        if (!self.expectCurrentTokenIs(Tokens.NUMBER, "number")) {
+            return null;
+        }
+
+        const rightExpression = self.parseExpression(prec) orelse null;
         infixExpr.right = rightExpression;
 
         const expr = self.createExpressionNode().?; // HANDLE THIS BETTER
@@ -182,22 +219,20 @@ pub const Parser = struct {
         return expr;
     }
 
-    pub fn parseGroupExpression(self: *Parser) *AST.Expression {
+    pub fn parseGroupExpression(self: *Parser) ?*AST.Expression {
         self.advance() catch |err| {
             std.debug.print("Error getting next token on parser: {any}", .{err});
         };
 
-        const expr = self.createExpressionNode().?;
-
         const expression = self.parseExpression(Precedence.DEFAULT);
 
         if (expression == null) {
-            self.currentNull();
-            return expr;
+            self.currentTokenIsNull(); // change this function to a error() like lox by robert nystrom
+            return null;
         }
 
+        const expr = self.createExpressionNode().?;
         expr.* = expression.?.*;
-
 
         if (!self.expect(Tokens.RPAREN, ")")) {
             return expr;
@@ -206,13 +241,13 @@ pub const Parser = struct {
         return expr;
     }
 
-    pub fn parseIdentifier(self: *Parser) *AST.Expression {
+    pub fn parseIdentifier(self: *Parser) ?*AST.Expression {
         const expr = self.createExpressionNode().?;
         expr.* = AST.Expression{ .identifier_expr = AST.Identifier{ .token = self.cur_token, .literal = self.cur_token.literal } };
         return expr;
     }
 
-    pub fn parseNumber(self: *Parser) *AST.Expression {
+    pub fn parseNumber(self: *Parser) ?*AST.Expression {
         const num_token = self.cur_token;
 
         const result = std.fmt.parseFloat(f64, self.cur_token.literal) catch unreachable;
@@ -224,7 +259,7 @@ pub const Parser = struct {
         return expr;
     }
 
-    pub fn parseBoolean(self: *Parser) *AST.Expression {
+    pub fn parseBoolean(self: *Parser) ?*AST.Expression {
         const expr = self.createExpressionNode().?;
         expr.* = AST.Expression{ .boolean_expr = AST.BooleanExpression{ .token = self.cur_token, .value = self.currentIs(Tokens.TRUE) } };
         return expr;
@@ -267,18 +302,18 @@ pub const Parser = struct {
             return true;
         } else {
             self.peekError(token_literal);
+            self.sync();
             return false;
         }
     }
-
-    pub fn expectCurrent(self: *Parser, token_type: Tokens, token_literal: []const u8) bool {
+    /// Checks if the current token is of the same type as the token_type param.
+    /// Need a better version of this, need to check for more types (maybe create a list of accetable types based on what is being parsed?)
+    pub fn expectCurrentTokenIs(self: *Parser, token_type: Tokens, token_literal: []const u8) bool {
         if (self.currentIs(token_type)) {
-            self.advance() catch |err| {
-                std.debug.print("Error getting next token on parser: {any}", .{err});
-            };
             return true;
         } else {
-            self.peekError(token_literal);
+            self.currentError(token_literal); // fix this
+            self.sync();
             return false;
         }
     }
@@ -361,7 +396,7 @@ pub const Parser = struct {
             };
 
             // call the infix function to parse the right-hand side
-            left = infix_fn(@constCast(self), left);
+            left = infix_fn(@constCast(self), left orelse null);
         }
 
         return left;
