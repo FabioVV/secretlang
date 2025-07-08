@@ -349,7 +349,6 @@ pub const Parser = struct {
             return null;
         }
 
-
         self.advance() catch |err| {
             std.debug.print("Error getting next token on parser: {any}", .{err});
         };
@@ -423,14 +422,14 @@ pub const Parser = struct {
                 if (r_stmt == null) {
                     return null;
                 }
-                return AST.Statement{ .r_stmt = r_stmt.? };
+                return AST.Statement{ .return_stmt = r_stmt.? };
             },
             else => {
                 const e_stmt = self.parseExpressionStatement();
                 if (e_stmt == null) {
                     return null;
                 }
-                return AST.Statement{ .e_stmt = e_stmt.? };
+                return AST.Statement{ .expression_stmt = e_stmt.? };
             },
         };
     }

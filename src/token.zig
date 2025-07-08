@@ -27,6 +27,9 @@ pub const Tokens = enum {
 
     VAR, // variable declartion token
 
+    IF, // if
+    ELSE, // else
+
     RETURN, // return token
 
     NIL, // Null value

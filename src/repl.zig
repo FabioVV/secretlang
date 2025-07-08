@@ -15,15 +15,21 @@ const AST = @import("ast.zig");
 
 fn printNodes(stmt: AST.Statement) void {
     switch (stmt) {
-        AST.Statement.var_stmt => |varStmt| {
-            printExpression(varStmt.expression);
+        .var_stmt => |varStmt| {
+            std.debug.print("{any}\n", .{varStmt});
+            //printExpression(varStmt.expression);
         },
-        AST.Statement.r_stmt => |returnStmt| {
-            printExpression(returnStmt.expression);
+        .return_stmt => |returnStmt| {
+            std.debug.print("{any}\n", .{returnStmt});
+
+            //printExpression(returnStmt.expression);
         },
-        AST.Statement.e_stmt => |exprStmt| {
-            printExpression(exprStmt.expression);
+        .expression_stmt => |exprStmt| {
+            std.debug.print("{any}\n", .{exprStmt});
+
+            //rintExpression(exprStmt.expression);
         },
+        else => {},
     }
 }
 

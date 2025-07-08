@@ -26,6 +26,16 @@ pub const Program = struct {
     }
 
     pub fn deinit(self: *Program) void {
+        for (self.nodes.items) |nodes| {
+            switch (nodes) {
+                .block_stmt => |block_stmt| {
+                    block_stmt.statements.deinit();
+                },
+                else => {
+                    // do nothing
+                },
+            }
+        }
         self.nodes.deinit();
         self.arena.deinit();
     }
@@ -46,6 +56,19 @@ pub const VarStatement = struct {
 pub const Identifier = struct {
     token: Token, // IDENT token.
     literal: []const u8,
+};
+
+pub const BlockStatement = struct {
+    token: Token, // { token
+    statements: std.ArrayList(Statement),
+
+    pub fn init(allocator: *std.mem.Allocator, token: Token) BlockStatement {
+        const block = BlockStatement{
+            .token = token,
+            .statements = std.ArrayList(Statement).init(allocator),
+        };
+        return block;
+    }
 };
 
 pub const ReturnStatement = struct {
@@ -69,16 +92,25 @@ pub const PrefixExpression = struct {
     right: ?*Expression,
 };
 
+pub const IfExpression = struct {
+    token: Token,
+    condition: ?*Expression = undefined,
+    ifBlock: *BlockStatement,
+    elseBlock: *BlockStatement,
+};
+
 pub const StmtTypes = enum {
     var_stmt,
-    r_stmt,
-    e_stmt,
+    return_stmt,
+    expression_stmt,
+    block_stmt,
 };
 
 pub const Statement = union(StmtTypes) {
     var_stmt: VarStatement,
-    r_stmt: ReturnStatement,
-    e_stmt: ExpressionStatement,
+    return_stmt: ReturnStatement,
+    expression_stmt: ExpressionStatement,
+    block_stmt: BlockStatement,
 };
 
 pub const ExprTypes = enum {
