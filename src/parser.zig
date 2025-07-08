@@ -25,7 +25,7 @@ const Precedence = enum(u32) {
     CALL = 9,
 };
 
-const SyncTokens = &[_]Tokens{ .EOF, .VAR, .RBRACE, .RETURN }; // Tokens that can be used as a stop point during sync if parser encounters an error
+const SyncTokens = &[_]Tokens{ .EOF, .VAR, .RBRACE, .RETURN }; // Tokens that can be used as a stop point to syncronize the parser if it encounters an error
 
 const NudParseFn = *const fn (*Parser) ?*AST.Expression;
 const LedParseFn = *const fn (*Parser, ?*AST.Expression) ?*AST.Expression;
@@ -349,13 +349,21 @@ pub const Parser = struct {
             return null;
         }
 
+
         self.advance() catch |err| {
             std.debug.print("Error getting next token on parser: {any}", .{err});
         };
 
-        const expression = self.parseExpression(Precedence.DEFAULT).?;
 
-        return AST.VarStatement{ .token = var_token, .identifier = identifier, .expression = expression };
+
+
+        const expression = self.parseExpression(Precedence.DEFAULT);
+        if (expression == null) {
+            self.currentTokenIsNull();
+            return null;
+        }
+
+        return AST.VarStatement{ .token = var_token, .identifier = identifier, .expression = expression.? };
     }
 
     pub fn parseReturnToken(self: *Parser) ?AST.ReturnStatement {
@@ -373,8 +381,10 @@ pub const Parser = struct {
 
         const expression = self.parseExpression(Precedence.DEFAULT);
         if (expression == null) {
+            self.currentTokenIsNull();
             return null;
         }
+
         estmt.expression = expression.?;
 
         return estmt;
