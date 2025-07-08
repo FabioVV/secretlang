@@ -62,7 +62,7 @@ pub const BlockStatement = struct {
     token: Token, // { token
     statements: std.ArrayList(Statement),
 
-    pub fn init(allocator: *std.mem.Allocator, token: Token) BlockStatement {
+    pub fn init(allocator: std.mem.Allocator, token: Token) BlockStatement {
         const block = BlockStatement{
             .token = token,
             .statements = std.ArrayList(Statement).init(allocator),
@@ -95,8 +95,8 @@ pub const PrefixExpression = struct {
 pub const IfExpression = struct {
     token: Token,
     condition: ?*Expression = undefined,
-    ifBlock: *BlockStatement,
-    elseBlock: *BlockStatement,
+    ifBlock: ?BlockStatement = undefined,
+    elseBlock: ?BlockStatement = undefined,
 };
 
 pub const StmtTypes = enum {
@@ -120,6 +120,7 @@ pub const ExprTypes = enum {
     identifier_expr,
     infix_expr,
     prefix_expr,
+    if_expr,
 };
 
 pub const Expression = union(ExprTypes) {
@@ -129,4 +130,5 @@ pub const Expression = union(ExprTypes) {
     identifier_expr: Identifier,
     infix_expr: InfixExpression,
     prefix_expr: PrefixExpression,
+    if_expr: IfExpression,
 };

@@ -67,11 +67,10 @@ pub const Parser = struct {
         parser.nud(Tokens.NUMBER, parseNumber);
         parser.nud(Tokens.TRUE, parseBoolean);
         parser.nud(Tokens.FALSE, parseBoolean);
-
         parser.nud(Tokens.NOT, parseNud);
         parser.nud(Tokens.MINUS, parseNud);
-
         parser.nud(Tokens.LPAREN, parseGroupExpression);
+        parser.nud(Tokens.IF, parseIfExpression);
 
         parser.led(Tokens.PLUS, parseLed);
         parser.led(Tokens.MINUS, parseLed);
@@ -237,6 +236,85 @@ pub const Parser = struct {
         if (!self.expect(Tokens.RPAREN, ")")) {
             return expr;
         }
+
+        return expr;
+    }
+
+    pub fn parseBlockStatement(self: *Parser) ?AST.BlockStatement {
+        var block = AST.BlockStatement.init(std.heap.page_allocator, self.cur_token);
+
+        self.advance() catch |err| {
+            std.debug.print("Error getting next token on parser: {any}", .{err});
+        };
+
+        while (!self.currentIs(Tokens.RBRACE)) {
+            const node_stmt = self.parseNode();
+
+            if (node_stmt != null) {
+                block.statements.append(node_stmt.?) catch |err| {
+                    std.debug.print("Error appeding statement node in IF expression: {any}", .{err});
+                };
+            }
+
+            self.advance() catch |err| {
+                std.debug.print("Error getting next token on parser: {any}", .{err});
+            };
+
+            if (self.currentIs(Tokens.EOF)) {
+                self.curTokenParseError("expected } but got EOF instead");
+                return null;
+            }
+        }
+
+        return block;
+    }
+
+    pub fn parseIfExpression(self: *Parser) ?*AST.Expression {
+        const if_token = self.cur_token;
+
+        if (!self.expect(Tokens.LPAREN, "(")) {
+            return null;
+        }
+
+        self.advance() catch |err| {
+            std.debug.print("Error getting next token on parser: {any}", .{err});
+        };
+
+        const expression_condition = self.parseExpression(Precedence.DEFAULT);
+        if (expression_condition == null) {
+            self.curTokenParseError("expected an expression but got EOF instead");
+            return null;
+        }
+
+        var if_exp = AST.IfExpression{ .token = if_token, .condition = expression_condition };
+
+        if (!self.expect(Tokens.RPAREN, ")")) {
+            return null;
+        }
+
+        if (!self.expect(Tokens.LBRACE, "{")) {
+            return null;
+        }
+
+        if_exp.ifBlock = self.parseBlockStatement() orelse null;
+
+        //debug.printTokenDebug(self.cur_token);
+        //debug.printTokenDebug(self.peek_token);
+
+        if (self.peekIs(Tokens.ELSE)) {
+            self.advance() catch |err| {
+                std.debug.print("Error getting next token on parser: {any}", .{err});
+            };
+
+            if (!self.expect(Tokens.LBRACE, "{")) {
+                return null;
+            }
+
+            if_exp.elseBlock = self.parseBlockStatement() orelse null;
+        }
+
+        const expr = self.createExpressionNode().?;
+        expr.* = AST.Expression{ .if_expr = if_exp };
 
         return expr;
     }
@@ -519,6 +597,59 @@ test "Prefix parsing" {
     defer program.?.deinit();
 
     for (program.?.nodes.items) |node| {
-        debug.printPrefixExpression(node.e_stmt.expression.*.prefix_expr);
+        debug.printPrefixExpression(node.expression_stmt.expression.?.*.prefix_expr);
+    }
+}
+
+test "simple if parsing" {
+    const input: []const u8 =
+        \\if(true){
+        \\ var age = 22
+        \\}
+    ;
+
+    var l: Lexer = try Lexer.init(input);
+    var p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    defer p.deinit();
+
+    const program = try p.parseProgram(std.heap.page_allocator);
+
+    if (program == null) {
+        std.debug.print("Error parsing program: program is null\n", .{});
+        //return null;
+        try expect(false);
+    }
+
+    defer program.?.deinit();
+
+    //for (program.?.nodes.items) |node| {
+    //    debug.printIfExpression(node.expression_stmt.expression.?.*.if_expr);
+    //}
+}
+
+test "if parsing with else" {
+    const input: []const u8 =
+        \\if(true){
+        \\ var els = true
+        \\} else {
+        \\ var els = false
+        \\}
+    ;
+
+    var l: Lexer = try Lexer.init(input);
+    var p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    defer p.deinit();
+
+    const program = try p.parseProgram(std.heap.page_allocator);
+
+    if (program == null) {
+        std.debug.print("Error parsing program: program is null\n", .{});
+        try expect(false);
+    }
+
+    defer program.?.deinit();
+
+    for (program.?.nodes.items) |node| {
+        debug.printIfExpression(node.expression_stmt.expression.?.*.if_expr);
     }
 }

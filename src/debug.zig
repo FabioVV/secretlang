@@ -9,6 +9,87 @@ const AST = @import("ast.zig");
 pub const DEBUG_PRINT_TOKENS: bool = false;
 pub const DEBUG_PRINT_VAR_STATEMENT: bool = false;
 pub const DEBUG_PRINT_PREFIX_EXPRESSION: bool = false;
+pub const DEBUG_PRINT_SIMPLE_IF_EXPRESSION: bool = false;
+
+const ANSI_RESET = "\x1b[0m";
+const ANSI_RED = "\x1b[31m";
+const ANSI_GREEN = "\x1b[32m";
+const ANSI_YELLOW = "\x1b[33m";
+const ANSI_BLUE = "\x1b[34m";
+const ANSI_MAGENTA = "\x1b[35m";
+const ANSI_CYAN = "\x1b[36m";
+const ANSI_WHITE = "\x1b[37m";
+
+// UTILITIES ->
+pub fn printNodes(stmt: AST.Statement) void {
+    const stdoutwriter = io.getStdOut().writer();
+
+    switch (stmt) {
+        .var_stmt => |varStmt| {
+            stdoutwriter.print("{s}AST{s}: {any}\n", .{ ANSI_GREEN, ANSI_RESET, varStmt }) catch |err| {
+                std.debug.print("Error printing var node: {any}", .{err});
+            };
+
+            stdoutwriter.print("{s}Var identifier{s}: {s}\n", .{ ANSI_GREEN, ANSI_RESET, varStmt.identifier.literal }) catch |err| {
+                std.debug.print("Error printing var node: {any}", .{err});
+            };
+
+            printExpression(varStmt.expression.?, "Var identifier value");
+        },
+        .return_stmt => |returnStmt| {
+            stdoutwriter.print("{s}AST{s}: {any}\n", .{ ANSI_GREEN, ANSI_RESET, returnStmt }) catch |err| {
+                std.debug.print("Error printing return node: {any}", .{err});
+            };
+
+            //printExpression(returnStmt.expression);
+        },
+        .expression_stmt => |exprStmt| {
+            stdoutwriter.print("{s}AST{s}: {any}\n", .{ ANSI_GREEN, ANSI_RESET, exprStmt }) catch |err| {
+                std.debug.print("Error printing expression statement node: {any}", .{err});
+            };
+
+            //rintExpression(exprStmt.expression);
+        },
+        else => {},
+    }
+}
+
+pub fn printExpression(expr: ?*AST.Expression, message: []const u8) void {
+    switch (expr.?.*) {
+        AST.Expression.boolean_expr => |boolExpr| {
+            std.debug.print("{s}{s}{s}: {}\n", .{ ANSI_GREEN, message, ANSI_RESET, boolExpr.value });
+        },
+        AST.Expression.number_expr => |numExpr| {
+            std.debug.print("{s}{s}{s}: {d:6.5}\n", .{ ANSI_GREEN, message, ANSI_RESET, numExpr.value });
+        },
+        AST.Expression.string_expr => |strExpr| {
+            std.debug.print("{s}{s}{s}: {s}\n", .{ ANSI_GREEN, message, ANSI_RESET, strExpr.value });
+        },
+        AST.Expression.identifier_expr => |idExpr| {
+            std.debug.print("{s}{s}{s}: {s}\n", .{ ANSI_GREEN, message, ANSI_RESET, idExpr.literal });
+        },
+        AST.Expression.infix_expr => |infixExpr| {
+            printExpression(infixExpr.left, "Infix left");
+            std.debug.print("{s}Operation{s}: {s}\n", .{ ANSI_GREEN, ANSI_RESET, infixExpr.token.literal });
+            printExpression(infixExpr.right, "Infix right");
+        },
+        AST.Expression.prefix_expr => |prefixExpr| {
+            std.debug.print("{s}{s}{s}: {s}\n", .{ ANSI_GREEN, message, ANSI_RESET, prefixExpr.token.literal });
+            printExpression(prefixExpr.right, "Prefix right");
+        },
+        else => {},
+    }
+}
+
+pub fn printTokenDebug(token: Token) void {
+    const stdoutwriter = io.getStdOut().writer();
+
+    stdoutwriter.print("Token: {s} - Literal: {s}\n", .{ @tagName(token.token_type), token.literal }) catch |err| {
+        std.debug.print("Error debug printing token: {any}", .{err});
+    };
+}
+
+// <- UTILITIES
 
 pub fn printToken(token: Token) void {
     const stdoutwriter = io.getStdOut().writer();
@@ -40,4 +121,30 @@ pub fn printPrefixExpression(stmt: AST.PrefixExpression) void {
     stdoutwriter.print("Token: {s} - PrefixOperator: {s} -> {s}{d}\n", .{ @tagName(stmt.token.token_type), stmt.token.literal, stmt.token.literal, val }) catch |err| {
         std.debug.print("Error debug prefix expression: {any}", .{err});
     };
+}
+
+pub fn printIfExpression(stmt: AST.IfExpression) void {
+    const stdoutwriter = io.getStdOut().writer();
+
+    if (!DEBUG_PRINT_SIMPLE_IF_EXPRESSION) return;
+
+    const this_condition_needs_to_be_a_boolean_dont_change = stmt.condition.?.*.boolean_expr.value;
+
+    stdoutwriter.print("Token: {s} - Condition: {} ->\n", .{ @tagName(stmt.token.token_type), this_condition_needs_to_be_a_boolean_dont_change }) catch |err| {
+        std.debug.print("Error debug prefix expression: {any}", .{err});
+    };
+
+    for (stmt.ifBlock.?.statements.items) |node| {
+        printNodes(node);
+    }
+
+    if (stmt.elseBlock != null) {
+        stdoutwriter.print("ELSE BLOCK ->\n", .{}) catch |err| {
+            std.debug.print("Error debug prefix expression: {any}", .{err});
+        };
+
+        for (stmt.elseBlock.?.statements.items) |node| {
+            printNodes(node);
+        }
+    }
 }
