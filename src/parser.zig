@@ -139,10 +139,10 @@ pub const Parser = struct {
         }
     }
 
-    pub fn currentTokenIsNull(self: *Parser) void {
+    pub fn curTokenParseError(self: *Parser, errorMessage: []const u8) void {
         const token = self.cur_token;
 
-        const msg = std.fmt.allocPrint(std.heap.page_allocator, "error: line {d} column {d}: expected an expression but got EOF instead\n", .{ token.position.line, token.position.column }) catch |err| {
+        const msg = std.fmt.allocPrint(std.heap.page_allocator, "error: line {d} column {d}: {s}\n", .{ token.position.line, token.position.column, errorMessage }) catch |err| {
             errorHandling.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
@@ -227,7 +227,7 @@ pub const Parser = struct {
         const expression = self.parseExpression(Precedence.DEFAULT);
 
         if (expression == null) {
-            self.currentTokenIsNull(); // change this function to a error() like lox by robert nystrom
+            self.curTokenParseError("expected an expression but got EOF instead");
             return null;
         }
 
@@ -354,12 +354,9 @@ pub const Parser = struct {
             std.debug.print("Error getting next token on parser: {any}", .{err});
         };
 
-
-
-
         const expression = self.parseExpression(Precedence.DEFAULT);
         if (expression == null) {
-            self.currentTokenIsNull();
+            self.curTokenParseError("expected an expression but got EOF instead");
             return null;
         }
 
@@ -381,7 +378,7 @@ pub const Parser = struct {
 
         const expression = self.parseExpression(Precedence.DEFAULT);
         if (expression == null) {
-            self.currentTokenIsNull();
+            //self.curTokenParseError("expected an expression but got EOF instead");
             return null;
         }
 
