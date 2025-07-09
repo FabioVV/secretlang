@@ -10,6 +10,7 @@ pub const DEBUG_PRINT_TOKENS: bool = false;
 pub const DEBUG_PRINT_VAR_STATEMENT: bool = false;
 pub const DEBUG_PRINT_PREFIX_EXPRESSION: bool = false;
 pub const DEBUG_PRINT_SIMPLE_IF_EXPRESSION: bool = false;
+pub const DEBUG_PRINT_FN: bool = false;
 
 const ANSI_RESET = "\x1b[0m";
 const ANSI_RED = "\x1b[31m";
@@ -26,7 +27,7 @@ pub fn printNodes(stmt: AST.Statement) void {
 
     switch (stmt) {
         .var_stmt => |varStmt| {
-            stdoutwriter.print("{s}AST{s}: {any}\n", .{ ANSI_GREEN, ANSI_RESET, varStmt }) catch |err| {
+            stdoutwriter.print("{s}Main AST node{s}: {any}\n", .{ ANSI_GREEN, ANSI_RESET, varStmt }) catch |err| {
                 std.debug.print("Error printing var node: {any}", .{err});
             };
 
@@ -37,18 +38,18 @@ pub fn printNodes(stmt: AST.Statement) void {
             printExpression(varStmt.expression.?, "Var identifier value");
         },
         .return_stmt => |returnStmt| {
-            stdoutwriter.print("{s}AST{s}: {any}\n", .{ ANSI_GREEN, ANSI_RESET, returnStmt }) catch |err| {
+            stdoutwriter.print("{s}Main AST node{s}: {any}\n", .{ ANSI_GREEN, ANSI_RESET, returnStmt }) catch |err| {
                 std.debug.print("Error printing return node: {any}", .{err});
             };
 
-            //printExpression(returnStmt.expression);
+            printExpression(returnStmt.expression, "Return value");
         },
         .expression_stmt => |exprStmt| {
-            stdoutwriter.print("{s}AST{s}: {any}\n", .{ ANSI_GREEN, ANSI_RESET, exprStmt }) catch |err| {
+            stdoutwriter.print("{s}Main AST node{s}: {any}\n", .{ ANSI_GREEN, ANSI_RESET, exprStmt }) catch |err| {
                 std.debug.print("Error printing expression statement node: {any}", .{err});
             };
 
-            //rintExpression(exprStmt.expression);
+            printExpression(exprStmt.expression, "Expression statement");
         },
         else => {},
     }
@@ -69,13 +70,16 @@ pub fn printExpression(expr: ?*AST.Expression, message: []const u8) void {
             std.debug.print("{s}{s}{s}: {s}\n", .{ ANSI_GREEN, message, ANSI_RESET, idExpr.literal });
         },
         AST.Expression.infix_expr => |infixExpr| {
-            printExpression(infixExpr.left, "Infix left");
+            printExpression(infixExpr.left, "Infix left value");
             std.debug.print("{s}Operation{s}: {s}\n", .{ ANSI_GREEN, ANSI_RESET, infixExpr.token.literal });
             printExpression(infixExpr.right, "Infix right");
         },
         AST.Expression.prefix_expr => |prefixExpr| {
             std.debug.print("{s}{s}{s}: {s}\n", .{ ANSI_GREEN, message, ANSI_RESET, prefixExpr.token.literal });
-            printExpression(prefixExpr.right, "Prefix right");
+            printExpression(prefixExpr.right, "Prefix right value");
+        },
+        AST.Expression.fn_expr => |fnExpr| {
+            std.debug.print("{s}{s}{s}: {s}\n", .{ ANSI_GREEN, message, ANSI_RESET, fnExpr.token.literal });
         },
         else => {},
     }
@@ -144,6 +148,33 @@ pub fn printIfExpression(stmt: AST.IfExpression) void {
         };
 
         for (stmt.elseBlock.?.statements.items) |node| {
+            printNodes(node);
+        }
+    }
+}
+
+pub fn printFnExpression(stmt: AST.fnExpression) void {
+    const stdoutwriter = io.getStdOut().writer();
+
+    if (!DEBUG_PRINT_FN) return;
+
+
+    stdoutwriter.print("Token: {s} - ->\n", .{ @tagName(stmt.token.token_type) }) catch |err| {
+        std.debug.print("Error debug print fn expression: {any}", .{err});
+    };
+
+    for (stmt.parameters.items) |param| {
+        stdoutwriter.print("Param: {s}\n", .{ param.literal }) catch |err| {
+            std.debug.print("Error debug print fn expression params: {any}", .{err});
+        };
+    }
+
+    if (stmt.body != null) {
+        stdoutwriter.print("FUNCTION BODY ->\n", .{}) catch |err| {
+            std.debug.print("Error debug print fn expression: {any}", .{err});
+        };
+
+        for (stmt.body.?.statements.items) |node| {
             printNodes(node);
         }
     }

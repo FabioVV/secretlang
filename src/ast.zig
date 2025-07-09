@@ -31,6 +31,16 @@ pub const Program = struct {
                 .block_stmt => |block_stmt| {
                     block_stmt.statements.deinit();
                 },
+                .expression_stmt => |expr|{
+                    switch (expr.expression.?.*) {
+                        .fn_expr => |fnLiteral|{
+                            fnLiteral.parameters.deinit();
+                        },
+                        else => {
+                            // do nothing
+                        },
+                    }
+                },
                 else => {
                     // do nothing
                 },
@@ -99,6 +109,20 @@ pub const IfExpression = struct {
     elseBlock: ?BlockStatement = undefined,
 };
 
+pub const fnExpression = struct {
+    token: Token,
+    parameters: std.ArrayList(Identifier),
+    body: ?BlockStatement = undefined,
+
+    pub fn init(allocator: std.mem.Allocator, token: Token) fnExpression {
+        const fnLiteralExpression = fnExpression{
+            .token = token,
+            .parameters = std.ArrayList(Identifier).init(allocator),
+        };
+        return fnLiteralExpression;
+    }
+};
+
 pub const StmtTypes = enum {
     var_stmt,
     return_stmt,
@@ -121,6 +145,7 @@ pub const ExprTypes = enum {
     infix_expr,
     prefix_expr,
     if_expr,
+    fn_expr,
 };
 
 pub const Expression = union(ExprTypes) {
@@ -131,4 +156,5 @@ pub const Expression = union(ExprTypes) {
     infix_expr: InfixExpression,
     prefix_expr: PrefixExpression,
     if_expr: IfExpression,
+    fn_expr: fnExpression,
 };

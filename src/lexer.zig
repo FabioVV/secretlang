@@ -115,6 +115,12 @@ pub const Lexer = struct {
             'f' => {
                 if (mem.eql(u8, identifier, "false")) {
                     return Token.makeToken(Tokens.FALSE, "FALSE", pos);
+
+                }
+
+                if (mem.eql(u8, identifier, "fn")) {
+                    return Token.makeToken(Tokens.FN, "FN", pos);
+
                 }
             },
             else => {
@@ -195,6 +201,9 @@ pub const Lexer = struct {
         }
 
         switch (ch.?) {
+            ',' => {
+                return Token.makeToken(Tokens.COMMA, ",", pos);
+            },
             '.' => {
                 return Token.makeToken(Tokens.DOT, ".", pos);
             },

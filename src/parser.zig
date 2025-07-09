@@ -71,6 +71,8 @@ pub const Parser = struct {
         parser.nud(Tokens.MINUS, parseNud);
         parser.nud(Tokens.LPAREN, parseGroupExpression);
         parser.nud(Tokens.IF, parseIfExpression);
+        parser.nud(Tokens.FN, parseFnExpression);
+
 
         parser.led(Tokens.PLUS, parseLed);
         parser.led(Tokens.MINUS, parseLed);
@@ -189,7 +191,7 @@ pub const Parser = struct {
 
         const prefixExpr = AST.PrefixExpression{ .token = cur_token, .right = rightExpression };
 
-        const expr = self.createExpressionNode().?; // HANDLE THIS BETTER
+        const expr = self.createExpressionNode(); // HANDLE THIS BETTER
         expr.* = AST.Expression{ .prefix_expr = prefixExpr };
 
         return expr;
@@ -212,7 +214,7 @@ pub const Parser = struct {
         const rightExpression = self.parseExpression(prec) orelse null;
         infixExpr.right = rightExpression;
 
-        const expr = self.createExpressionNode().?; // HANDLE THIS BETTER
+        const expr = self.createExpressionNode(); // HANDLE THIS BETTER
         expr.* = AST.Expression{ .infix_expr = infixExpr };
 
         return expr;
@@ -230,7 +232,7 @@ pub const Parser = struct {
             return null;
         }
 
-        const expr = self.createExpressionNode().?;
+        const expr = self.createExpressionNode();
         expr.* = expression.?.*;
 
         if (!self.expect(Tokens.RPAREN, ")")) {
@@ -298,8 +300,6 @@ pub const Parser = struct {
 
         if_exp.ifBlock = self.parseBlockStatement() orelse null;
 
-        //debug.printTokenDebug(self.cur_token);
-        //debug.printTokenDebug(self.peek_token);
 
         if (self.peekIs(Tokens.ELSE)) {
             self.advance() catch |err| {
@@ -313,14 +313,86 @@ pub const Parser = struct {
             if_exp.elseBlock = self.parseBlockStatement() orelse null;
         }
 
-        const expr = self.createExpressionNode().?;
+        const expr = self.createExpressionNode();
         expr.* = AST.Expression{ .if_expr = if_exp };
 
         return expr;
     }
 
+    pub fn parseFnParameters(self: *Parser) ?[]AST.Identifier {
+        var params = std.ArrayList(AST.Identifier).init(std.heap.page_allocator); // CHANGE THIS ALLOCATOR LATER
+
+        if(self.peekIs(Tokens.RPAREN)){
+            self.advance() catch |err| {
+                std.debug.print("Error getting next token on parser: {any}", .{err});
+            };
+
+            return &[_]AST.Identifier{};
+        }
+
+        self.advance() catch |err| {
+            std.debug.print("Error getting next token on parser: {any}", .{err});
+        };
+
+        const ident = AST.Identifier{ .token = self.cur_token, .literal = self.cur_token.literal };
+        params.append(ident) catch |err| {
+            errorHandling.exitWithError("Unrecoverable error when trying to append function parameter.", err);
+        };
+
+        while(self.peekIs(Tokens.COMMA)){
+            self.advance() catch |err| {
+                std.debug.print("Error getting next token on parser: {any}", .{err});
+            };
+            self.advance() catch |err| {
+                std.debug.print("Error getting next token on parser: {any}", .{err});
+            };
+
+            const _ident = AST.Identifier{ .token = self.cur_token, .literal = self.cur_token.literal };
+            params.append(_ident) catch |err| {
+                errorHandling.exitWithError("Unrecoverable error when trying to append function parameter.", err);
+            };
+        }
+
+        if (!self.expect(Tokens.RPAREN, ")")) {
+            return null;
+        }
+
+        const _params = params.toOwnedSlice() catch |err| {
+            errorHandling.exitWithError("Unrecoverable error when trying to get slice of function parameters.", err);
+        };
+
+        return _params;
+    }
+
+    pub fn parseFnExpression(self: *Parser) ?*AST.Expression {
+        var fnLiteral = AST.fnExpression.init(std.heap.page_allocator, self.cur_token);
+
+        if (!self.expect(Tokens.LPAREN, "(")) {
+            return null;
+        }
+
+        const params = self.parseFnParameters();
+
+        if(params != null){
+            fnLiteral.parameters.appendSlice(params.?) catch |err| {
+                errorHandling.exitWithError("Unrecoverable error when trying to append slice of function parameters.", err);
+            };
+        }
+
+        if (!self.expect(Tokens.LBRACE, "{")) {
+            return null;
+        }
+
+        fnLiteral.body = self.parseBlockStatement() orelse null;
+
+        const expr = self.createExpressionNode();
+        expr.* = AST.Expression{ .fn_expr =  fnLiteral };
+
+        return expr;
+    }
+
     pub fn parseIdentifier(self: *Parser) ?*AST.Expression {
-        const expr = self.createExpressionNode().?;
+        const expr = self.createExpressionNode();
         expr.* = AST.Expression{ .identifier_expr = AST.Identifier{ .token = self.cur_token, .literal = self.cur_token.literal } };
         return expr;
     }
@@ -331,19 +403,19 @@ pub const Parser = struct {
         const result = std.fmt.parseFloat(f64, self.cur_token.literal) catch unreachable;
         const num_exp = AST.NumberExpression{ .token = num_token, .value = result };
 
-        const expr = self.createExpressionNode().?; // HANDLE THIS BETTER
+        const expr = self.createExpressionNode();
         expr.* = AST.Expression{ .number_expr = num_exp };
 
         return expr;
     }
 
     pub fn parseBoolean(self: *Parser) ?*AST.Expression {
-        const expr = self.createExpressionNode().?;
+        const expr = self.createExpressionNode();
         expr.* = AST.Expression{ .boolean_expr = AST.BooleanExpression{ .token = self.cur_token, .value = self.currentIs(Tokens.TRUE) } };
         return expr;
     }
 
-    pub fn createExpressionNode(self: *Parser) ?*AST.Expression {
+    pub fn createExpressionNode(self: *Parser) *AST.Expression {
         const expr = self.arena.allocator().create(AST.Expression) catch |err| {
             errorHandling.exitWithError("Unrecoverable error when trying to create expression node.", err);
         };
@@ -565,7 +637,6 @@ test "Var statement parsing errors len" {
 
     if (program == null) {
         std.debug.print("Error parsing program: program is null\n", .{});
-        //return null;
         try expect(false);
     }
 
@@ -651,5 +722,34 @@ test "if parsing with else" {
 
     for (program.?.nodes.items) |node| {
         debug.printIfExpression(node.expression_stmt.expression.?.*.if_expr);
+    }
+}
+
+test "function literal" {
+    const input: []const u8 =
+    \\fn(){}
+    \\fn(a){}
+    \\fn(a, b){}
+    \\fn(a, b, c){}
+    \\fn(a, b, c, d){
+    \\ var a = 55;
+    \\}
+    ;
+
+    var l: Lexer = try Lexer.init(input);
+    var p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    defer p.deinit();
+
+    const program = try p.parseProgram(std.heap.page_allocator);
+
+    if (program == null) {
+        std.debug.print("Error parsing program: program is null\n", .{});
+        try expect(false);
+    }
+
+    defer program.?.deinit();
+
+    for (program.?.nodes.items) |node| {
+        debug.printFnExpression(node.expression_stmt.expression.?.*.fn_expr);
     }
 }

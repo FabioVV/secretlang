@@ -4,6 +4,8 @@ pub const Tokens = enum {
     NUMBER, // 1234
     STRING, // "this is a string"
 
+    COMMA, // ,
+
     PLUS, // +
     MINUS, // -
     ASTERISK, // *
@@ -29,6 +31,8 @@ pub const Tokens = enum {
 
     IF, // if
     ELSE, // else
+
+    FN, // Function
 
     RETURN, // return token
 
