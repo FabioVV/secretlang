@@ -15,7 +15,7 @@ pub const Program = struct {
         };
 
         program.* = Program{
-            .nodes = std.ArrayList(Statement).init(std.heap.page_allocator),
+            .nodes = std.ArrayList(Statement).init(allocator),
             .arena = arena,
         };
         return program;
@@ -41,6 +41,8 @@ pub const Program = struct {
         }
         self.nodes.deinit();
         self.arena.deinit();
+
+        // Some of the frees in here my do nothing because since i used arena, technically, by calling self.arena.deinit(); it frees everything, but i will keep the individual frees anyway because it does not hurt. Also stuff li the block statements still need to be freed manually
     }
 };
 

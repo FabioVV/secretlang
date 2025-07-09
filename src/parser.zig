@@ -540,8 +540,16 @@ pub const Parser = struct {
     }
 
     pub fn parseReturnToken(self: *Parser) ?AST.ReturnStatement {
-        const rstmt = AST.ReturnStatement{ .token = self.cur_token };
+        var rstmt = AST.ReturnStatement{ .token = self.cur_token };
         self.advance();
+
+        const expression = self.parseExpression(Precedence.DEFAULT);
+        if (expression == null) {
+            self.curTokenParseError("expected an expression but got EOF instead");
+            return null;
+        }
+
+        rstmt.expression = expression;
 
         return rstmt;
     }

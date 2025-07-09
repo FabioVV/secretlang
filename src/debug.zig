@@ -11,7 +11,7 @@ pub const DEBUG_PRINT_VAR_STATEMENT: bool = false;
 pub const DEBUG_PRINT_PREFIX_EXPRESSION: bool = false;
 pub const DEBUG_PRINT_SIMPLE_IF_EXPRESSION: bool = false;
 pub const DEBUG_PRINT_FN: bool = false;
-pub const DEBUG_PRINT_FN_CALL: bool = true;
+pub const DEBUG_PRINT_FN_CALL: bool = false;
 
 const ANSI_RESET = "\x1b[0m";
 const ANSI_RED = "\x1b[31m";
