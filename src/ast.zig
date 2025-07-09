@@ -31,15 +31,8 @@ pub const Program = struct {
                 .block_stmt => |block_stmt| {
                     block_stmt.statements.deinit();
                 },
-                .expression_stmt => |expr|{
-                    switch (expr.expression.?.*) {
-                        .fn_expr => |fnLiteral|{
-                            fnLiteral.parameters.deinit();
-                        },
-                        else => {
-                            // do nothing
-                        },
-                    }
+                .expression_stmt => {
+                    // do nothing
                 },
                 else => {
                     // do nothing
@@ -111,15 +104,30 @@ pub const IfExpression = struct {
 
 pub const fnExpression = struct {
     token: Token,
-    parameters: std.ArrayList(Identifier),
+    parameters: std.BoundedArray(Identifier, 32), // Max 32 params,
     body: ?BlockStatement = undefined,
 
-    pub fn init(allocator: std.mem.Allocator, token: Token) fnExpression {
+    pub fn init(token: Token) fnExpression {
         const fnLiteralExpression = fnExpression{
             .token = token,
-            .parameters = std.ArrayList(Identifier).init(allocator),
+            .parameters = .{},
         };
         return fnLiteralExpression;
+    }
+};
+
+pub const callExpression = struct {
+    token: Token, // ( token
+    function: ?*Expression,
+    arguments: std.BoundedArray(?*Expression, 32), // Max 32 arguments
+
+    pub fn init(token: Token, fn_expr: ?*Expression) callExpression {
+        const callExpr = callExpression{
+            .token = token,
+            .function = fn_expr,
+            .arguments = .{},
+        };
+        return callExpr;
     }
 };
 
@@ -146,6 +154,7 @@ pub const ExprTypes = enum {
     prefix_expr,
     if_expr,
     fn_expr,
+    call_expr,
 };
 
 pub const Expression = union(ExprTypes) {
@@ -157,4 +166,5 @@ pub const Expression = union(ExprTypes) {
     prefix_expr: PrefixExpression,
     if_expr: IfExpression,
     fn_expr: fnExpression,
+    call_expr: callExpression,
 };

@@ -11,6 +11,7 @@ pub const DEBUG_PRINT_VAR_STATEMENT: bool = false;
 pub const DEBUG_PRINT_PREFIX_EXPRESSION: bool = false;
 pub const DEBUG_PRINT_SIMPLE_IF_EXPRESSION: bool = false;
 pub const DEBUG_PRINT_FN: bool = false;
+pub const DEBUG_PRINT_FN_CALL: bool = true;
 
 const ANSI_RESET = "\x1b[0m";
 const ANSI_RED = "\x1b[31m";
@@ -80,6 +81,11 @@ pub fn printExpression(expr: ?*AST.Expression, message: []const u8) void {
         },
         AST.Expression.fn_expr => |fnExpr| {
             std.debug.print("{s}{s}{s}: {s}\n", .{ ANSI_GREEN, message, ANSI_RESET, fnExpr.token.literal });
+        },
+        AST.Expression.call_expr => |callExpr| {
+            std.debug.print("{s}{s} of function call {s}:\n", .{ ANSI_GREEN, message, ANSI_RESET });
+            printExpression(callExpr.function.?, "Functio call");
+
         },
         else => {},
     }
@@ -163,7 +169,7 @@ pub fn printFnExpression(stmt: AST.fnExpression) void {
         std.debug.print("Error debug print fn expression: {any}", .{err});
     };
 
-    for (stmt.parameters.items) |param| {
+    for (stmt.parameters.constSlice()) |param| {
         stdoutwriter.print("Param: {s}\n", .{ param.literal }) catch |err| {
             std.debug.print("Error debug print fn expression params: {any}", .{err});
         };
@@ -177,5 +183,22 @@ pub fn printFnExpression(stmt: AST.fnExpression) void {
         for (stmt.body.?.statements.items) |node| {
             printNodes(node);
         }
+    }
+}
+
+pub fn printFnExpressionCall(stmt: AST.callExpression) void {
+    const stdoutwriter = io.getStdOut().writer();
+
+    if (!DEBUG_PRINT_FN_CALL) return;
+
+
+    stdoutwriter.print("Token: {s} - ->\n", .{ @tagName(stmt.token.token_type) }) catch |err| {
+        std.debug.print("Error debug print fn expression: {any}", .{err});
+    };
+
+    printExpression(stmt.function, "Function");
+
+    for (stmt.arguments.constSlice()) |param| {
+        printExpression(param, "Arg");
     }
 }
