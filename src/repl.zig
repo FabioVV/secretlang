@@ -13,6 +13,8 @@ const Lexer = @import("lexer.zig").Lexer;
 const Parser = @import("parser.zig").Parser;
 const Compiler = @import("compiler.zig").Compiler;
 const AST = @import("ast.zig");
+const _vm = @import("vm.zig");
+const VM = _vm.VM;
 const _instruction = @import("instruction.zig");
 const _value = @import("value.zig");
 const Value = _value.Value;
@@ -40,20 +42,26 @@ pub fn launchRepl() !void {
 
             if (p.errors.items.len > 0) {
                 for (p.errors.items) |err| {
-                    try stdout.print("\n{s}\n", .{err.message});
+                    try stdout.print("  {s}\n", .{err.message});
                 }
                 continue;
             }
 
-            var c: Compiler = Compiler.init(std.heap.page_allocator, program.?);
+            var c: *Compiler = Compiler.init(std.heap.page_allocator, program.?);
             defer c.deinit();
 
-            //const bytecode = c.compile();
             c.compile();
 
-            const op = _instruction.getOpcode(c.instructions.items[0]);
-            std.debug.print("Opcode: {any}\n", .{op});
-            std.debug.print("Number val: {d:6.2}\n", .{c.constantsPool.items[0].asNumber()});
+            // for (program.?.nodes.items) |node| {
+            //    debug.printNodes(node);
+            //}
+
+            // check for compiler errors
+
+            var vm: *VM = VM.init(std.heap.page_allocator, &c.*.constantsPool, &c.*.instructions);
+            defer vm.deinit();
+
+            vm.run();
 
             // for (program.?.nodes.items) |node| {
             //    debug.printNodes(node);
