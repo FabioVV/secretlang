@@ -620,7 +620,7 @@ test "Parser initializtion" {
     ;
 
     var l: Lexer = try Lexer.init(input);
-    var p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    var p: Parser = Parser.init(&l, std.heap.page_allocator);
     defer p.deinit();
 
     try expect(mem.eql(u8, l.content, p.lexer.content));
@@ -637,7 +637,7 @@ test "Var statement parsing" {
     ;
 
     var l: Lexer = try Lexer.init(input);
-    var p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    var p: Parser = Parser.init(&l, std.heap.page_allocator);
     defer p.deinit();
 
     const program = try p.parseProgram(std.heap.page_allocator);
@@ -665,7 +665,7 @@ test "Var statement parsing errors len" {
     ;
 
     var l: Lexer = try Lexer.init(input);
-    var p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    var p: Parser = Parser.init(&l, std.heap.page_allocator);
     defer p.deinit();
 
     const program = try p.parseProgram(std.heap.page_allocator);
@@ -687,7 +687,7 @@ test "Prefix parsing" {
     ;
 
     var l: Lexer = try Lexer.init(input);
-    var p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    var p: Parser = Parser.init(&l, std.heap.page_allocator);
     defer p.deinit();
 
     const program = try p.parseProgram(std.heap.page_allocator);
@@ -715,7 +715,7 @@ test "simple if parsing" {
     ;
 
     var l: Lexer = try Lexer.init(input);
-    var p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    var p: Parser = Parser.init(&l, std.heap.page_allocator);
     defer p.deinit();
 
     const program = try p.parseProgram(std.heap.page_allocator);
@@ -744,7 +744,7 @@ test "if parsing with else" {
     ;
 
     var l: Lexer = try Lexer.init(input);
-    var p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    var p: Parser = Parser.init(&l, std.heap.page_allocator);
     defer p.deinit();
 
     const program = try p.parseProgram(std.heap.page_allocator);
@@ -775,7 +775,7 @@ test "function literal" {
     ;
 
     var l: Lexer = try Lexer.init(input);
-    var p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    var p: Parser = Parser.init(&l, std.heap.page_allocator);
     defer p.deinit();
 
     const program = try p.parseProgram(std.heap.page_allocator);
@@ -802,7 +802,7 @@ test "function call" {
     ;
 
     var l: Lexer = try Lexer.init(input);
-    var p: Parser = try Parser.init(&l, std.heap.page_allocator);
+    var p: Parser = Parser.init(&l, std.heap.page_allocator);
     defer p.deinit();
 
     const program = try p.parseProgram(std.heap.page_allocator);
