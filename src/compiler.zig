@@ -12,6 +12,7 @@ const _value = @import("value.zig");
 const Value = _value.Value;
 const Instruction = _instruction.Instruction;
 
+// todo: Transform values into pointers
 
 pub const Compiler = struct {
     ast_program: *AST.Program,
