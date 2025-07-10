@@ -45,7 +45,7 @@ pub const Parser = struct {
     errors: std.ArrayList(ParserError),
     arena: std.heap.ArenaAllocator,
 
-    pub fn init(lexer: *Lexer, allocator: std.mem.Allocator) !Parser {
+    pub fn init(lexer: *Lexer, allocator: std.mem.Allocator) Parser {
         var parser: Parser = Parser{ .lexer = lexer, .arena = std.heap.ArenaAllocator.init(allocator), .errors = std.ArrayList(ParserError).init(allocator) };
 
         // Initializing hashmaps
@@ -624,6 +624,9 @@ test "Parser initializtion" {
     defer p.deinit();
 
     try expect(mem.eql(u8, l.content, p.lexer.content));
+
+    try expect(p.errors.items.len == 0);
+
 }
 
 test "Var statement parsing" {
@@ -646,6 +649,9 @@ test "Var statement parsing" {
     }
 
     defer program.?.deinit();
+
+    try expect(p.errors.items.len == 0);
+
 
     for (program.?.nodes.items) |node| {
         debug.printVarStatement(node.var_stmt);
@@ -671,10 +677,8 @@ test "Var statement parsing errors len" {
 
     defer program.?.deinit();
 
-    if (p.errors.items.len > 0) {
-        //std.debug.print("\n{s}\n", .{p.errors.items[0].message});
-        try expect(true);
-    }
+    try expect(p.errors.items.len > 0);
+
 }
 
 test "Prefix parsing" {
@@ -695,6 +699,8 @@ test "Prefix parsing" {
     }
 
     defer program.?.deinit();
+
+    try expect(p.errors.items.len == 0);
 
     for (program.?.nodes.items) |node| {
         debug.printPrefixExpression(node.expression_stmt.expression.?.*.prefix_expr);
@@ -721,6 +727,7 @@ test "simple if parsing" {
     }
 
     defer program.?.deinit();
+    try expect(p.errors.items.len == 0);
 
     //for (program.?.nodes.items) |node| {
     //    debug.printIfExpression(node.expression_stmt.expression.?.*.if_expr);
@@ -748,6 +755,8 @@ test "if parsing with else" {
     }
 
     defer program.?.deinit();
+
+    try expect(p.errors.items.len == 0);
 
     for (program.?.nodes.items) |node| {
         debug.printIfExpression(node.expression_stmt.expression.?.*.if_expr);
@@ -778,6 +787,8 @@ test "function literal" {
 
     defer program.?.deinit();
 
+    try expect(p.errors.items.len == 0);
+
     for (program.?.nodes.items) |node| {
         debug.printFnExpression(node.expression_stmt.expression.?.*.fn_expr);
     }
@@ -802,6 +813,9 @@ test "function call" {
     }
 
     defer program.?.deinit();
+
+    try expect(p.errors.items.len == 0);
+
 
     for (program.?.nodes.items) |node| {
         debug.printFnExpressionCall(node.expression_stmt.expression.?.*.call_expr);

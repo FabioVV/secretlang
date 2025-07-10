@@ -11,7 +11,12 @@ const Token = _token.Token;
 const Tokens = _token.Tokens;
 const Lexer = @import("lexer.zig").Lexer;
 const Parser = @import("parser.zig").Parser;
+const Compiler = @import("compiler.zig").Compiler;
 const AST = @import("ast.zig");
+const _instruction = @import("instruction.zig");
+const _value = @import("value.zig");
+const Value = _value.Value;
+const Instruction = _instruction.Instruction;
 
 pub fn launchRepl() !void {
     const stdin = std.io.getStdIn().reader();
@@ -23,14 +28,14 @@ pub fn launchRepl() !void {
 
         if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |input_text| {
             var l: Lexer = try Lexer.init(input_text);
-            var p: Parser = try Parser.init(&l, std.heap.page_allocator);
+            var p: Parser = Parser.init(&l, std.heap.page_allocator);
             defer p.deinit();
 
             const program = try p.parseProgram(std.heap.page_allocator);
             defer program.?.deinit();
 
             if (program == null) {
-                try stdout.print("Error parsing program: program is null\n", .{});
+                try stdout.print("Error parsing program\n", .{});
             }
 
             if (p.errors.items.len > 0) {
@@ -40,9 +45,19 @@ pub fn launchRepl() !void {
                 continue;
             }
 
-            for (program.?.nodes.items) |node| {
-                debug.printNodes(node);
-            }
+            var c: Compiler = Compiler.init(std.heap.page_allocator, program.?);
+            defer c.deinit();
+
+            //const bytecode = c.compile();
+            c.compile();
+
+            const op = _instruction.getOpcode(c.instructions.items[0]);
+            std.debug.print("Opcode: {any}\n", .{op});
+            std.debug.print("Number val: {d:6.2}\n", .{c.constantsPool.items[0].asNumber()});
+
+            // for (program.?.nodes.items) |node| {
+            //    debug.printNodes(node);
+            // }
         }
     }
 }

@@ -28,8 +28,6 @@ pub const Lexer = struct {
         return lexer;
     }
 
-    pub fn deinit() void {}
-
     pub fn advance(self: *Lexer) ?u8 {
         if (self.iterator.nextCodepointSlice()) |char| {
             self.currentChar = char[0];
