@@ -41,39 +41,22 @@ pub const VM = struct {
     }
 
     fn BINARY_OP(self: *VM, operator: u8, instruction: Instruction) void {
-        //std.debug.print("RA: {any}\n", .{_instruction.DECODE_RA(instruction)});
-        //std.debug.print("RB: {any}\n", .{_instruction.DECODE_RB(instruction)});
-
         const RA = self.registers.get(_instruction.DECODE_RA(instruction));
         const RB = self.registers.get(_instruction.DECODE_RB(instruction));
         const RC = _instruction.DECODE_RC(instruction);
 
-        var RA_VAL: f64 = 0.0;
-        if (RA.isNumber()) {
-            RA_VAL = RA.asNumber().?;
-        } else {
-            RA_VAL = self.GET_CONSTANT(RA.asConstantIndex().?).asNumber().?;
-        }
-
-        var RB_VAL: f64 = 0.0;
-        if (RB.isNumber()) {
-            RB_VAL = RA.asNumber().?;
-        } else {
-            RB_VAL = self.GET_CONSTANT(RB.asConstantIndex().?).asNumber().?;
-        }
-
         switch (operator) {
             '+' => {
-                self.registers.set(RC, Value.createNumber(RA_VAL + RB_VAL));
+                self.registers.set(RC, Value.createNumber(RB.NUMBER + RA.NUMBER));
             },
             '-' => {
-                self.registers.set(RC, Value.createNumber(RA_VAL - RB_VAL));
+                self.registers.set(RC, Value.createNumber(RB.NUMBER - RA.NUMBER));
             },
             '*' => {
-                self.registers.set(RC, Value.createNumber(RA_VAL * RB_VAL));
+                self.registers.set(RC, Value.createNumber(RB.NUMBER * RA.NUMBER));
             },
             '/' => {
-                self.registers.set(RC, Value.createNumber(RA_VAL / RB_VAL));
+                self.registers.set(RC, Value.createNumber(RB.NUMBER / RA.NUMBER));
             },
             else => {},
         }
@@ -92,9 +75,9 @@ pub const VM = struct {
                 .OP_CONSTANT => {
                     const constantIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
                     const RC = _instruction.DECODE_RC(curInstruction);
-                    self.registers.set(RC, Value.createConstantIndex(constantIdx));
-                    std.debug.print("RC constant: {any}\n", .{RC});
-                    std.debug.print("Constant val: {d:6.1}\n", .{self.constantsPool.*.items[constantIdx].NUMBER});
+                    const contantValue = self.GET_CONSTANT(constantIdx);
+
+                    self.registers.set(RC, contantValue);
                 },
                 .OP_ADD => {
                     self.*.BINARY_OP('+', curInstruction);

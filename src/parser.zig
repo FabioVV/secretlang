@@ -184,11 +184,16 @@ pub const Parser = struct {
 
         self.advance();
 
-        if (!self.expectCurrentTokenIs(Tokens.NUMBER, "number")) {
-            return null;
-        }
+        //if (!self.expectCurrentTokenIs(Tokens.NUMBER, "number")) {
+         //   return null;
+        //}
 
-        const rightExpression = self.parseExpression(Precedence.PREFIX) orelse null; // HANDLE THIS BETTER
+        const rightExpression = self.parseExpression(Precedence.PREFIX);
+
+        //if (rightExpression == null) {
+        //self.curTokenParseError("expected an expression but got EOF instead");
+        //    return null;
+        //}
 
         const prefixExpr = AST.PrefixExpression{ .token = cur_token, .right = rightExpression };
 
@@ -206,11 +211,17 @@ pub const Parser = struct {
 
         self.advance();
 
-        if (!self.expectCurrentTokenIs(Tokens.NUMBER, "number")) {
-            return null;
-        }
+        //if (!self.expectCurrentTokenIs(Tokens.NUMBER, "number")) {
+        //    return null;
+        //}
 
-        const rightExpression = self.parseExpression(prec) orelse null;
+        const rightExpression = self.parseExpression(prec);
+
+        //if (rightExpression == null) {
+            //self.curTokenParseError("expected an expression but got EOF instead");
+        //    return null;
+        //}
+
         infixExpr.right = rightExpression;
 
         const expr = self.createExpressionNode();
@@ -275,7 +286,7 @@ pub const Parser = struct {
         const expression = self.parseExpression(Precedence.DEFAULT);
 
         if (expression == null) {
-            self.curTokenParseError("expected an expression but got EOF instead");
+           //self.curTokenParseError("expected an expression but got EOF instead");
             return null;
         }
 
