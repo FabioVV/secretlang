@@ -19,9 +19,13 @@ pub const TOTAL_REGISTERS = 256;
 
 pub const VM = struct {
     registers: std.BoundedArray(Value, TOTAL_REGISTERS),
+
     arena: std.heap.ArenaAllocator,
+
     instructions: *std.ArrayList(Instruction),
     constantsPool: *std.ArrayList(Value),
+
+    pc: usize,
 
     pub fn init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction)) *VM {
         var arena = std.heap.ArenaAllocator.init(allocator);
@@ -31,6 +35,8 @@ pub const VM = struct {
         vm.registers = std.BoundedArray(Value, TOTAL_REGISTERS).init(TOTAL_REGISTERS) catch unreachable;
         vm.*.instructions = instructions;
         vm.*.constantsPool = constantsPool;
+
+        vm.*.pc = 0;
 
         return vm;
     }
@@ -85,10 +91,9 @@ pub const VM = struct {
     }
 
     pub fn run(self: *VM) void {
-        for (self.instructions.*.items) |curInstruction| {
+        while (self.*.pc < self.instructions.*.items.len) : (self.*.pc += 1) {
+            const curInstruction = self.instructions.*.items[self.*.pc];
             const opcode = _instruction.GET_OPCODE(curInstruction);
-            //std.debug.print("{any}\n", .{curInstruction});
-            //std.debug.print("{any}\n", .{opcode});
 
             switch (opcode) {
                 .OP_CONSTANT => {
