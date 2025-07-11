@@ -47,7 +47,7 @@ pub const Compiler = struct {
         self.arena.deinit();
     }
 
-    pub fn addConstant(self: *Compiler, val: Value) u16 {
+    fn addConstant(self: *Compiler, val: Value) u16 {
         self.constantsPool.append(val) catch |err| {
             std.debug.print("{any}\n", .{err});
             std.process.exit(1); // Fix this later
@@ -60,13 +60,13 @@ pub const Compiler = struct {
         return @intCast(self.constantsPool.items.len - 1);
     }
 
-    pub fn emitInstruction(self: *Compiler, instruction: Instruction) void {
+    fn emitInstruction(self: *Compiler, instruction: Instruction) void {
         self.instructions.append(instruction) catch |err| {
             errorHandling.exitWithError("unrecoverable error trying to emit instruction", err);
         };
     }
 
-    pub fn emitConstant(self: *Compiler, val: Value) u16 {
+    fn emitConstant(self: *Compiler, val: Value) u16 {
         const contantIndex = self.addConstant(val);
         const result_register = self.free_registers.pop().?;
         self.used_registers.append(result_register) catch unreachable;
@@ -78,7 +78,35 @@ pub const Compiler = struct {
         return contantIndex;
     }
 
-    pub fn compileExpression(self: *Compiler, expr: ?*AST.Expression) void {
+    fn emitJumpIfFalse(self: *Compiler, RA: u8) usize {
+        self.emitInstruction(_instruction.ENCODE_JUMP_IF_FALSE(RA));
+        return self.instructions.items.len - 1;
+    }
+
+    fn emitJump(self: *Compiler) usize {
+        self.emitInstruction(_instruction.ENCODE_JUMP());
+        return self.instructions.items.len - 1;
+    }
+
+    fn emitNil(self: *Compiler) void {
+        const result_register = self.free_registers.pop().?;
+        self.used_registers.append(result_register) catch unreachable;
+        self.emitInstruction(_instruction.ENCODE_NIL(result_register));
+    }
+
+    fn patchJump(self: *Compiler, pos: usize) void {
+        const one: usize = 1;
+        const jump = self.instructions.items.len - pos - one;
+
+        // ensure the jump doesn't exceed the allowed 18-bit range
+        if (jump > 0x3FFFF) { // jump > 18 bits
+            // compiler error
+        }
+
+        self.instructions.items[pos] = self.instructions.items[pos] | (@as(Instruction, @intCast(jump)) & 0x3FFFF);
+    }
+
+    fn compileExpression(self: *Compiler, expr: ?*AST.Expression) void {
         switch (expr.?.*) {
             AST.Expression.number_expr => |numExpr| {
                 _ = self.emitConstant(Value.createNumber(numExpr.value));
@@ -122,6 +150,29 @@ pub const Compiler = struct {
                 self.used_registers.append(result_register) catch unreachable;
                 self.free_registers.append(right_register) catch unreachable;
             },
+            AST.Expression.if_expr => |ifExpr| {
+                self.compileExpression(ifExpr.condition);
+
+                const condtition_register = self.used_registers.pop().?;
+
+                const ifJump = self.emitJumpIfFalse(condtition_register);
+
+                self.free_registers.append(condtition_register) catch unreachable;
+
+                self.compileBlockStatement(ifExpr.ifBlock.?);
+
+                const elseJump = self.emitJump();
+
+                self.patchJump(ifJump);
+
+                if (ifExpr.elseBlock == null) {
+                    self.emitNil();
+                } else {
+                    self.compileBlockStatement(ifExpr.elseBlock.?);
+                }
+
+                self.patchJump(elseJump);
+            },
             else => {},
         }
     }
@@ -141,27 +192,36 @@ pub const Compiler = struct {
         _ = stmt;
     }
 
+    fn compileBlockStatement(self: *Compiler, stmt: AST.BlockStatement) void {
+        for (stmt.statements.items) |stmt_node| {
+            self.compile_stmts(stmt_node);
+        }
+    }
+
     inline fn compileExpressionStatement(self: *Compiler, stmt: AST.ExpressionStatement) void {
         self.compileExpression(stmt.expression);
     }
 
+    pub inline fn compile_stmts(self: *Compiler, stmt: AST.Statement) void {
+        switch (stmt) {
+            .var_stmt => |var_stmt| {
+                self.compileVarStatement(var_stmt);
+            },
+            .return_stmt => |r_stmt| {
+                self.compileReturnStatement(r_stmt);
+            },
+            .expression_stmt => |e_stmt| {
+                self.compileExpressionStatement(e_stmt);
+            },
+            .block_stmt => |b_stmt| {
+                self.compileBlockStatement(b_stmt);
+            },
+        }
+    }
+
     pub fn compile(self: *Compiler) void {
         for (self.ast_program.nodes.items) |node| {
-            switch (node) {
-                .var_stmt => |stmt| {
-                    self.compileVarStatement(stmt);
-                },
-                .return_stmt => |stmt| {
-                    self.compileReturnStatement(stmt);
-                },
-                .expression_stmt => |stmt| {
-                    self.compileExpressionStatement(stmt);
-                },
-                else => {
-                    // do nothing
-                },
-            }
-
+            self.compile_stmts(node);
             //self.registers_status();
         }
     }

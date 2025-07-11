@@ -14,7 +14,7 @@ pub const Value = union(ValueType) {
     }
 
     pub fn createNil() Value {
-        return Value{ .NIL = .{} };
+        return Value{ .NIL = void{} };
     }
 
     pub fn createBoolean(boolean: bool) Value {
@@ -30,4 +30,25 @@ pub const Value = union(ValueType) {
         };
     }
 
+    pub fn isBoolean(self: Value) bool {
+        return switch (self) {
+            .BOOLEAN => true,
+            else => {
+                return false;
+            },
+        };
+    }
+
+    pub fn isTruthy(self: Value) bool {
+        return switch (self) {
+            .BOOLEAN => |b| b,
+            .NIL => false,
+            .NUMBER => |n| {
+                if (n == 0) {
+                    return false;
+                }
+                return true;
+            },
+        };
+    }
 };

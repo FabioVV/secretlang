@@ -67,6 +67,15 @@ pub const VM = struct {
 
             const s = self.registers.get(RC).BOOLEAN;
             std.debug.print("{}\n", .{s});
+        } else if (RA.isBoolean() and RB.isBoolean()) {
+            if (mem.eql(u8, operator, "==")) {
+                self.registers.set(RC, Value.createBoolean(RB.BOOLEAN == RA.BOOLEAN));
+            } else if (mem.eql(u8, operator, "!=")) {
+                self.registers.set(RC, Value.createBoolean(RB.BOOLEAN != RA.BOOLEAN));
+            }
+
+            const s = self.registers.get(RC).BOOLEAN;
+            std.debug.print("{}\n", .{s});
         }
     }
 
@@ -171,6 +180,13 @@ pub const VM = struct {
                     const s = self.registers.get(RC).BOOLEAN;
                     std.debug.print("{}\n", .{s});
                 },
+                .OP_NIL => {
+                    const RC = _instruction.DECODE_RC(curInstruction);
+                    self.registers.set(RC, Value.createNil());
+
+                    const s = self.registers.get(RC).NIL;
+                    std.debug.print("{}\n", .{s});
+                },
                 .OP_BANG => {
                     const RA = self.registers.get(_instruction.DECODE_RA(curInstruction));
                     const RC = _instruction.DECODE_RC(curInstruction);
@@ -188,6 +204,19 @@ pub const VM = struct {
                     const s = self.registers.get(RC).NUMBER;
                     std.debug.print("{d:6.2}\n", .{s});
                 },
+                .OP_JUMP_IF_FALSE => {
+                    const RC = self.registers.get(_instruction.DECODE_RC(curInstruction));
+                    const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
+
+                    if (!RC.isTruthy()) {
+                        self.*.pc += jumpOffset;
+                    }
+                },
+                .OP_JUMP => {
+                    const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
+                    self.*.pc += jumpOffset;
+                },
+
                 else => {
                     std.debug.print("Unhandled OPCODE: {any} \n", .{opcode});
                     std.process.exit(1);
