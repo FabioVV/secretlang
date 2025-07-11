@@ -68,7 +68,7 @@ pub const Compiler = struct {
 
     pub fn emitConstant(self: *Compiler, val: Value) u16 {
         const contantIndex = self.addConstant(val);
-        const result_register = self.free_registers.pop();
+        const result_register = self.free_registers.pop().?;
         self.used_registers.append(result_register) catch unreachable;
 
         self.instructions.append(_instruction.ENCODE_CONSTANT(contantIndex, result_register)) catch |err| { // Maybe pass the line so that errors can be nicely reporter later in the vm
@@ -84,10 +84,10 @@ pub const Compiler = struct {
                 _ = self.emitConstant(Value.createNumber(numExpr.value));
             },
             AST.Expression.boolean_expr => |boolExpr| {
-                const result_register = self.free_registers.pop();
+                const result_register = self.free_registers.pop().?;
                 self.used_registers.append(result_register) catch unreachable;
 
-                if(boolExpr.value){
+                if (boolExpr.value) {
                     self.emitInstruction(_instruction.ENCODE_BOOLEAN_TRUE(result_register));
                 } else {
                     self.emitInstruction(_instruction.ENCODE_BOOLEAN_FALSE(result_register));
@@ -99,9 +99,9 @@ pub const Compiler = struct {
                 self.compileExpression(infixExpr.left);
                 self.compileExpression(infixExpr.right);
 
-                const result_register = self.free_registers.pop();
-                const left_register = self.used_registers.pop();
-                const right_register = self.used_registers.pop();
+                const result_register = self.free_registers.pop().?;
+                const left_register = self.used_registers.pop().?;
+                const right_register = self.used_registers.pop().?;
 
                 self.emitInstruction(_instruction.ENCODE_BINARY(operator, result_register, left_register, right_register));
 
@@ -114,8 +114,8 @@ pub const Compiler = struct {
 
                 self.compileExpression(infixExpr.right);
 
-                const result_register = self.free_registers.pop();
-                const right_register = self.used_registers.pop();
+                const result_register = self.free_registers.pop().?;
+                const right_register = self.used_registers.pop().?;
 
                 self.emitInstruction(_instruction.ENCODE_PREFIX(operator, result_register, right_register));
 
