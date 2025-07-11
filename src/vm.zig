@@ -13,6 +13,8 @@ const _value = @import("value.zig");
 const Value = _value.Value;
 const Instruction = _instruction.Instruction;
 
+//TODO: ADD RUNTIME AND COMPILE TIME ERRORS
+
 pub const TOTAL_REGISTERS = 256;
 
 pub const VM = struct {
@@ -62,6 +64,7 @@ pub const VM = struct {
                 self.registers.set(RC, Value.createBoolean(RB.NUMBER != RA.NUMBER));
 
             }
+
             const s = self.registers.get(RC).BOOLEAN;
             std.debug.print("{}\n", .{s});
         }
@@ -72,6 +75,7 @@ pub const VM = struct {
         const RA = self.registers.get(_instruction.DECODE_RA(instruction));
         const RB = self.registers.get(_instruction.DECODE_RB(instruction));
         const RC = _instruction.DECODE_RC(instruction);
+        //std.debug.print("RC: {d}\n", .{RC});
 
         if(mem.eql(u8, operator, "+")) {
             self.registers.set(RC, Value.createNumber(RB.NUMBER + RA.NUMBER));
@@ -173,11 +177,27 @@ pub const VM = struct {
                     const s = self.registers.get(RC).BOOLEAN;
                     std.debug.print("{}\n", .{s});
                 },
+                .OP_BANG => {
+                    //const RA = self.registers.get(_instruction.DECODE_RA(curInstruction));
+                    //const RC = _instruction.DECODE_RC(curInstruction);
+
+                },
+                .OP_MINUS => {
+                    const RA = self.registers.get(_instruction.DECODE_RA(curInstruction));
+                    const RC = _instruction.DECODE_RC(curInstruction);
+
+
+                    self.registers.set(RC, Value.createNumber(-RA.NUMBER));
+                    const s = self.registers.get(RC).NUMBER;
+                    std.debug.print("{d:6.2}\n", .{s});
+                },
                 else => {
                     std.debug.print("Unhandled OPCODE: {any} \n", .{opcode});
                     std.process.exit(1);
                 },
             }
+
+
         }
     }
 };

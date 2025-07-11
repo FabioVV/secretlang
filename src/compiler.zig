@@ -109,8 +109,26 @@ pub const Compiler = struct {
                 self.free_registers.append(left_register) catch unreachable;
                 self.free_registers.append(right_register) catch unreachable;
             },
+            AST.Expression.prefix_expr => |infixExpr| {
+                const operator = infixExpr.token.literal;
+
+                self.compileExpression(infixExpr.right);
+
+                const result_register = self.free_registers.pop();
+                const right_register = self.used_registers.pop();
+
+                self.emitInstruction(_instruction.ENCODE_PREFIX(operator, result_register, right_register));
+
+                self.used_registers.append(result_register) catch unreachable;
+                self.free_registers.append(right_register) catch unreachable;
+            },
             else => {},
         }
+    }
+
+    fn registers_status(self: *Compiler) void {
+        std.debug.print("FREE REGISTERS: R{d}\n", .{self.free_registers.len});
+        std.debug.print("USED REGISTERS: R{d}\n", .{self.used_registers.len});
     }
 
     fn compileVarStatement(self: *Compiler, stmt: AST.VarStatement) void {
@@ -143,6 +161,8 @@ pub const Compiler = struct {
                     // do nothing
                 },
             }
+
+            //self.registers_status();
         }
     }
 };

@@ -21,6 +21,9 @@ pub const Opcode = enum(u8) {
     OP_LESSTHAN = 11,
     OP_LESSEQUAL = 12,
     OP_GREATEREQUAL = 13,
+
+    OP_MINUS = 14,
+    OP_BANG = 15,
 };
 
 // Maybe make a struct InstructionHandler to encode/decode
@@ -69,6 +72,22 @@ pub fn ENCODE_BINARY(operator: []const u8, r_dest: u8, ra: u8, rb: u8) Instructi
         return 0;
     }
 
+}
+
+pub fn ENCODE_PREFIX(operator: []const u8, r_dest: u8, ra: u8) Instruction {
+    switch (operator[0]) {
+        '!' => {
+            return @as(Instruction, @intFromEnum(Opcode.OP_BANG)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10);
+
+        },
+        '-' => {
+            return @as(Instruction, @intFromEnum(Opcode.OP_MINUS)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10);
+
+        },
+        else => {
+            return 0;
+        }
+    }
 }
 
 pub fn ENCODE_BOOLEAN_TRUE(r_dest: u8) Instruction{
