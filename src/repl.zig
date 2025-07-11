@@ -52,8 +52,8 @@ pub fn launchRepl() !void {
 
             c.compile();
 
-            // for (program.?.nodes.items) |node| {
-            //    debug.printNodes(node);
+            //for (program.?.nodes.items) |node| {
+            //   debug.printNodes(node);
             //}
 
             // check for compiler errors
@@ -63,9 +63,6 @@ pub fn launchRepl() !void {
 
             vm.run();
 
-            // for (program.?.nodes.items) |node| {
-            //    debug.printNodes(node);
-            // }
         }
     }
 }

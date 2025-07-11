@@ -54,7 +54,7 @@ pub const Parser = struct {
         parser.binding_powers = std.AutoHashMap(Tokens, Precedence).init(std.heap.page_allocator);
 
         // Setting up the binding power hashtable
-        parser.bindingPower(Tokens.EQUAL, Precedence.EQUALS);
+        parser.bindingPower(Tokens.EQUAL_EQUAL, Precedence.EQUALS);
         parser.bindingPower(Tokens.NOT_EQUAL, Precedence.EQUALS);
         parser.bindingPower(Tokens.LESST, Precedence.LESS_GREATER);
         parser.bindingPower(Tokens.GREATERT, Precedence.LESS_GREATER);
@@ -82,7 +82,7 @@ pub const Parser = struct {
         parser.led(Tokens.MINUS, parseLed);
         parser.led(Tokens.FSLASH, parseLed);
         parser.led(Tokens.ASTERISK, parseLed);
-        parser.led(Tokens.EQUAL, parseLed);
+        parser.led(Tokens.EQUAL_EQUAL, parseLed);
         parser.led(Tokens.NOT_EQUAL, parseLed);
         parser.led(Tokens.LESST, parseLed);
         parser.led(Tokens.GREATERT, parseLed);

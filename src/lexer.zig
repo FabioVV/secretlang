@@ -237,12 +237,24 @@ pub const Lexer = struct {
                 return Token.makeToken(Tokens.NOT, "!", pos);
             },
             '=' => {
+                if (self.peek() == '=') {
+                    _ = self.advance();
+                    return Token.makeToken(Tokens.EQUAL_EQUAL, "==", pos);
+                }
                 return Token.makeToken(Tokens.EQUAL, "=", pos);
             },
             '<' => {
+                if (self.peek() == '=') {
+                    _ = self.advance();
+                    return Token.makeToken(Tokens.EQUAL_EQUAL, "<=", pos);
+                }
                 return Token.makeToken(Tokens.LESST, "<", pos);
             },
             '>' => {
+                if (self.peek() == '=') {
+                    _ = self.advance();
+                    return Token.makeToken(Tokens.GREATERT, ">=", pos);
+                }
                 return Token.makeToken(Tokens.GREATERT, ">", pos);
             },
             '"' => {

@@ -1,5 +1,6 @@
 const std = @import("std");
 const expect = std.testing.expect;
+const mem = std.mem;
 
 const _token = @import("token.zig");
 const Token = _token.Token;
@@ -40,28 +41,53 @@ pub const VM = struct {
         return self.constantsPool.*.items[idx];
     }
 
-    fn BINARY_OP(self: *VM, operator: u8, instruction: Instruction) void {
+    fn makeComparison(self: *VM, operator: []const u8, RA: Value, RB: Value, RC: u8) void {
+        if(RA.isNumber() and RB.isNumber()){
+            if(mem.eql(u8, operator, "<")) {
+                self.registers.set(RC, Value.createBoolean(RB.NUMBER < RA.NUMBER));
+
+            } else if(mem.eql(u8, operator, ">")) {
+                self.registers.set(RC, Value.createBoolean(RB.NUMBER > RA.NUMBER));
+
+            } else if(mem.eql(u8, operator, "<=")) {
+                self.registers.set(RC, Value.createBoolean(RB.NUMBER <= RA.NUMBER));
+
+            } else if(mem.eql(u8, operator, ">=")) {
+                self.registers.set(RC, Value.createBoolean(RB.NUMBER >= RA.NUMBER));
+
+            } else if(mem.eql(u8, operator, "==")) {
+                self.registers.set(RC, Value.createBoolean(RB.NUMBER == RA.NUMBER));
+
+            } else if(mem.eql(u8, operator, "!=")) {
+                self.registers.set(RC, Value.createBoolean(RB.NUMBER != RA.NUMBER));
+
+            }
+            const s = self.registers.get(RC).BOOLEAN;
+            std.debug.print("{}\n", .{s});
+        }
+
+    }
+
+    fn BINARY_OP(self: *VM, operator: []const u8, instruction: Instruction) void {
         const RA = self.registers.get(_instruction.DECODE_RA(instruction));
         const RB = self.registers.get(_instruction.DECODE_RB(instruction));
         const RC = _instruction.DECODE_RC(instruction);
 
-        switch (operator) {
-            '+' => {
-                self.registers.set(RC, Value.createNumber(RB.NUMBER + RA.NUMBER));
-            },
-            '-' => {
-                self.registers.set(RC, Value.createNumber(RB.NUMBER - RA.NUMBER));
-            },
-            '*' => {
-                self.registers.set(RC, Value.createNumber(RB.NUMBER * RA.NUMBER));
-            },
-            '/' => {
-                self.registers.set(RC, Value.createNumber(RB.NUMBER / RA.NUMBER));
-            },
-            else => {},
+        if(mem.eql(u8, operator, "+")) {
+            self.registers.set(RC, Value.createNumber(RB.NUMBER + RA.NUMBER));
+
+        } else if(mem.eql(u8, operator, "-")) {
+            self.registers.set(RC, Value.createNumber(RB.NUMBER - RA.NUMBER));
+
+        } else if(mem.eql(u8, operator, "*")) {
+            self.registers.set(RC, Value.createNumber(RB.NUMBER * RA.NUMBER));
+
+        } else if(mem.eql(u8, operator, "/")) {
+            self.registers.set(RC, Value.createNumber(RB.NUMBER / RA.NUMBER));
+
         }
 
-        const s = self.registers.get(RC).asNumber().?;
+        const s = self.registers.get(RC).NUMBER;
         std.debug.print("{d:6.2}\n", .{s});
     }
 
@@ -80,16 +106,72 @@ pub const VM = struct {
                     self.registers.set(RC, contantValue);
                 },
                 .OP_ADD => {
-                    self.*.BINARY_OP('+', curInstruction);
+                    self.*.BINARY_OP("+", curInstruction);
                 },
                 .OP_SUB => {
-                    self.*.BINARY_OP('-', curInstruction);
+                    self.*.BINARY_OP("-", curInstruction);
                 },
                 .OP_MUL => {
-                    self.*.BINARY_OP('*', curInstruction);
+                    self.*.BINARY_OP("*", curInstruction);
                 },
                 .OP_DIV => {
-                    self.*.BINARY_OP('/', curInstruction);
+                    self.*.BINARY_OP("/", curInstruction);
+                },
+                .OP_EQUAL => {
+                    const RA = self.registers.get(_instruction.DECODE_RA(curInstruction));
+                    const RB = self.registers.get(_instruction.DECODE_RB(curInstruction));
+                    const RC = _instruction.DECODE_RC(curInstruction);
+
+                    self.*.makeComparison("==", RA, RB, RC);
+                },
+                .OP_NOTEQUAL => {
+                    const RA = self.registers.get(_instruction.DECODE_RA(curInstruction));
+                    const RB = self.registers.get(_instruction.DECODE_RB(curInstruction));
+                    const RC = _instruction.DECODE_RC(curInstruction);
+
+                    self.*.makeComparison("!=", RA, RB, RC);
+                },
+                .OP_LESSEQUAL => {
+                    const RA = self.registers.get(_instruction.DECODE_RA(curInstruction));
+                    const RB = self.registers.get(_instruction.DECODE_RB(curInstruction));
+                    const RC = _instruction.DECODE_RC(curInstruction);
+
+                    self.*.makeComparison("<=", RA, RB, RC);
+                },
+                .OP_GREATEREQUAL => {
+                    const RA = self.registers.get(_instruction.DECODE_RA(curInstruction));
+                    const RB = self.registers.get(_instruction.DECODE_RB(curInstruction));
+                    const RC = _instruction.DECODE_RC(curInstruction);
+
+                    self.*.makeComparison(">=", RA, RB, RC);
+                },
+                .OP_GREATERTHAN => {
+                    const RA = self.registers.get(_instruction.DECODE_RA(curInstruction));
+                    const RB = self.registers.get(_instruction.DECODE_RB(curInstruction));
+                    const RC = _instruction.DECODE_RC(curInstruction);
+
+                    self.*.makeComparison(">", RA, RB, RC);
+                },
+                .OP_LESSTHAN => {
+                    const RA = self.registers.get(_instruction.DECODE_RA(curInstruction));
+                    const RB = self.registers.get(_instruction.DECODE_RB(curInstruction));
+                    const RC = _instruction.DECODE_RC(curInstruction);
+
+                    self.*.makeComparison("<", RA, RB, RC);
+                },
+                .OP_FALSE => {
+                    const RC = _instruction.DECODE_RC(curInstruction);
+                    self.registers.set(RC, Value.createBoolean(false));
+
+                    const s = self.registers.get(RC).BOOLEAN;
+                    std.debug.print("{}\n", .{s});
+                },
+                .OP_TRUE => {
+                    const RC = _instruction.DECODE_RC(curInstruction);
+                    self.registers.set(RC, Value.createBoolean(true));
+
+                    const s = self.registers.get(RC).BOOLEAN;
+                    std.debug.print("{}\n", .{s});
                 },
                 else => {
                     std.debug.print("Unhandled OPCODE: {any} \n", .{opcode});

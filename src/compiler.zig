@@ -78,13 +78,23 @@ pub const Compiler = struct {
         return contantIndex;
     }
 
-    fn compileExpression(self: *Compiler, expr: ?*AST.Expression) void {
+    pub fn compileExpression(self: *Compiler, expr: ?*AST.Expression) void {
         switch (expr.?.*) {
             AST.Expression.number_expr => |numExpr| {
                 _ = self.emitConstant(Value.createNumber(numExpr.value));
             },
+            AST.Expression.boolean_expr => |boolExpr| {
+                const result_register = self.free_registers.pop();
+                self.used_registers.append(result_register) catch unreachable;
+
+                if(boolExpr.value){
+                    self.emitInstruction(_instruction.ENCODE_BOOLEAN_TRUE(result_register));
+                } else {
+                    self.emitInstruction(_instruction.ENCODE_BOOLEAN_FALSE(result_register));
+                }
+            },
             AST.Expression.infix_expr => |infixExpr| {
-                const operator = infixExpr.token.literal[0];
+                const operator = infixExpr.token.literal;
 
                 self.compileExpression(infixExpr.left);
                 self.compileExpression(infixExpr.right);
