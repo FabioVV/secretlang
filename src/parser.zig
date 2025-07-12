@@ -71,6 +71,7 @@ pub const Parser = struct {
         parser.nud(Tokens.NUMBER, parseNumber);
         parser.nud(Tokens.TRUE, parseBoolean);
         parser.nud(Tokens.FALSE, parseBoolean);
+        parser.nud(Tokens.STRING, parseString);
         parser.nud(Tokens.NOT, parseNud);
         parser.nud(Tokens.MINUS, parseNud);
         parser.nud(Tokens.LPAREN, parseGroupExpression);
@@ -444,6 +445,15 @@ pub const Parser = struct {
 
         const expr = self.createExpressionNode();
         expr.* = AST.Expression{ .number_expr = num_exp };
+
+        return expr;
+    }
+
+    pub fn parseString(self: *Parser) ?*AST.Expression {
+        const str_exp = AST.StringExpression{ .token = self.cur_token, .value = self.cur_token.literal };
+
+        const expr = self.createExpressionNode();
+        expr.* = AST.Expression{ .string_expr = str_exp };
 
         return expr;
     }

@@ -47,6 +47,11 @@ pub const Compiler = struct {
         self.arena.deinit();
     }
 
+    fn registers_status(self: *Compiler) void {
+        std.debug.print("FREE REGISTERS: R{d}\n", .{self.free_registers.len});
+        std.debug.print("USED REGISTERS: R{d}\n", .{self.used_registers.len});
+    }
+
     fn addConstant(self: *Compiler, val: Value) u16 {
         self.constantsPool.append(val) catch |err| {
             std.debug.print("{any}\n", .{err});
@@ -110,6 +115,9 @@ pub const Compiler = struct {
         switch (expr.?.*) {
             AST.Expression.number_expr => |numExpr| {
                 _ = self.emitConstant(Value.createNumber(numExpr.value));
+            },
+            AST.Expression.string_expr => |strExpr| {
+                _ = self.emitConstant(Value.createString(std.heap.page_allocator.dupe(u8, strExpr.value) catch unreachable));
             },
             AST.Expression.boolean_expr => |boolExpr| {
                 const result_register = self.free_registers.pop().?;
@@ -177,14 +185,19 @@ pub const Compiler = struct {
         }
     }
 
-    fn registers_status(self: *Compiler) void {
-        std.debug.print("FREE REGISTERS: R{d}\n", .{self.free_registers.len});
-        std.debug.print("USED REGISTERS: R{d}\n", .{self.used_registers.len});
-    }
-
     fn compileVarStatement(self: *Compiler, stmt: AST.VarStatement) void {
-        _ = self;
-        _ = stmt;
+
+        _ = self.addConstant(Value.createString(stmt.identifier.literal));
+
+
+
+        if(stmt.expression != null){
+            self.compileExpression(stmt.expression);
+        } else {
+            self.emitNil();
+        }
+
+
     }
 
     fn compileReturnStatement(self: *Compiler, stmt: AST.ReturnStatement) void {

@@ -28,6 +28,9 @@ pub const Opcode = enum(u8) {
 
     OP_JUMP_IF_FALSE = 17,
     OP_JUMP = 18,
+
+    OP_SET_GLOBAL = 19,
+    OP_GET_GLOBAL = 20,
 };
 
 // Maybe make a struct InstructionHandler to encode/decode

@@ -2,12 +2,14 @@ pub const ValueType = enum {
     NUMBER,
     BOOLEAN,
     NIL,
+    STRING,
 };
 
 pub const Value = union(ValueType) {
     NUMBER: f64,
     BOOLEAN: bool,
     NIL: void,
+    STRING: []const u8,
 
     pub fn createNumber(num: f64) Value {
         return Value{ .NUMBER = num };
@@ -19,6 +21,10 @@ pub const Value = union(ValueType) {
 
     pub fn createBoolean(boolean: bool) Value {
         return Value{ .BOOLEAN = boolean };
+    }
+
+    pub fn createString(str: []const u8) Value {
+        return Value{ .STRING = str };
     }
 
     pub fn isNumber(self: Value) bool {
@@ -39,6 +45,15 @@ pub const Value = union(ValueType) {
         };
     }
 
+    pub fn isString(self: Value) bool {
+        return switch (self) {
+            .STRING => true,
+            else => {
+                return false;
+            },
+        };
+    }
+
     pub fn isTruthy(self: Value) bool {
         return switch (self) {
             .BOOLEAN => |b| b,
@@ -49,6 +64,7 @@ pub const Value = union(ValueType) {
                 }
                 return true;
             },
+            .STRING => true,
         };
     }
 };
