@@ -24,6 +24,8 @@ pub fn launchRepl() !void {
     const stdin = std.io.getStdIn().reader();
     const stdout = std.io.getStdOut().writer();
 
+    var globalStore = std.StringHashMap(Value).init(std.heap.page_allocator);
+
     while (true) {
         var buf: [512]u8 = undefined;
         try stdout.print(">> ", .{});
@@ -58,10 +60,15 @@ pub fn launchRepl() !void {
 
             // check for compiler errors
 
-            var vm: *VM = VM.init(std.heap.page_allocator, &c.*.constantsPool, &c.*.instructions);
+            var vm: *VM = VM.repl_init(std.heap.page_allocator, &c.*.constantsPool, &c.*.instructions, globalStore);
             defer vm.deinit();
 
             vm.run();
+
+            // Workaround for globals in the VM, i copy them back and forth here and in the VM so that the REPL session can keep track of variables, functions etc.
+            // I choose this over allocating memory for the globals in the heap for performance reasons, which while negligible in the REPL, it does matters in normal programs
+            globalStore.deinit();
+            globalStore = vm.*.globals.clone() catch unreachable;
 
         }
     }

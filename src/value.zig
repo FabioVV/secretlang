@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub const ValueType = enum {
     NUMBER,
     BOOLEAN,
@@ -65,6 +67,15 @@ pub const Value = union(ValueType) {
                 return true;
             },
             .STRING => true,
+        };
+    }
+
+    pub fn print(self: Value) void {
+        return switch (self) {
+            .BOOLEAN => |b| std.debug.print("{}\n", .{b}),
+            .NIL => std.debug.print("nil\n", .{}),
+            .NUMBER => |n| std.debug.print("{d:6.2}\n", .{n}),
+            .STRING => |s| std.debug.print("{s}\n", .{s}),
         };
     }
 };

@@ -39,9 +39,18 @@ pub fn GET_OPCODE(instruction: Instruction) Opcode {
     return @enumFromInt((instruction >> 26) & 0x3F);
 }
 
+pub fn ENCODE_DEFINE_GLOBAL(r_dest: u8, constantIndex: u16) Instruction {
+    return @as(Instruction, @intFromEnum(Opcode.OP_SET_GLOBAL)) << 26 | (@as(Instruction, r_dest) << 18) | @as(Instruction, constantIndex);
+}
+
+pub fn ENCODE_GET_GLOBAL(constantIdenIndex: u16, r_dest: u8) Instruction {
+    return @as(Instruction, @intFromEnum(Opcode.OP_GET_GLOBAL)) << 26 | (@as(Instruction, r_dest) << 18) | @as(Instruction, constantIdenIndex);
+}
+
 pub fn ENCODE_CONSTANT(constantIndex: u16, r_dest: u8) Instruction {
     return @as(Instruction, @intFromEnum(Opcode.OP_CONSTANT)) << 26 | (@as(Instruction, r_dest) << 18) | @as(Instruction, constantIndex);
 }
+
 
 pub fn ENCODE_BINARY(operator: []const u8, r_dest: u8, ra: u8, rb: u8) Instruction {
     if (mem.eql(u8, operator, "+")) {
@@ -95,11 +104,11 @@ pub fn ENCODE_NIL(r_dest: u8) Instruction {
     return @as(Instruction, @intFromEnum(Opcode.OP_NIL)) << 26 | (@as(Instruction, r_dest) << 18);
 }
 
-pub fn ENCODE_JUMP_IF_FALSE(r_dest: u8) Instruction {
+pub fn ENCODE_JUMP_IF_FALSE(r_dest: u8) Instruction { // The instrutions here is incomplete, there is 18 bits which are set during compile time
     return @as(Instruction, @intFromEnum(Opcode.OP_JUMP_IF_FALSE)) << 26 | (@as(Instruction, r_dest) << 18);
 }
 
-pub fn ENCODE_JUMP() Instruction {
+pub fn ENCODE_JUMP() Instruction { // The instrutions here is incomplete, there is 18 bits which are set during compile time
     return @as(Instruction, @intFromEnum(Opcode.OP_JUMP)) << 26;
 }
 

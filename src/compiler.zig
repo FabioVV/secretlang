@@ -83,8 +83,8 @@ pub const Compiler = struct {
         return contantIndex;
     }
 
-    fn emitJumpIfFalse(self: *Compiler, RA: u8) usize {
-        self.emitInstruction(_instruction.ENCODE_JUMP_IF_FALSE(RA));
+    fn emitJumpIfFalse(self: *Compiler, ra: u8) usize {
+        self.emitInstruction(_instruction.ENCODE_JUMP_IF_FALSE(ra));
         return self.instructions.items.len - 1;
     }
 
@@ -109,6 +109,10 @@ pub const Compiler = struct {
         }
 
         self.instructions.items[pos] = self.instructions.items[pos] | (@as(Instruction, @intCast(jump)) & 0x3FFFF);
+    }
+
+    fn defineGlobal(self: *Compiler, constantIdx: u16, result_register: u8) void {
+        self.emitInstruction(_instruction.ENCODE_DEFINE_GLOBAL(result_register, constantIdx));
     }
 
     fn compileExpression(self: *Compiler, expr: ?*AST.Expression) void {
@@ -181,14 +185,22 @@ pub const Compiler = struct {
 
                 self.patchJump(elseJump);
             },
+            AST.Expression.identifier_expr => |idenExpr| {
+                const result_register = self.free_registers.pop().?;
+                self.used_registers.append(result_register) catch unreachable;
+
+                const identifierStrIdx = self.addConstant(Value.createString(std.heap.page_allocator.dupe(u8, idenExpr.literal) catch unreachable));
+
+                self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(identifierStrIdx, result_register));
+
+            },
             else => {},
         }
     }
 
     fn compileVarStatement(self: *Compiler, stmt: AST.VarStatement) void {
 
-        _ = self.addConstant(Value.createString(stmt.identifier.literal));
-
+        const idenIdx = self.addConstant(Value.createString(std.heap.page_allocator.dupe(u8, stmt.identifier.literal) catch unreachable));
 
 
         if(stmt.expression != null){
@@ -197,7 +209,10 @@ pub const Compiler = struct {
             self.emitNil();
         }
 
+        const result_register = self.used_registers.pop().?;
+        self.free_registers.append(result_register) catch unreachable;
 
+        self.defineGlobal(idenIdx, result_register);
     }
 
     fn compileReturnStatement(self: *Compiler, stmt: AST.ReturnStatement) void {
