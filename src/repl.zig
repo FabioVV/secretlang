@@ -69,7 +69,6 @@ pub fn launchRepl() !void {
             // I choose this over allocating memory for the globals in the heap for performance reasons, which while negligible in the REPL, it does matters in normal programs
             globalStore.deinit();
             globalStore = vm.*.globals.clone() catch unreachable;
-
         }
     }
 }

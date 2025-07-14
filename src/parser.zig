@@ -103,10 +103,10 @@ pub const Parser = struct {
         self.errors.deinit();
     }
 
-    pub fn currentError(self: *Parser, token_literal: []const u8) void {
-        const token = self.cur_token;
+    pub fn peekError(self: *Parser, token_literal: []const u8) void {
+        const token = self.peek_token;
 
-        const msg = std.fmt.allocPrint(std.heap.page_allocator, "error: [line {d} column {d}]:\n  expected {s} but got {s} instead\n", .{ token.position.line, token.position.column, token_literal, token.literal }) catch |err| {
+        const msg = std.fmt.allocPrint(std.heap.page_allocator, "syntax error: [line {d} column {d}]:\n  expected {s} but got: {s}\n", .{ token.position.line, token.position.column, token_literal, token.literal }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
@@ -117,10 +117,11 @@ pub const Parser = struct {
         };
     }
 
-    pub fn peekError(self: *Parser, token_literal: []const u8) void {
-        const token = self.peek_token;
+    /// Emits a parser error with a custom message for the current token being processed
+    pub fn pError(self: *Parser, errorMessage: []const u8) void {
+        const token = self.cur_token;
 
-        const msg = std.fmt.allocPrint(std.heap.page_allocator, "error: [line {d} column {d}]:\n  expected {s} but got {s} instead\n", .{ token.position.line, token.position.column, token_literal, token.literal }) catch |err| {
+        const msg = std.fmt.allocPrint(std.heap.page_allocator, "syntax error: [line {d} column {d}]:\n  {s} but got: {s}\n", .{ token.position.line, token.position.column, errorMessage, token.literal }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
@@ -141,25 +142,6 @@ pub const Parser = struct {
             self.advance();
         }
     }
-
-    /// Emits a custom message parser error for the current token being processed
-    pub fn pError(self: *Parser, errorMessage: []const u8) void {
-        const token = self.cur_token;
-
-        const msg = std.fmt.allocPrint(std.heap.page_allocator, "error: [line {d} column {d}]:\n  {s} but got {s} instead\n", .{ token.position.line, token.position.column, errorMessage, self.cur_token.literal }) catch |err| {
-            panic.exitWithError("unrecoverable error trying to write parse error message", err);
-        };
-
-        self.errors.append(ParserError{ .message = std.heap.page_allocator.dupe(u8, msg) catch |_err| {
-            panic.exitWithError("unrecoverable error trying to dupe parse error message", _err);
-        } }) catch |err| {
-            panic.exitWithError("unrecoverable error trying to append parse error message", err);
-        };
-    }
-
-    //pub fn noNudHandlerError(self: *Parser, token_literal: []const u8) void {}
-
-    //pub fn noLedHandlerError(self: *Parser, token_literal: []const u8) void {}
 
     pub inline fn bindingPower(self: *Parser, token_type: Tokens, prec: Precedence) void {
         self.binding_powers.put(token_type, prec) catch |err| {
@@ -531,7 +513,6 @@ pub const Parser = struct {
 
     pub fn parseExpression(self: *Parser, prec: Precedence) ?*AST.Expression {
         const prefix_fn = self.nud_handlers.get(self.cur_token.token_type) orelse {
-            std.debug.print("c:{s} p:{s}\n", .{ self.cur_token.literal, self.peek_token.literal });
             self.pError("expected an expression");
             return null;
         };

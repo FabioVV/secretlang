@@ -170,3 +170,13 @@ pub const Expression = union(ExprTypes) {
     fn_expr: fnExpression,
     call_expr: callExpression,
 };
+
+pub const NodeTypes = enum {
+    statement,
+    expression,
+};
+
+pub const CurrentNode = union(NodeTypes) {
+    statement: *Statement,
+    expression: *Expression,
+};

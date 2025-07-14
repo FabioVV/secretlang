@@ -23,12 +23,15 @@ const CompilerError = struct {
 
 pub const Compiler = struct {
     ast_program: *AST.Program,
+    cur_node: AST.CurrentNode,
+
     arena: std.heap.ArenaAllocator,
+
     instructions: std.ArrayList(Instruction),
     constantsPool: std.ArrayList(Value),
+
     free_registers: std.BoundedArray(u8, TOTAL_REGISTERS),
     used_registers: std.BoundedArray(u8, TOTAL_REGISTERS),
-    errors: std.ArrayList(CompilerError),
 
     pub fn init(allocator: std.mem.Allocator, ast: *AST.Program) *Compiler {
         var arena = std.heap.ArenaAllocator.init(allocator);
@@ -38,7 +41,6 @@ pub const Compiler = struct {
         compiler.*.ast_program = ast;
         compiler.*.instructions = std.ArrayList(Instruction).init(compiler.arena.allocator());
         compiler.*.constantsPool = std.ArrayList(Value).init(compiler.arena.allocator());
-        compiler.*.errors = std.ArrayList(CompilerError).init(compiler.arena.allocator());
 
         compiler.*.free_registers = .{};
         for (0..TOTAL_REGISTERS) |a| {
@@ -50,11 +52,26 @@ pub const Compiler = struct {
     }
 
     pub fn deinit(self: *Compiler) void {
-        for (self.errors.items) |err| {
-            std.heap.page_allocator.free(err.message);
-        }
-
         self.arena.deinit();
+    }
+
+    /// Emits a compiler error with a custom message
+    pub fn cError(self: *Compiler, errorMessage: []const u8) void {
+        const token: Token = switch (self.cur_node) {
+            .statement => |stmt| switch (stmt.*) {
+                inline else => |v| v.token,
+            },
+            .expression => |expr| switch (expr.*) {
+                inline else => |v| v.token,
+            },
+        };
+
+        const msg = std.fmt.allocPrint(std.heap.page_allocator, "compilation failed: [line {d} column {d}]:\n  {s} \n", .{ token.position.line, token.position.column, errorMessage }) catch |err| {
+            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        std.debug.print(" {s}\n", .{msg});
+        std.process.exit(1);
     }
 
     fn registers_status(self: *Compiler) void {
@@ -69,7 +86,7 @@ pub const Compiler = struct {
         };
 
         if (self.constantsPool.items.len > std.math.maxInt(u16)) { // we cant hold more than 65535 constants, because of the bytecode layout
-            std.process.exit(1); // Fix this later
+            self.cError("exceeded maximum number of constants (65,535)");
         }
 
         return @intCast(self.constantsPool.items.len - 1);
@@ -115,7 +132,7 @@ pub const Compiler = struct {
 
         // ensure the jump doesn't exceed the allowed 18-bit range
         if (jump > 0x3FFFF) { // jump > 18 bits
-            // compiler error
+            self.cError("jump instruction too large");
         }
 
         self.instructions.items[pos] = self.instructions.items[pos] | (@as(Instruction, @intCast(jump)) & 0x3FFFF);
@@ -126,6 +143,8 @@ pub const Compiler = struct {
     }
 
     fn compileExpression(self: *Compiler, expr: ?*AST.Expression) void {
+        self.cur_node = AST.CurrentNode{ .expression = @constCast(&expr.?.*) };
+
         switch (expr.?.*) {
             AST.Expression.number_expr => |numExpr| {
                 _ = self.emitConstant(Value.createNumber(numExpr.value));
@@ -238,6 +257,8 @@ pub const Compiler = struct {
     }
 
     pub inline fn compile_stmts(self: *Compiler, stmt: AST.Statement) void {
+        self.cur_node = AST.CurrentNode{ .statement = @constCast(&stmt) };
+
         switch (stmt) {
             .var_stmt => |var_stmt| {
                 self.compileVarStatement(var_stmt);
@@ -257,6 +278,7 @@ pub const Compiler = struct {
     pub fn compile(self: *Compiler) void {
         for (self.ast_program.nodes.items) |node| {
             self.compile_stmts(node);
+
             //self.registers_status();
         }
     }

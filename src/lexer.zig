@@ -140,7 +140,10 @@ pub const Lexer = struct {
         if (self.peek() == '.') {
             try numbers.append(self.advance().?); // Consume the .
 
-            if (!ascii.isDigit(self.peek())) {}
+            if (!ascii.isDigit(self.peek())) {
+                const pos = Position{ .column = self.column, .line = self.line };
+                return Token.makeIllegalToken("malformed number", pos);
+            }
 
             while (ascii.isDigit(self.peek())) {
                 try numbers.append(self.advance().?);
