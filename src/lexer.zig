@@ -113,12 +113,10 @@ pub const Lexer = struct {
             'f' => {
                 if (mem.eql(u8, identifier, "false")) {
                     return Token.makeToken(Tokens.FALSE, "FALSE", pos);
-
                 }
 
                 if (mem.eql(u8, identifier, "fn")) {
                     return Token.makeToken(Tokens.FN, "FN", pos);
-
                 }
             },
             else => {
@@ -162,14 +160,15 @@ pub const Lexer = struct {
             if (self.peek() == '\n' or self.currentChar.? == '\n') {
                 self.line = self.line + 1;
             }
-            try chars.append(self.advance().?);
+            if (self.advance()) |c| {
+                try chars.append(c);
+            } else {
+                const pos = Position{ .column = self.column, .line = self.line };
+                return Token.makeIllegalToken("unterminated string", pos);
+            }
         }
 
         const pos = Position{ .column = self.column, .line = self.line };
-        if (self.currentChar == null) {
-            return Token.makeIllegalToken("Unterminated string", pos);
-        }
-
         _ = self.advance(); // ending "
         const str = try chars.toOwnedSlice();
         return Token.makeToken(Tokens.STRING, str, pos);

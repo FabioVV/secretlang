@@ -1,7 +1,7 @@
 const std = @import("std");
 const expect = std.testing.expect;
 
-const errorHandling = @import("error.zig");
+const panic = @import("error.zig");
 const _token = @import("token.zig");
 const Token = _token.Token;
 const Tokens = _token.Tokens;
@@ -17,6 +17,10 @@ const Instruction = _instruction.Instruction;
 
 pub const TOTAL_REGISTERS: u8 = 255;
 
+const CompilerError = struct {
+    message: []const u8,
+};
+
 pub const Compiler = struct {
     ast_program: *AST.Program,
     arena: std.heap.ArenaAllocator,
@@ -24,6 +28,7 @@ pub const Compiler = struct {
     constantsPool: std.ArrayList(Value),
     free_registers: std.BoundedArray(u8, TOTAL_REGISTERS),
     used_registers: std.BoundedArray(u8, TOTAL_REGISTERS),
+    errors: std.ArrayList(CompilerError),
 
     pub fn init(allocator: std.mem.Allocator, ast: *AST.Program) *Compiler {
         var arena = std.heap.ArenaAllocator.init(allocator);
@@ -33,6 +38,7 @@ pub const Compiler = struct {
         compiler.*.ast_program = ast;
         compiler.*.instructions = std.ArrayList(Instruction).init(compiler.arena.allocator());
         compiler.*.constantsPool = std.ArrayList(Value).init(compiler.arena.allocator());
+        compiler.*.errors = std.ArrayList(CompilerError).init(compiler.arena.allocator());
 
         compiler.*.free_registers = .{};
         for (0..TOTAL_REGISTERS) |a| {
@@ -44,6 +50,10 @@ pub const Compiler = struct {
     }
 
     pub fn deinit(self: *Compiler) void {
+        for (self.errors.items) |err| {
+            std.heap.page_allocator.free(err.message);
+        }
+
         self.arena.deinit();
     }
 
@@ -67,7 +77,7 @@ pub const Compiler = struct {
 
     fn emitInstruction(self: *Compiler, instruction: Instruction) void {
         self.instructions.append(instruction) catch |err| {
-            errorHandling.exitWithError("unrecoverable error trying to emit instruction", err);
+            panic.exitWithError("unrecoverable error trying to emit instruction", err);
         };
     }
 
@@ -77,7 +87,7 @@ pub const Compiler = struct {
         self.used_registers.append(result_register) catch unreachable;
 
         self.instructions.append(_instruction.ENCODE_CONSTANT(contantIndex, result_register)) catch |err| { // Maybe pass the line so that errors can be nicely reporter later in the vm
-            errorHandling.exitWithError("unrecoverable error trying to emit constant", err);
+            panic.exitWithError("unrecoverable error trying to emit constant", err);
         };
 
         return contantIndex;
@@ -192,18 +202,15 @@ pub const Compiler = struct {
                 const identifierStrIdx = self.addConstant(Value.createString(std.heap.page_allocator.dupe(u8, idenExpr.literal) catch unreachable));
 
                 self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(identifierStrIdx, result_register));
-
             },
             else => {},
         }
     }
 
     fn compileVarStatement(self: *Compiler, stmt: AST.VarStatement) void {
-
         const idenIdx = self.addConstant(Value.createString(std.heap.page_allocator.dupe(u8, stmt.identifier.literal) catch unreachable));
 
-
-        if(stmt.expression != null){
+        if (stmt.expression != null) {
             self.compileExpression(stmt.expression);
         } else {
             self.emitNil();
