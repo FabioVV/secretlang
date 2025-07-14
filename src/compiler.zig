@@ -15,11 +15,14 @@ const Instruction = _instruction.Instruction;
 
 // todo: Transform values into pointers
 
-pub const TOTAL_REGISTERS: u8 = 255;
+pub const REGISTERS_COUNT: u8 = 255;
+pub const LOCALS_COUNT: u8 = 200;
 
 const CompilerError = struct {
     message: []const u8,
 };
+
+pub const Local = struct { name: []const u8, depth: i32, register: ?u8 = null };
 
 pub const Compiler = struct {
     ast_program: *AST.Program,
@@ -30,8 +33,11 @@ pub const Compiler = struct {
     instructions: std.ArrayList(Instruction),
     constantsPool: std.ArrayList(Value),
 
-    free_registers: std.BoundedArray(u8, TOTAL_REGISTERS),
-    used_registers: std.BoundedArray(u8, TOTAL_REGISTERS),
+    free_registers: std.BoundedArray(u8, REGISTERS_COUNT),
+    used_registers: std.BoundedArray(u8, REGISTERS_COUNT),
+
+    locals: std.BoundedArray(Local, LOCALS_COUNT),
+    scope_depth: i32,
 
     pub fn init(allocator: std.mem.Allocator, ast: *AST.Program) *Compiler {
         var arena = std.heap.ArenaAllocator.init(allocator);
@@ -43,10 +49,12 @@ pub const Compiler = struct {
         compiler.*.constantsPool = std.ArrayList(Value).init(compiler.arena.allocator());
 
         compiler.*.free_registers = .{};
-        for (0..TOTAL_REGISTERS) |a| {
+        for (0..REGISTERS_COUNT) |a| {
             compiler.*.free_registers.append(@intCast(a)) catch unreachable;
         }
         compiler.*.used_registers = .{};
+        compiler.*.locals = .{};
+        compiler.*.scope_depth = 0;
 
         return compiler;
     }
@@ -55,7 +63,7 @@ pub const Compiler = struct {
         self.arena.deinit();
     }
 
-    /// Emits a compiler error with a custom message
+    /// Emits a compiler error with a custom message and kills the process
     pub fn cError(self: *Compiler, errorMessage: []const u8) void {
         const token: Token = switch (self.cur_node) {
             .statement => |stmt| switch (stmt.*) {
@@ -77,6 +85,14 @@ pub const Compiler = struct {
     fn registers_status(self: *Compiler) void {
         std.debug.print("FREE REGISTERS: R{d}\n", .{self.free_registers.len});
         std.debug.print("USED REGISTERS: R{d}\n", .{self.used_registers.len});
+    }
+
+    fn startScope(self: *Compiler) void {
+        self.*.scope_depth += 1;
+    }
+
+    fn endScope(self: *Compiler) void {
+        self.*.scope_depth -= 1;
     }
 
     fn addConstant(self: *Compiler, val: Value) u16 {
@@ -238,7 +254,9 @@ pub const Compiler = struct {
         const result_register = self.used_registers.pop().?;
         self.free_registers.append(result_register) catch unreachable;
 
-        self.defineGlobal(idenIdx, result_register);
+        if (self.scope_depth > 0) {} else {
+            self.defineGlobal(idenIdx, result_register);
+        }
     }
 
     fn compileReturnStatement(self: *Compiler, stmt: AST.ReturnStatement) void {
