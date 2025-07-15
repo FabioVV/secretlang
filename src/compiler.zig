@@ -1,10 +1,12 @@
 const std = @import("std");
 const expect = std.testing.expect;
 
+const dbg = @import("debug.zig");
 const panic = @import("error.zig");
 const _token = @import("token.zig");
 const Token = _token.Token;
 const Tokens = _token.Tokens;
+const Position = _token.Position;
 const Lexer = @import("lexer.zig").Lexer;
 const Parser = @import("parser.zig").Parser;
 const AST = @import("ast.zig");
@@ -12,6 +14,8 @@ const _instruction = @import("instruction.zig");
 const _value = @import("value.zig");
 const Value = _value.Value;
 const Instruction = _instruction.Instruction;
+const Opcode = _instruction.Opcode;
+
 
 // todo: Transform values into pointers
 
@@ -31,7 +35,10 @@ pub const Compiler = struct {
     arena: std.heap.ArenaAllocator,
 
     instructions: std.ArrayList(Instruction),
+    instructions_positions: std.AutoHashMap(u32, Position),
+
     constantsPool: std.ArrayList(Value),
+
 
     free_registers: std.BoundedArray(u8, REGISTERS_COUNT),
     used_registers: std.BoundedArray(u8, REGISTERS_COUNT),
@@ -46,6 +53,7 @@ pub const Compiler = struct {
         compiler.*.arena = arena;
         compiler.*.ast_program = ast;
         compiler.*.instructions = std.ArrayList(Instruction).init(compiler.arena.allocator());
+        compiler.*.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.arena.allocator());
         compiler.*.constantsPool = std.ArrayList(Value).init(compiler.arena.allocator());
 
         compiler.*.free_registers = .{};
@@ -64,7 +72,7 @@ pub const Compiler = struct {
     }
 
     /// Emits a compiler error with a custom message and kills the process
-    pub fn cError(self: *Compiler, errorMessage: []const u8) void {
+    pub fn cError(self: *Compiler, errorMessage: []const u8) noreturn {
         const token: Token = switch (self.cur_node) {
             .statement => |stmt| switch (stmt.*) {
                 inline else => |v| v.token,
@@ -74,12 +82,17 @@ pub const Compiler = struct {
             },
         };
 
-        const msg = std.fmt.allocPrint(std.heap.page_allocator, "compilation failed: [line {d} column {d}]:\n  {s} \n", .{ token.position.line, token.position.column, errorMessage }) catch |err| {
-            panic.exitWithError("unrecoverable error trying to write parse error message", err);
-        };
-
-        std.debug.print(" {s}\n", .{msg});
+        std.debug.print(" {s}compilation failed{s}: [line {d} column {d}]:  {s}\n", .{ dbg.ANSI_RED, dbg.ANSI_RESET, token.position.line, token.position.column, errorMessage });
         std.process.exit(1);
+    }
+
+    pub fn canOpError(self: *Compiler, opcode: Opcode) bool {
+        _ = self;
+        return switch (opcode) {
+            .OP_ADD, .OP_SUB, .OP_MUL, .OP_DIV, .OP_EQUAL, .OP_NOTEQUAL, .OP_GREATERTHAN, .OP_LESSTHAN, .OP_LESSEQUAL, .OP_GREATEREQUAL, .OP_MINUS, .OP_BANG // can runtime error
+            => true,
+            else => false, // won't error (problably)
+        };
     }
 
     fn registers_status(self: *Compiler) void {
@@ -108,10 +121,30 @@ pub const Compiler = struct {
         return @intCast(self.constantsPool.items.len - 1);
     }
 
+    inline fn getCurrentToken(self: *Compiler) Token {
+        return switch (self.cur_node) {
+            .statement => |stmt| switch (stmt.*) {
+                inline else => |v| v.token,
+            },
+            .expression => |expr| switch (expr.*) {
+                inline else => |v| v.token,
+            },
+
+        };
+    }
+
     fn emitInstruction(self: *Compiler, instruction: Instruction) void {
         self.instructions.append(instruction) catch |err| {
             panic.exitWithError("unrecoverable error trying to emit instruction", err);
         };
+
+        const opcode = _instruction.GET_OPCODE(instruction);
+        if(self.canOpError(opcode)){
+            const token = self.getCurrentToken();
+            self.instructions_positions.put( @as(u32, @intCast(self.instructions.items.len - 1)) , Position{.line = token.position.line, .column = token.position.column}) catch |err| {
+                panic.exitWithError("failed to store debug for instruction", err);
+            };
+        }
     }
 
     fn emitConstant(self: *Compiler, val: Value) u16 {
@@ -203,6 +236,7 @@ pub const Compiler = struct {
                 const right_register = self.used_registers.pop().?;
 
                 self.emitInstruction(_instruction.ENCODE_PREFIX(operator, result_register, right_register));
+
 
                 self.used_registers.append(result_register) catch unreachable;
                 self.free_registers.append(right_register) catch unreachable;

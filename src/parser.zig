@@ -4,7 +4,7 @@ const proc = std.process;
 const expect = std.testing.expect;
 
 const panic = @import("error.zig");
-const debug = @import("debug.zig");
+const dbg = @import("debug.zig");
 const _token = @import("token.zig");
 const Position = _token.Position;
 const Token = _token.Token;
@@ -106,7 +106,7 @@ pub const Parser = struct {
     pub fn peekError(self: *Parser, token_literal: []const u8) void {
         const token = self.peek_token;
 
-        const msg = std.fmt.allocPrint(std.heap.page_allocator, "syntax error: [line {d} column {d}]:\n  expected {s} but got: {s}\n", .{ token.position.line, token.position.column, token_literal, token.literal }) catch |err| {
+        const msg = std.fmt.allocPrint(std.heap.page_allocator, "{s}In [{s}] {d}:{d}:{s} \nsyntax error{s}: expected {s} but got: {s}\n", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RED,  dbg.ANSI_RESET, token_literal, token.literal }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
@@ -121,7 +121,7 @@ pub const Parser = struct {
     pub fn pError(self: *Parser, errorMessage: []const u8) void {
         const token = self.cur_token;
 
-        const msg = std.fmt.allocPrint(std.heap.page_allocator, "syntax error: [line {d} column {d}]:\n  {s} but got: {s}\n", .{ token.position.line, token.position.column, errorMessage, token.literal }) catch |err| {
+        const msg = std.fmt.allocPrint(std.heap.page_allocator, "{s}In [{s}] {d}:{d}:{s} \nsyntax error{s}: {s} but got: {s}\n", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RED, dbg.ANSI_RESET, errorMessage, token.literal }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
@@ -598,7 +598,7 @@ test "Var statement parsing" {
     try expect(p.errors.items.len == 0);
 
     for (program.?.nodes.items) |node| {
-        debug.printVarStatement(node.var_stmt);
+        dbg.printVarStatement(node.var_stmt);
     }
 }
 
@@ -646,7 +646,7 @@ test "Prefix parsing" {
     try expect(p.errors.items.len == 0);
 
     for (program.?.nodes.items) |node| {
-        debug.printPrefixExpression(node.expression_stmt.expression.?.*.prefix_expr);
+        dbg.printPrefixExpression(node.expression_stmt.expression.?.*.prefix_expr);
     }
 }
 
@@ -673,7 +673,7 @@ test "simple if parsing" {
     try expect(p.errors.items.len == 0);
 
     //for (program.?.nodes.items) |node| {
-    //    debug.printIfExpression(node.expression_stmt.expression.?.*.if_expr);
+    //    dbg.printIfExpression(node.expression_stmt.expression.?.*.if_expr);
     //}
 }
 
@@ -702,7 +702,7 @@ test "if parsing with else" {
     try expect(p.errors.items.len == 0);
 
     for (program.?.nodes.items) |node| {
-        debug.printIfExpression(node.expression_stmt.expression.?.*.if_expr);
+        dbg.printIfExpression(node.expression_stmt.expression.?.*.if_expr);
     }
 }
 
@@ -733,7 +733,7 @@ test "function literal" {
     try expect(p.errors.items.len == 0);
 
     for (program.?.nodes.items) |node| {
-        debug.printFnExpression(node.expression_stmt.expression.?.*.fn_expr);
+        dbg.printFnExpression(node.expression_stmt.expression.?.*.fn_expr);
     }
 }
 
@@ -760,6 +760,6 @@ test "function call" {
     try expect(p.errors.items.len == 0);
 
     for (program.?.nodes.items) |node| {
-        debug.printFnExpressionCall(node.expression_stmt.expression.?.*.call_expr);
+        dbg.printFnExpressionCall(node.expression_stmt.expression.?.*.call_expr);
     }
 }

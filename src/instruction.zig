@@ -35,24 +35,24 @@ pub const Opcode = enum(u8) {
 
 // Maybe make a struct InstructionHandler to encode/decode
 
-pub fn GET_OPCODE(instruction: Instruction) Opcode {
+pub inline fn GET_OPCODE(instruction: Instruction) Opcode {
     return @enumFromInt((instruction >> 26) & 0x3F);
 }
 
-pub fn ENCODE_DEFINE_GLOBAL(r_dest: u8, constantIndex: u16) Instruction {
+pub inline fn ENCODE_DEFINE_GLOBAL(r_dest: u8, constantIndex: u16) Instruction {
     return @as(Instruction, @intFromEnum(Opcode.OP_SET_GLOBAL)) << 26 | (@as(Instruction, r_dest) << 18) | @as(Instruction, constantIndex);
 }
 
-pub fn ENCODE_GET_GLOBAL(constantIdenIndex: u16, r_dest: u8) Instruction {
+pub inline fn ENCODE_GET_GLOBAL(constantIdenIndex: u16, r_dest: u8) Instruction {
     return @as(Instruction, @intFromEnum(Opcode.OP_GET_GLOBAL)) << 26 | (@as(Instruction, r_dest) << 18) | @as(Instruction, constantIdenIndex);
 }
 
-pub fn ENCODE_CONSTANT(constantIndex: u16, r_dest: u8) Instruction {
+pub inline fn ENCODE_CONSTANT(constantIndex: u16, r_dest: u8) Instruction {
     return @as(Instruction, @intFromEnum(Opcode.OP_CONSTANT)) << 26 | (@as(Instruction, r_dest) << 18) | @as(Instruction, constantIndex);
 }
 
 
-pub fn ENCODE_BINARY(operator: []const u8, r_dest: u8, ra: u8, rb: u8) Instruction {
+pub inline fn ENCODE_BINARY(operator: []const u8, r_dest: u8, ra: u8, rb: u8) Instruction {
     if (mem.eql(u8, operator, "+")) {
         return @as(Instruction, @intFromEnum(Opcode.OP_ADD)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10) | rb;
     } else if (mem.eql(u8, operator, "-")) {
@@ -78,7 +78,7 @@ pub fn ENCODE_BINARY(operator: []const u8, r_dest: u8, ra: u8, rb: u8) Instructi
     }
 }
 
-pub fn ENCODE_PREFIX(operator: []const u8, r_dest: u8, ra: u8) Instruction {
+pub inline fn ENCODE_PREFIX(operator: []const u8, r_dest: u8, ra: u8) Instruction {
     switch (operator[0]) {
         '!' => {
             return @as(Instruction, @intFromEnum(Opcode.OP_BANG)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10);
@@ -92,42 +92,42 @@ pub fn ENCODE_PREFIX(operator: []const u8, r_dest: u8, ra: u8) Instruction {
     }
 }
 
-pub fn ENCODE_BOOLEAN_TRUE(r_dest: u8) Instruction {
+pub inline fn ENCODE_BOOLEAN_TRUE(r_dest: u8) Instruction {
     return @as(Instruction, @intFromEnum(Opcode.OP_TRUE)) << 26 | (@as(Instruction, r_dest) << 18);
 }
 
-pub fn ENCODE_BOOLEAN_FALSE(r_dest: u8) Instruction {
+pub inline fn ENCODE_BOOLEAN_FALSE(r_dest: u8) Instruction {
     return @as(Instruction, @intFromEnum(Opcode.OP_FALSE)) << 26 | (@as(Instruction, r_dest) << 18);
 }
 
-pub fn ENCODE_NIL(r_dest: u8) Instruction {
+pub inline fn ENCODE_NIL(r_dest: u8) Instruction {
     return @as(Instruction, @intFromEnum(Opcode.OP_NIL)) << 26 | (@as(Instruction, r_dest) << 18);
 }
 
-pub fn ENCODE_JUMP_IF_FALSE(r_dest: u8) Instruction { // The instrutions here is incomplete, there is 18 bits which are set during compile time
+pub inline fn ENCODE_JUMP_IF_FALSE(r_dest: u8) Instruction { // The instrutions here is incomplete, there is 18 bits which are set during compile time
     return @as(Instruction, @intFromEnum(Opcode.OP_JUMP_IF_FALSE)) << 26 | (@as(Instruction, r_dest) << 18);
 }
 
-pub fn ENCODE_JUMP() Instruction { // The instrutions here is incomplete, there is 18 bits which are set during compile time
+pub inline fn ENCODE_JUMP() Instruction { // The instrutions here is incomplete, there is 18 bits which are set during compile time
     return @as(Instruction, @intFromEnum(Opcode.OP_JUMP)) << 26;
 }
 
-pub fn DECODE_JUMP_OFFSET(instruction: Instruction) usize {
+pub inline fn DECODE_JUMP_OFFSET(instruction: Instruction) usize {
     return @intCast((instruction & 0x3FFFF));
 }
 
-pub fn DECODE_CONSTANT_IDX(instruction: Instruction) u16 {
+pub inline fn DECODE_CONSTANT_IDX(instruction: Instruction) u16 {
     return @intCast(instruction & 0x1FFFF);
 }
 
-pub fn DECODE_RA(instruction: Instruction) u8 {
+pub inline fn DECODE_RA(instruction: Instruction) u8 {
     return @intCast((instruction >> 10) & 0xFF);
 }
 
-pub fn DECODE_RB(instruction: Instruction) u8 {
+pub inline fn DECODE_RB(instruction: Instruction) u8 {
     return @intCast(instruction & 0xFF);
 }
 
-pub fn DECODE_RC(instruction: Instruction) u8 {
+pub inline fn DECODE_RC(instruction: Instruction) u8 {
     return @intCast((instruction >> 18) & 0xFF);
 }

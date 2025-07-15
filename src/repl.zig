@@ -44,7 +44,7 @@ pub fn launchRepl() !void {
 
             if (p.errors.items.len > 0) {
                 for (p.errors.items) |err| {
-                    try stdout.print("  {s}\n", .{err.message});
+                    try stdout.print(" {s}\n", .{err.message});
                 }
                 continue;
             }
@@ -60,7 +60,7 @@ pub fn launchRepl() !void {
 
             // check for compiler errors
 
-            var vm: *VM = VM.repl_init(std.heap.page_allocator, &c.*.constantsPool, &c.*.instructions, globalStore);
+            var vm: *VM = VM.repl_init(std.heap.page_allocator, &c.*.constantsPool, &c.*.instructions, &c.instructions_positions, globalStore);
             defer vm.deinit();
 
             vm.run();

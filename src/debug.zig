@@ -13,14 +13,14 @@ pub const DEBUG_PRINT_SIMPLE_IF_EXPRESSION: bool = false;
 pub const DEBUG_PRINT_FN: bool = false;
 pub const DEBUG_PRINT_FN_CALL: bool = false;
 
-const ANSI_RESET = "\x1b[0m";
-const ANSI_RED = "\x1b[31m";
-const ANSI_GREEN = "\x1b[32m";
-const ANSI_YELLOW = "\x1b[33m";
-const ANSI_BLUE = "\x1b[34m";
-const ANSI_MAGENTA = "\x1b[35m";
-const ANSI_CYAN = "\x1b[36m";
-const ANSI_WHITE = "\x1b[37m";
+pub const ANSI_RESET = "\x1b[0m";
+pub const ANSI_RED = "\x1b[31m";
+pub const ANSI_GREEN = "\x1b[32m";
+pub const ANSI_YELLOW = "\x1b[33m";
+pub const ANSI_BLUE = "\x1b[34m";
+pub const ANSI_MAGENTA = "\x1b[35m";
+pub const ANSI_CYAN = "\x1b[36m";
+pub const ANSI_WHITE = "\x1b[37m";
 
 // UTILITIES ->
 pub fn printNodes(stmt: AST.Statement) void {

@@ -50,6 +50,7 @@ pub const Tokens = enum {
 pub const Position = struct {
     column: usize = 0,
     line: usize = 0,
+    filename: []const u8 = "stdin",
 };
 
 pub const Token = struct {

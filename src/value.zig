@@ -13,64 +13,48 @@ pub const Value = union(ValueType) {
     NIL: void,
     STRING: []const u8,
 
-    pub fn createNumber(num: f64) Value {
+    pub inline fn createNumber(num: f64) Value {
         return Value{ .NUMBER = num };
     }
 
-    pub fn createNil() Value {
+    pub inline fn createNil() Value {
         return Value{ .NIL = void{} };
     }
 
-    pub fn createBoolean(boolean: bool) Value {
+    pub inline fn createBoolean(boolean: bool) Value {
         return Value{ .BOOLEAN = boolean };
     }
 
-    pub fn createString(str: []const u8) Value {
+    pub inline fn createString(str: []const u8) Value {
         return Value{ .STRING = str };
     }
 
-    pub fn isNumber(self: Value) bool {
-        return switch (self) {
-            .NUMBER => true,
-            else => {
-                return false;
-            },
-        };
+    pub inline fn isNumber(self: Value) bool {
+        return self == .NUMBER;
     }
 
-    pub fn isBoolean(self: Value) bool {
-        return switch (self) {
-            .BOOLEAN => true,
-            else => {
-                return false;
-            },
-        };
+    pub inline fn isBoolean(self: Value) bool {
+        return self == .BOOLEAN;
     }
 
-    pub fn isString(self: Value) bool {
-        return switch (self) {
-            .STRING => true,
-            else => {
-                return false;
-            },
-        };
+    pub inline fn isString(self: Value) bool {
+        return self == .STRING;
     }
 
-    pub fn isTruthy(self: Value) bool {
+    pub inline fn isNil(self: Value) bool {
+        return self == .NIL;
+    }
+
+    pub inline fn isTruthy(self: Value) bool {
         return switch (self) {
             .BOOLEAN => |b| b,
             .NIL => false,
-            .NUMBER => |n| {
-                if (n == 0) {
-                    return false;
-                }
-                return true;
-            },
+            .NUMBER => |n| n != 0,
             .STRING => true,
         };
     }
 
-    pub fn print(self: Value) void {
+    pub inline fn print(self: Value) void {
         return switch (self) {
             .BOOLEAN => |b| std.debug.print("{}\n", .{b}),
             .NIL => std.debug.print("nil\n", .{}),
