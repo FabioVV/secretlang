@@ -16,9 +16,7 @@ const _value = @import("value.zig");
 const Value = _value.Value;
 const Instruction = _instruction.Instruction;
 
-//TODO: ADD RUNTIME AND COMPILE TIME ERRORS
-
-pub const TOTAL_REGISTERS = 256;
+pub const TOTAL_REGISTERS = 255;
 
 pub const VM = struct {
     registers: std.BoundedArray(Value, TOTAL_REGISTERS),
@@ -265,12 +263,27 @@ pub const VM = struct {
                     self.registers.get(RC).print();
                 },
                 else => |p| {
-                    self.rError("type error: operands must be numeric or string, got {s}", .{@tagName(p)});
+                    self.rError("type error: operands must be both numeric or string, got {s}", .{@tagName(p)});
+                    std.process.exit(1);
+                },
+            },
+            .STRING => |a| switch (RB) {
+                .STRING => |b| {
+                    const result = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ b, a }) catch {
+                        self.rError("out of memory during string concatenation", .{});
+                        std.process.exit(1);
+                    };
+
+                    self.registers.set(RC, Value.createString(result));
+                    self.registers.get(RC).print();
+                },
+                else => |p| {
+                    self.rError("type error: operands must both be numeric or string, got {s}", .{@tagName(p)});
                     std.process.exit(1);
                 },
             },
             else => |p| {
-                self.rError("type error: operands must be numeric or string, got {s}", .{@tagName(p)});
+                self.rError("type error: operands must both be numeric or string, got {s}", .{@tagName(p)});
                 std.process.exit(1);
             },
         }
