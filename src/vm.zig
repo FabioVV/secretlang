@@ -174,12 +174,12 @@ pub const VM = struct {
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
-                    std.process.exit(1);
+                    //std.process.exit(1);
                 },
             },
             else => |p| {
                 self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
-                std.process.exit(1);
+                //std.process.exit(1);
             },
         }
     }
@@ -197,12 +197,12 @@ pub const VM = struct {
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
-                    std.process.exit(1);
+                    //std.process.exit(1);
                 },
             },
             else => |p| {
                 self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
-                std.process.exit(1);
+                //std.process.exit(1);
             },
         }
     }
@@ -220,12 +220,12 @@ pub const VM = struct {
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
-                    std.process.exit(1);
+                    //std.process.exit(1);
                 },
             },
             else => |p| {
                 self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
-                std.process.exit(1);
+                //std.process.exit(1);
             },
         }
     }
@@ -243,12 +243,12 @@ pub const VM = struct {
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
-                    std.process.exit(1);
+                    //std.process.exit(1);
                 },
             },
             else => |p| {
                 self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
-                std.process.exit(1);
+                //std.process.exit(1);
             },
         }
     }
@@ -309,12 +309,12 @@ pub const VM = struct {
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
-                    std.process.exit(1);
+                    //std.process.exit(1);
                 },
             },
             else => |p| {
                 self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
-                std.process.exit(1);
+                //std.process.exit(1);
             },
         }
     }
@@ -332,12 +332,12 @@ pub const VM = struct {
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
-                    std.process.exit(1);
+                    //std.process.exit(1);
                 },
             },
             else => |p| {
                 self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
-                std.process.exit(1);
+                //std.process.exit(1);
             },
         }
     }
@@ -359,12 +359,12 @@ pub const VM = struct {
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
-                    std.process.exit(1);
+                    //std.process.exit(1);
                 },
             },
             else => |p| {
                 self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
-                std.process.exit(1);
+                //std.process.exit(1);
             },
         }
     }
@@ -438,7 +438,7 @@ pub const VM = struct {
                         .BOOLEAN => |n| self.registers.set(RC, Value.createBoolean(!n)),
                         else => |p| {
                             self.rError("type error: operand must be boolean, got {s}", .{@tagName(p)});
-                            std.process.exit(1);
+                            //std.process.exit(1);
                         },
                     }
 
@@ -452,7 +452,7 @@ pub const VM = struct {
                         .NUMBER => |n| self.registers.set(RC, Value.createNumber(-n)),
                         else => |p| {
                             self.rError("type error: operand must be numeric, got {s}", .{@tagName(p)});
-                            std.process.exit(1);
+                            //std.process.exit(1);
                         },
                     }
 
