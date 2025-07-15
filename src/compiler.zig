@@ -199,7 +199,9 @@ pub const Compiler = struct {
                 _ = self.emitConstant(Value.createNumber(numExpr.value));
             },
             AST.Expression.string_expr => |strExpr| {
-                _ = self.emitConstant(Value.createString(std.heap.page_allocator.dupe(u8, strExpr.value) catch unreachable));
+                const str = std.heap.page_allocator.dupe(u8, strExpr.value) catch unreachable;
+
+                _ = self.emitConstant(Value.createString(std.heap.page_allocator, str)); // find better way
             },
             AST.Expression.boolean_expr => |boolExpr| {
                 const result_register = self.free_registers.pop().?;
@@ -268,7 +270,8 @@ pub const Compiler = struct {
                 const result_register = self.free_registers.pop().?;
                 self.used_registers.append(result_register) catch unreachable;
 
-                const identifierStrIdx = self.addConstant(Value.createString(std.heap.page_allocator.dupe(u8, idenExpr.literal) catch unreachable));
+                const str = std.heap.page_allocator.dupe(u8, idenExpr.literal) catch unreachable;
+                const identifierStrIdx = self.addConstant(Value.createString(std.heap.page_allocator, str)); // find better way
 
                 self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(identifierStrIdx, result_register));
             },
@@ -277,7 +280,8 @@ pub const Compiler = struct {
     }
 
     fn compileVarStatement(self: *Compiler, stmt: AST.VarStatement) void {
-        const idenIdx = self.addConstant(Value.createString(std.heap.page_allocator.dupe(u8, stmt.identifier.literal) catch unreachable));
+        const str = std.heap.page_allocator.dupe(u8, stmt.identifier.literal) catch unreachable;
+        const idenIdx = self.addConstant(Value.createString(std.heap.page_allocator, str));// find better way
 
         if (stmt.expression != null) {
             self.compileExpression(stmt.expression);

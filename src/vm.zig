@@ -93,7 +93,11 @@ pub const VM = struct {
     inline fn GET_CONSTANT_STRING(self: *VM, idx: u16) ?[]const u8 {
         const v = self.GET_CONSTANT(idx);
         if(v != null){
-            return v.?.STRING;
+            switch (v.?.OBJECT.*) {
+                .STRING => |str| {
+                    return str.chars;
+                }
+            }
         }
 
        return null;
@@ -113,9 +117,11 @@ pub const VM = struct {
                 .BOOLEAN => |b| b == a,
                 else => false,
             },
-            .STRING => |a| switch (RB) {
-                .STRING => |b| mem.eql(u8, b, a),
-                else => false,
+            .OBJECT => |a| switch (a.*) {
+                .STRING => |str_a| if (RB.asZigString()) |str_b|
+                std.mem.eql(u8, str_b, str_a.chars)
+                else
+                    false,
             },
             .NIL => switch (RB) {
                 .NIL => true,
@@ -141,9 +147,11 @@ pub const VM = struct {
                 .BOOLEAN => |b| b != a,
                 else => true,
             },
-            .STRING => |a| switch (RB) {
-                .STRING => |b| !mem.eql(u8, b, a),
-                else => true,
+            .OBJECT => |a| switch (a.*) {
+                .STRING => |str_a| if (RB.asZigString()) |str_b|
+                !std.mem.eql(u8, str_b, str_a.chars)
+                else
+                    true,
             },
             .NIL => switch (RB) {
                 .NIL => false,
@@ -267,23 +275,29 @@ pub const VM = struct {
                     std.process.exit(1);
                 },
             },
-            .STRING => |a| switch (RB) {
-                .STRING => |b| {
-                    const result = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ b, a }) catch {
-                        self.rError("out of memory during string concatenation", .{});
-                        std.process.exit(1);
-                    };
+            .OBJECT => |a| switch (a.*) {
+                .STRING => |str_a| {
+                    if(RB.asZigString()) |str_b|{
+                        const result = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ str_b, str_a.chars }) catch {
+                            self.rError("out of memory during string concatenation", .{});
+                            std.process.exit(1);
+                        };
 
-                    self.registers.set(RC, Value.createString(result));
-                    self.registers.get(RC).print();
+                        const value = Value.createString(self.arena.allocator(), result);// need to fix memory for gc stuff
+
+
+                        self.registers.set(RC, value);
+                        self.registers.get(RC).print();
+                    } else {
+                        self.rError("type error: operands must be both numeric or string, got {s}", .{@tagName(RB)});
+                        std.process.exit(1);
+                    }
+
                 },
-                else => |p| {
-                    self.rError("type error: operands must both be numeric or string, got {s}", .{@tagName(p)});
-                    std.process.exit(1);
-                },
+
             },
             else => |p| {
-                self.rError("type error: operands must both be numeric or string, got {s}", .{@tagName(p)});
+                self.rError("type error: operands must be both numeric or string, got {s}", .{@tagName(p)});
                 std.process.exit(1);
             },
         }
