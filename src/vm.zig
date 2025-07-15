@@ -28,7 +28,6 @@ pub const VM = struct {
 
     constantsPool: *std.ArrayList(Value),
 
-
     globals: std.StringHashMap(Value),
 
     pc: usize,
@@ -74,8 +73,8 @@ pub const VM = struct {
     }
 
     /// Emits a runtime error
-    fn rError(self: *VM, comptime message:[] const u8, varargs: anytype) void {
-        const pos = self.instructions_positions.get( @intCast(self.pc)).?;
+    fn rError(self: *VM, comptime message: []const u8, varargs: anytype) void {
+        const pos = self.instructions_positions.get(@intCast(self.pc)).?;
         std.debug.print(" {s}In [{s}] {d}:{d}{s}: \n", .{ dbg.ANSI_CYAN, pos.filename, pos.line, pos.column, dbg.ANSI_RESET });
 
         std.debug.print(" {s}runtime error{s}: ", .{ dbg.ANSI_RED, dbg.ANSI_RESET });
@@ -84,7 +83,7 @@ pub const VM = struct {
     }
 
     inline fn GET_CONSTANT(self: *VM, idx: u16) ?Value {
-        if(idx >= self.constantsPool.*.items.len){
+        if (idx >= self.constantsPool.*.items.len) {
             return null;
         }
         return self.constantsPool.*.items[idx];
@@ -92,15 +91,14 @@ pub const VM = struct {
 
     inline fn GET_CONSTANT_STRING(self: *VM, idx: u16) ?[]const u8 {
         const v = self.GET_CONSTANT(idx);
-        if(v != null){
+        if (v != null) {
             switch (v.?.OBJECT.*) {
                 .STRING => |str| {
                     return str.chars;
-                }
+                },
             }
         }
-
-       return null;
+        return null;
     }
 
     inline fn cmpEqual(self: *VM, instruction: Instruction) void {
@@ -119,7 +117,7 @@ pub const VM = struct {
             },
             .OBJECT => |a| switch (a.*) {
                 .STRING => |str_a| if (RB.asZigString()) |str_b|
-                std.mem.eql(u8, str_b, str_a.chars)
+                    std.mem.eql(u8, str_b, str_a.chars)
                 else
                     false,
             },
@@ -149,7 +147,7 @@ pub const VM = struct {
             },
             .OBJECT => |a| switch (a.*) {
                 .STRING => |str_a| if (RB.asZigString()) |str_b|
-                !std.mem.eql(u8, str_b, str_a.chars)
+                    !std.mem.eql(u8, str_b, str_a.chars)
                 else
                     true,
             },
@@ -196,7 +194,6 @@ pub const VM = struct {
                 .NUMBER => |b| {
                     self.registers.set(RC, Value.createBoolean(b > a));
                     self.registers.get(RC).print();
-
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
@@ -220,7 +217,6 @@ pub const VM = struct {
                 .NUMBER => |b| {
                     self.registers.set(RC, Value.createBoolean(b <= a));
                     self.registers.get(RC).print();
-
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
@@ -232,7 +228,6 @@ pub const VM = struct {
                 std.process.exit(1);
             },
         }
-
     }
 
     inline fn cmpGreaterEqual(self: *VM, instruction: Instruction) void {
@@ -245,7 +240,6 @@ pub const VM = struct {
                 .NUMBER => |b| {
                     self.registers.set(RC, Value.createBoolean(b >= a));
                     self.registers.get(RC).print();
-
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
@@ -259,7 +253,7 @@ pub const VM = struct {
         }
     }
 
-    inline fn mathAdd(self: *VM, instruction: Instruction) void{ // add string concatenation
+    inline fn mathAdd(self: *VM, instruction: Instruction) void { // add string concatenation
         const RA = self.registers.get(_instruction.DECODE_RA(instruction));
         const RB = self.registers.get(_instruction.DECODE_RB(instruction));
         const RC = _instruction.DECODE_RC(instruction);
@@ -272,38 +266,37 @@ pub const VM = struct {
                 },
                 else => |p| {
                     self.rError("type error: operands must be both numeric or string, got {s}", .{@tagName(p)});
-                    std.process.exit(1);
+                    //std.process.exit(1);
                 },
             },
             .OBJECT => |a| switch (a.*) {
                 .STRING => |str_a| {
-                    if(RB.asZigString()) |str_b|{
-                        const result = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ str_b, str_a.chars }) catch {
-                            self.rError("out of memory during string concatenation", .{});
-                            std.process.exit(1);
+                    if (RB.asZigString()) |str_b| {
+                        const result = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ str_b, str_a.chars }) catch |err| {
+                            self.rError("out of memory during string concatenation: {any}", .{err});
+                            //std.process.exit(1);
+                            return;
                         };
 
-                        const value = Value.createString(self.arena.allocator(), result);// need to fix memory for gc stuff
-
+                        const value = Value.createString(self.arena.allocator(), result); // need to fix memory for gc stuff
 
                         self.registers.set(RC, value);
                         self.registers.get(RC).print();
                     } else {
                         self.rError("type error: operands must be both numeric or string, got {s}", .{@tagName(RB)});
-                        std.process.exit(1);
+                        //std.process.exit(1);
+
                     }
-
                 },
-
             },
             else => |p| {
                 self.rError("type error: operands must be both numeric or string, got {s}", .{@tagName(p)});
-                std.process.exit(1);
+                //std.process.exit(1);
             },
         }
     }
 
-    inline fn mathSub(self: *VM, instruction: Instruction) void{
+    inline fn mathSub(self: *VM, instruction: Instruction) void {
         const RA = self.registers.get(_instruction.DECODE_RA(instruction));
         const RB = self.registers.get(_instruction.DECODE_RB(instruction));
         const RC = _instruction.DECODE_RC(instruction);
@@ -326,7 +319,7 @@ pub const VM = struct {
         }
     }
 
-    inline fn mathMul(self: *VM, instruction: Instruction) void{ // add string multiplication
+    inline fn mathMul(self: *VM, instruction: Instruction) void { // add string multiplication
         const RA = self.registers.get(_instruction.DECODE_RA(instruction));
         const RB = self.registers.get(_instruction.DECODE_RB(instruction));
         const RC = _instruction.DECODE_RC(instruction);
@@ -349,7 +342,7 @@ pub const VM = struct {
         }
     }
 
-    inline fn mathDiv(self: *VM, instruction: Instruction) void{
+    inline fn mathDiv(self: *VM, instruction: Instruction) void {
         const RA = self.registers.get(_instruction.DECODE_RA(instruction));
         const RB = self.registers.get(_instruction.DECODE_RB(instruction));
         const RC = _instruction.DECODE_RC(instruction);
@@ -357,8 +350,8 @@ pub const VM = struct {
         switch (RA) {
             .NUMBER => |a| switch (RB) {
                 .NUMBER => |b| {
-                    if(b == 0) {
-                        // division by zero error
+                    if (a == 0) {
+                        self.rError("numeric error: division by zero", .{});
                     } else {
                         self.registers.set(RC, Value.createNumber(b / a));
                         self.registers.get(RC).print();
@@ -441,7 +434,6 @@ pub const VM = struct {
                     const RA = self.registers.get(_instruction.DECODE_RA(curInstruction));
                     const RC = _instruction.DECODE_RC(curInstruction);
 
-
                     switch (RA) {
                         .BOOLEAN => |n| self.registers.set(RC, Value.createBoolean(!n)),
                         else => |p| {
@@ -483,10 +475,9 @@ pub const VM = struct {
                     const constantIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
                     const identifier = self.GET_CONSTANT_STRING(constantIdx).?;
 
-                    self.*.globals.put(identifier, RC) catch |err|{
+                    self.*.globals.put(identifier, RC) catch |err| {
                         panic.exitWithError("Error trying to store global variable", err);
                     };
-
                 },
                 .OP_GET_GLOBAL => {
                     const RC = _instruction.DECODE_RC(curInstruction);
@@ -494,13 +485,12 @@ pub const VM = struct {
                     const identifier = self.GET_CONSTANT_STRING(constantIdx).?;
 
                     var identifierValue: Value = undefined;
-                    if(self.*.globals.get(identifier)) |v|{
+                    if (self.*.globals.get(identifier)) |v| {
                         identifierValue = v;
-
                     } else {
                         // runtime error, variable not defined
                         self.rError("undefined variable: {s}", .{identifier});
-                        std.process.exit(1);
+                        //std.process.exit(1);
                     }
 
                     self.registers.set(RC, identifierValue);
@@ -510,7 +500,6 @@ pub const VM = struct {
                 else => {
                     self.rError("Unhandled OPCODE: {any} \n", .{opcode});
                     std.process.exit(1);
-
                 },
             }
         }

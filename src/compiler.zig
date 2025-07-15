@@ -16,7 +16,6 @@ const Value = _value.Value;
 const Instruction = _instruction.Instruction;
 const Opcode = _instruction.Opcode;
 
-
 // todo: Transform values into pointers
 
 pub const REGISTERS_COUNT: u8 = 255;
@@ -38,7 +37,6 @@ pub const Compiler = struct {
     instructions_positions: std.AutoHashMap(u32, Position),
 
     constantsPool: std.ArrayList(Value),
-
 
     free_registers: std.BoundedArray(u8, REGISTERS_COUNT),
     used_registers: std.BoundedArray(u8, REGISTERS_COUNT),
@@ -89,7 +87,19 @@ pub const Compiler = struct {
     pub fn canOpError(self: *Compiler, opcode: Opcode) bool {
         _ = self;
         return switch (opcode) {
-            .OP_ADD, .OP_SUB, .OP_MUL, .OP_DIV, .OP_EQUAL, .OP_NOTEQUAL, .OP_GREATERTHAN, .OP_LESSTHAN, .OP_LESSEQUAL, .OP_GREATEREQUAL, .OP_MINUS, .OP_BANG // can runtime error
+            .OP_ADD,
+            .OP_SUB,
+            .OP_MUL,
+            .OP_DIV,
+            .OP_EQUAL,
+            .OP_NOTEQUAL,
+            .OP_GREATERTHAN,
+            .OP_LESSTHAN,
+            .OP_LESSEQUAL,
+            .OP_GREATEREQUAL,
+            .OP_MINUS,
+            .OP_BANG,
+            .OP_GET_GLOBAL, // can runtime error
             => true,
             else => false, // won't error (problably)
         };
@@ -129,7 +139,6 @@ pub const Compiler = struct {
             .expression => |expr| switch (expr.*) {
                 inline else => |v| v.token,
             },
-
         };
     }
 
@@ -139,9 +148,9 @@ pub const Compiler = struct {
         };
 
         const opcode = _instruction.GET_OPCODE(instruction);
-        if(self.canOpError(opcode)){
+        if (self.canOpError(opcode)) {
             const token = self.getCurrentToken();
-            self.instructions_positions.put( @as(u32, @intCast(self.instructions.items.len - 1)) , Position{.line = token.position.line, .column = token.position.column}) catch |err| {
+            self.instructions_positions.put(@as(u32, @intCast(self.instructions.items.len - 1)), Position{ .line = token.position.line, .column = token.position.column }) catch |err| {
                 panic.exitWithError("failed to store debug for instruction", err);
             };
         }
@@ -239,7 +248,6 @@ pub const Compiler = struct {
 
                 self.emitInstruction(_instruction.ENCODE_PREFIX(operator, result_register, right_register));
 
-
                 self.used_registers.append(result_register) catch unreachable;
                 self.free_registers.append(right_register) catch unreachable;
             },
@@ -281,7 +289,7 @@ pub const Compiler = struct {
 
     fn compileVarStatement(self: *Compiler, stmt: AST.VarStatement) void {
         const str = std.heap.page_allocator.dupe(u8, stmt.identifier.literal) catch unreachable;
-        const idenIdx = self.addConstant(Value.createString(std.heap.page_allocator, str));// find better way
+        const idenIdx = self.addConstant(Value.createString(std.heap.page_allocator, str)); // find better way
 
         if (stmt.expression != null) {
             self.compileExpression(stmt.expression);
