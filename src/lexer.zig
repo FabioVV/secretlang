@@ -248,14 +248,14 @@ pub const Lexer = struct {
             '<' => {
                 if (self.peek() == '=') {
                     _ = self.advance();
-                    return Token.makeToken(Tokens.EQUAL_EQUAL, "<=", pos);
+                    return Token.makeToken(Tokens.LESS_EQUAL, "<=", pos);
                 }
                 return Token.makeToken(Tokens.LESST, "<", pos);
             },
             '>' => {
                 if (self.peek() == '=') {
                     _ = self.advance();
-                    return Token.makeToken(Tokens.GREATERT, ">=", pos);
+                    return Token.makeToken(Tokens.GREATER_EQUAL, ">=", pos);
                 }
                 return Token.makeToken(Tokens.GREATERT, ">", pos);
             },

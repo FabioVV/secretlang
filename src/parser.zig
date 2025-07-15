@@ -58,6 +58,8 @@ pub const Parser = struct {
         parser.bindingPower(Tokens.NOT_EQUAL, Precedence.EQUALS);
         parser.bindingPower(Tokens.LESST, Precedence.LESS_GREATER);
         parser.bindingPower(Tokens.GREATERT, Precedence.LESS_GREATER);
+        parser.bindingPower(Tokens.LESS_EQUAL, Precedence.LESS_GREATER);
+        parser.bindingPower(Tokens.GREATER_EQUAL, Precedence.LESS_GREATER);
         parser.bindingPower(Tokens.PLUS, Precedence.SUM);
         parser.bindingPower(Tokens.MINUS, Precedence.SUM);
         parser.bindingPower(Tokens.FSLASH, Precedence.PRODUCT);
@@ -85,6 +87,8 @@ pub const Parser = struct {
         parser.led(Tokens.NOT_EQUAL, parseLed);
         parser.led(Tokens.LESST, parseLed);
         parser.led(Tokens.GREATERT, parseLed);
+        parser.led(Tokens.LESS_EQUAL, parseLed);
+        parser.led(Tokens.GREATER_EQUAL, parseLed);
         parser.led(Tokens.LPAREN, parseCallExpression);
 
         return parser;

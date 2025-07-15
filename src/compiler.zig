@@ -212,7 +212,7 @@ pub const Compiler = struct {
                 }
             },
             AST.Expression.infix_expr => |infixExpr| {
-                const operator = infixExpr.token.literal;
+                const operator = infixExpr.token.token_type;
 
                 self.compileExpression(infixExpr.left);
                 self.compileExpression(infixExpr.right);

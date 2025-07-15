@@ -1,6 +1,9 @@
 const std = @import("std");
 const mem = std.mem;
 
+const token = @import("token.zig");
+const TokenType = token.Tokens;
+
 pub const Instruction = u32; // Our bytecode is 32 bits in size
 
 pub const Opcode = enum(u8) {
@@ -52,30 +55,22 @@ pub inline fn ENCODE_CONSTANT(constantIndex: u16, r_dest: u8) Instruction {
 }
 
 
-pub inline fn ENCODE_BINARY(operator: []const u8, r_dest: u8, ra: u8, rb: u8) Instruction {
-    if (mem.eql(u8, operator, "+")) {
-        return @as(Instruction, @intFromEnum(Opcode.OP_ADD)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10) | rb;
-    } else if (mem.eql(u8, operator, "-")) {
-        return @as(Instruction, @intFromEnum(Opcode.OP_SUB)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10) | rb;
-    } else if (mem.eql(u8, operator, "*")) {
-        return @as(Instruction, @intFromEnum(Opcode.OP_MUL)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10) | rb;
-    } else if (mem.eql(u8, operator, "/")) {
-        return @as(Instruction, @intFromEnum(Opcode.OP_DIV)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10) | rb;
-    } else if (mem.eql(u8, operator, "!=")) {
-        return @as(Instruction, @intFromEnum(Opcode.OP_NOTEQUAL)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10) | rb;
-    } else if (mem.eql(u8, operator, "==")) {
-        return @as(Instruction, @intFromEnum(Opcode.OP_EQUAL)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10) | rb;
-    } else if (mem.eql(u8, operator, ">")) {
-        return @as(Instruction, @intFromEnum(Opcode.OP_GREATERTHAN)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10) | rb;
-    } else if (mem.eql(u8, operator, "<")) {
-        return @as(Instruction, @intFromEnum(Opcode.OP_LESSTHAN)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10) | rb;
-    } else if (mem.eql(u8, operator, "<=")) {
-        return @as(Instruction, @intFromEnum(Opcode.OP_LESSEQUAL)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10) | rb;
-    } else if (mem.eql(u8, operator, ">=")) {
-        return @as(Instruction, @intFromEnum(Opcode.OP_GREATEREQUAL)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10) | rb;
-    } else {
-        return 0;
-    }
+pub inline fn ENCODE_BINARY(operator: TokenType, r_dest: u8, ra: u8, rb: u8) Instruction {
+    const opcode: Opcode = switch (operator) {
+        .PLUS => .OP_ADD,
+        .MINUS => .OP_SUB,
+        .ASTERISK => .OP_MUL,
+        .FSLASH => .OP_DIV,
+        .NOT_EQUAL => .OP_NOTEQUAL,
+        .EQUAL_EQUAL => .OP_EQUAL,
+        .GREATERT => .OP_GREATERTHAN,
+        .LESST => .OP_LESSTHAN,
+        .LESS_EQUAL => .OP_LESSEQUAL,
+        .GREATER_EQUAL => .OP_GREATEREQUAL,
+        else => return 0,
+    };
+
+    return @as(Instruction, @intFromEnum(opcode)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10) | rb;
 }
 
 pub inline fn ENCODE_PREFIX(operator: []const u8, r_dest: u8, ra: u8) Instruction {
