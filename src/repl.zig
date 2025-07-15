@@ -26,16 +26,27 @@ pub fn launchRepl() !void {
 
     var globalStore = std.StringHashMap(Value).init(std.heap.page_allocator);
 
+    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
+    defer {
+        const deinit_status = gpa.deinit();
+        //fail test; can't try in defer as defer is executed after we return
+        if (deinit_status == .leak) {
+            @panic("MEMORY LEAK");
+        }
+    }
+
+    const allocator = gpa.allocator();
+
     while (true) {
         var buf: [512]u8 = undefined;
         try stdout.print(">> ", .{});
 
         if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |input_text| {
             var l: Lexer = try Lexer.init(input_text);
-            var p: Parser = Parser.init(&l, std.heap.page_allocator);
+            var p: *Parser = Parser.init(&l, allocator);
             defer p.deinit();
 
-            const program = try p.parseProgram(std.heap.page_allocator);
+            const program = try p.parseProgram(allocator);
             defer program.?.deinit();
 
             if (program == null) {
@@ -49,7 +60,7 @@ pub fn launchRepl() !void {
                 continue;
             }
 
-            var c: *Compiler = Compiler.init(std.heap.page_allocator, program.?);
+            var c: *Compiler = Compiler.init(allocator, program.?);
             defer c.deinit();
 
             c.compile();
@@ -58,9 +69,7 @@ pub fn launchRepl() !void {
             //   debug.printNodes(node);
             //}
 
-            // check for compiler errors
-
-            var vm: *VM = VM.repl_init(std.heap.page_allocator, &c.*.constantsPool, &c.*.instructions, &c.instructions_positions, globalStore);
+            var vm: *VM = VM.repl_init(allocator, &c.*.constantsPool, &c.*.instructions, &c.instructions_positions, globalStore);
             defer vm.deinit();
 
             vm.run();

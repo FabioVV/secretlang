@@ -36,14 +36,14 @@ pub const VM = struct {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const vm = arena.allocator().create(VM) catch unreachable;
 
-        vm.*.arena = arena;
+        vm.arena = arena;
         vm.registers = std.BoundedArray(Value, TOTAL_REGISTERS).init(TOTAL_REGISTERS) catch unreachable;
-        vm.*.instructions = instructions;
-        vm.*.constantsPool = constantsPool;
-        vm.*.instructions_positions = instructions_positions;
-        vm.*.globals = std.StringHashMap(Value).init(arena.allocator());
+        vm.instructions = instructions;
+        vm.constantsPool = constantsPool;
+        vm.instructions_positions = instructions_positions;
+        vm.globals = std.StringHashMap(Value).init(vm.arena.allocator());
 
-        vm.*.pc = 0;
+        vm.pc = 0;
 
         return vm;
     }
@@ -52,23 +52,20 @@ pub const VM = struct {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const vm = arena.allocator().create(VM) catch unreachable;
 
-        vm.*.arena = arena;
+        vm.arena = arena;
         vm.registers = std.BoundedArray(Value, TOTAL_REGISTERS).init(TOTAL_REGISTERS) catch unreachable;
-        vm.*.instructions = instructions;
-        vm.*.constantsPool = constantsPool;
-        vm.*.instructions_positions = instructions_positions;
+        vm.instructions = instructions;
+        vm.constantsPool = constantsPool;
+        vm.instructions_positions = instructions_positions;
 
-        vm.*.globals = globals.clone() catch unreachable; // Clone the existing globals
+        vm.globals = globals.clone() catch unreachable; // Clone the existing globals
 
-        vm.*.pc = 0;
+        vm.pc = 0;
 
         return vm;
     }
 
     pub fn deinit(self: *VM) void {
-        self.instructions.deinit();
-        self.instructions_positions.deinit();
-        self.constantsPool.deinit();
         self.arena.deinit();
     }
 

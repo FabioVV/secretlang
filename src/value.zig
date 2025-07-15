@@ -45,12 +45,12 @@ pub const Value = union(ValueType) {
 
     pub inline fn createString(allocator: std.mem.Allocator, str: []const u8) Value {
         const string_obj = String.create(allocator, str);
-        const obj =  allocator.create(Object) catch unreachable;
+        const obj = allocator.create(Object) catch unreachable;
         obj.* = Object{ .STRING = string_obj };
         return Value{ .OBJECT = obj };
     }
 
-    pub inline fn asZigString(self: Value) ?[]const u8{
+    pub inline fn asZigString(self: Value) ?[]const u8 {
         return switch (self) {
             .OBJECT => |obj| switch (obj.*) {
                 .STRING => |str| str.chars,
@@ -81,8 +81,14 @@ pub const Value = union(ValueType) {
             .NIL => false,
             .NUMBER => |n| n != 0,
             .OBJECT => |obj| switch (obj.*) {
-                .STRING => |str| str.chars.len > 0
+                .STRING => |str| str.chars.len > 0,
             },
+        };
+    }
+
+    inline fn getType(self: Value) ObjectTypes {
+        return switch (self.*) {
+            .STRING => .STRING,
         };
     }
 
@@ -92,7 +98,7 @@ pub const Value = union(ValueType) {
             .NIL => std.debug.print("nil\n", .{}),
             .NUMBER => |n| std.debug.print("{d:6.2}\n", .{n}),
             .OBJECT => |obj| switch (obj.*) {
-                .STRING => |str| std.debug.print("{s}\n", .{str.chars})
+                .STRING => |str| std.debug.print("{s}\n", .{str.chars}),
             },
         };
     }

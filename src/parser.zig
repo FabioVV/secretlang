@@ -36,22 +36,31 @@ const ParserError = struct {
 };
 
 pub const Parser = struct {
+    arena: std.heap.ArenaAllocator,
+
     lexer: *Lexer,
+
     cur_token: Token = undefined,
     peek_token: Token = undefined,
+
     nud_handlers: std.AutoHashMap(Tokens, NudParseFn) = undefined,
     led_handlers: std.AutoHashMap(Tokens, LedParseFn) = undefined,
     binding_powers: std.AutoHashMap(Tokens, Precedence) = undefined,
-    errors: std.ArrayList(ParserError),
-    arena: std.heap.ArenaAllocator,
 
-    pub fn init(lexer: *Lexer, allocator: std.mem.Allocator) Parser {
-        var parser: Parser = Parser{ .lexer = lexer, .arena = std.heap.ArenaAllocator.init(allocator), .errors = std.ArrayList(ParserError).init(allocator) };
+    errors: std.ArrayList(ParserError),
+
+    pub fn init(lexer: *Lexer, allocator: std.mem.Allocator) *Parser {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        const parser = arena.allocator().create(Parser) catch unreachable;
+
+        parser.lexer = lexer;
+        parser.arena = arena;
+        parser.errors = std.ArrayList(ParserError).init(parser.arena.allocator());
 
         // Initializing hashmaps
-        parser.nud_handlers = std.AutoHashMap(Tokens, NudParseFn).init(std.heap.page_allocator);
-        parser.led_handlers = std.AutoHashMap(Tokens, LedParseFn).init(std.heap.page_allocator);
-        parser.binding_powers = std.AutoHashMap(Tokens, Precedence).init(std.heap.page_allocator);
+        parser.nud_handlers = std.AutoHashMap(Tokens, NudParseFn).init(parser.arena.allocator());
+        parser.led_handlers = std.AutoHashMap(Tokens, LedParseFn).init(parser.arena.allocator());
+        parser.binding_powers = std.AutoHashMap(Tokens, Precedence).init(parser.arena.allocator());
 
         // Setting up the binding power hashtable
         parser.bindingPower(Tokens.EQUAL_EQUAL, Precedence.EQUALS);
@@ -95,16 +104,11 @@ pub const Parser = struct {
     }
 
     pub fn deinit(self: *Parser) void {
-        self.arena.deinit();
-        self.nud_handlers.deinit();
-        self.led_handlers.deinit();
-        self.binding_powers.deinit();
-
         for (self.errors.items) |err| {
-            std.heap.page_allocator.free(err.message);
+            self.arena.allocator().free(err.message);
         }
 
-        self.errors.deinit();
+        self.arena.deinit();
     }
 
     pub fn peekError(self: *Parser, token_literal: []const u8) void {
