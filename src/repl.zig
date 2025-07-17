@@ -1,5 +1,6 @@
 const std = @import("std");
 const mem = std.mem;
+const os = std.os;
 const proc = std.process;
 const expect = std.testing.expect;
 
@@ -20,6 +21,9 @@ const _value = @import("value.zig");
 const Value = _value.Value;
 const Instruction = _instruction.Instruction;
 
+extern "kernel32" fn ReadConsoleW(handle: os.fd_t, buffer: [*]u16, len: os.windows.DWORD, read: *os.windows.DWORD, input_ctrl: ?*void) i32;
+extern "kernel32" fn SetConsoleOutputCP(cp: os.windows.UINT) i32;
+
 pub fn launchRepl() !void {
     const stdin = std.io.getStdIn().reader();
     const stdout = std.io.getStdOut().writer();
@@ -37,7 +41,7 @@ pub fn launchRepl() !void {
     const allocator = gpa.allocator();
 
     while (true) {
-        var buf: [512]u8 = undefined;
+        var buf: [2048]u8 = undefined;
         try stdout.print(">> ", .{});
 
         if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |input_text| {

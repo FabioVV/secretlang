@@ -4,7 +4,7 @@ context aware suggestions
 spelling checking with Levenshtein Distance
 
 
-
+ - Change error text from the current expected both to be, got ? to this: expect expectec both to be ?, but got ? and ?
 
 
 Language ideas

@@ -9,22 +9,23 @@ const _token = @import("token.zig");
 const Token = _token.Token;
 const Tokens = _token.Tokens;
 const Position = _token.Position;
-const debug = @import("debug.zig");
+const dbg = @import("debug.zig");
 
 inline fn isSpace(char: u8) bool {
     return mem.indexOfScalar(u8, &ascii.whitespace, char) != null;
 }
 
 pub const Lexer = struct {
-    content: []const u8,
+    source: []const u8,
     iterator: unicode.Utf8Iterator,
     currentChar: ?[]const u8 = null,
     column: usize = 0,
     line: usize = 1,
+    current: u32 = 0,
 
-    pub fn init(content: []const u8) !Lexer {
-        var iterator = (try unicode.Utf8View.init(content));
-        const lexer = Lexer{ .content = content, .iterator = iterator.iterator() };
+    pub fn init(source: []const u8) !Lexer {
+        var iterator = (try unicode.Utf8View.init(source));
+        const lexer = Lexer{ .source = source, .iterator = iterator.iterator() };
         return lexer;
     }
 
@@ -32,6 +33,7 @@ pub const Lexer = struct {
         if (self.iterator.nextCodepointSlice()) |char| {
             self.currentChar = char;
 
+            self.current += @intCast(self.currentChar.?.len);
             if (char.len == 1 and char[0] == '\n') {
                 self.line += 1;
                 self.column = 0;
@@ -39,7 +41,6 @@ pub const Lexer = struct {
                 self.column += 1;
             }
 
-            self.column += 1;
             return char;
         } else {
             self.currentChar = null;
@@ -100,8 +101,8 @@ pub const Lexer = struct {
     }
 
     // trie
-    pub fn identifyTypeOfAlphanumeric(self: *Lexer, identifier: []u8) Token {
-        const pos = Position{ .column = self.column, .line = self.line };
+    pub fn identifyTypeOfAlphanumeric(self: *Lexer, identifier: []u8, startOfIden: u32) Token {
+        const pos = Position{ .column = self.column, .line = self.line, .lexeme = self.source[startOfIden..self.current] };
 
         switch (identifier[0]) {
             'p' => {
@@ -160,6 +161,8 @@ pub const Lexer = struct {
         var numbers = std.ArrayList(u8).init(std.heap.page_allocator);
         defer numbers.deinit();
 
+        const start = self.current;
+
         numbers.appendSlice(self.currentChar.?) catch unreachable;
 
         while (self.isAsciiDigit(self.peek(1))) {
@@ -170,7 +173,7 @@ pub const Lexer = struct {
             numbers.appendSlice(self.advance().?) catch unreachable; // Consume the .
 
             if (!self.isAsciiDigit(self.peek(1))) {
-                const pos = Position{ .column = self.column, .line = self.line };
+                const pos = Position{ .column = self.column, .line = self.line, .lexeme = self.source[start..self.current] };
                 return Token.makeIllegalToken("malformed number", pos);
             }
 
@@ -179,12 +182,13 @@ pub const Lexer = struct {
             }
         }
 
-        const pos = Position{ .column = self.column, .line = self.line };
+        const pos = Position{ .column = self.column, .line = self.line, .lexeme = self.source[start..self.current] };
         const fullNumber = numbers.toOwnedSlice() catch unreachable;
+
         return Token.makeToken(Tokens.NUMBER, fullNumber, pos);
     }
 
-    pub fn lexString(self: *Lexer) Token {
+    pub fn lexString(self: *Lexer, startOfIden: u32) Token {
         var chars = std.ArrayList(u8).init(std.heap.page_allocator);
         defer chars.deinit();
 
@@ -195,21 +199,24 @@ pub const Lexer = struct {
             if (self.advance()) |c| {
                 chars.appendSlice(c) catch unreachable;
             } else {
-                const pos = Position{ .column = self.column, .line = self.line };
+                const pos = Position{ .column = self.column, .line = self.line, .lexeme = self.source[startOfIden..self.current] };
                 return Token.makeIllegalToken("unterminated string", pos);
             }
         }
 
-        const pos = Position{ .column = self.column, .line = self.line };
         _ = self.advance(); // ending "
 
         const str = chars.toOwnedSlice() catch unreachable;
+        const pos = Position{ .column = self.column, .line = self.line, .lexeme = self.source[startOfIden..self.current] };
+
         return Token.makeToken(Tokens.STRING, str, pos);
     }
 
     pub fn lexIdentifier(self: *Lexer) Token {
         var iden = std.ArrayList(u8).init(std.heap.page_allocator);
         defer iden.deinit();
+
+        const start = self.current;
 
         iden.appendSlice(self.currentChar.?) catch unreachable;
 
@@ -218,14 +225,16 @@ pub const Lexer = struct {
         }
 
         const identifier = iden.toOwnedSlice() catch unreachable;
-        return self.identifyTypeOfAlphanumeric(identifier);
+        return self.identifyTypeOfAlphanumeric(identifier, start);
     }
 
     pub fn nextToken(self: *Lexer) Token {
         self.eatWhitespace();
 
+        const start = self.current;
+
         const ch: ?[]const u8 = self.advance();
-        const pos = Position{ .column = self.column, .line = self.line };
+        const pos = Position{ .column = self.column, .line = self.line, .lexeme = self.source[start..self.current] };
 
         if (ch == null) {
             return Token.makeToken(Tokens.EOF, "EOF", pos);
@@ -300,7 +309,7 @@ pub const Lexer = struct {
                 return Token.makeToken(Tokens.GREATERT, ">", pos);
             },
             '"' => {
-                return self.lexString();
+                return self.lexString(start);
             },
             else => {
                 return Token.makeIllegalToken("unexpected character", pos);
@@ -350,14 +359,14 @@ test "Input tokenization" {
         if (actual.token_type == Tokens.EOF) {
             break; // Exit the loop on EOF
         }
-        debug.printToken(actual);
+        dbg.printToken(actual);
         const expected = testArr[idx];
         if (expected.token_type != actual.token_type) {
-            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.dbg.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
         if (!std.mem.eql(u8, expected.literal, actual.literal)) {
-            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.dbg.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
     }
@@ -422,14 +431,14 @@ test "Variable declaration tokenization" {
             break;
         }
 
-        //debug.printToken(actual);
+        //dbg.printToken(actual);
         const expected = testArr[idx];
         if (expected.token_type != actual.token_type) {
-            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.dbg.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
         if (!std.mem.eql(u8, expected.literal, actual.literal)) {
-            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.dbg.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
     }
@@ -476,11 +485,11 @@ test "Simple utf8 lexing" {
 
         const expected = testArr[idx];
         if (expected.token_type != actual.token_type) {
-            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.dbg.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
         if (!std.mem.eql(u8, expected.literal, actual.literal)) {
-            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.dbg.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
     }
@@ -488,7 +497,7 @@ test "Simple utf8 lexing" {
 
 test "Another Simple utf8 lexing" {
     const source =
-    \\var 名前 = "私の名前はファビオ・バレラです。"
+        \\var 名前 = "私の名前はファビオ・バレラです。"
     ;
 
     var l: Lexer = try Lexer.init(source);
@@ -509,11 +518,11 @@ test "Another Simple utf8 lexing" {
 
         const expected = testArr[idx];
         if (expected.token_type != actual.token_type) {
-            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.dbg.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
         if (!std.mem.eql(u8, expected.literal, actual.literal)) {
-            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.dbg.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
     }

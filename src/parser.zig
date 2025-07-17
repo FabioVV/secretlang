@@ -114,6 +114,8 @@ pub const Parser = struct {
     pub fn peekError(self: *Parser, token_literal: []const u8) void {
         const token = self.peek_token;
 
+        std.debug.print("aqui: {s}\n\n", .{token.position.lexeme});
+
         const msg = std.fmt.allocPrint(std.heap.page_allocator, "{s}In [{s}] {d}:{d}:{s} \n syntax error{s}: expected {s} but got: {s}\n", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RED, dbg.ANSI_RESET, token_literal, token.literal }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
