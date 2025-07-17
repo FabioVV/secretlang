@@ -18,7 +18,7 @@ inline fn isSpace(char: u8) bool {
 pub const Lexer = struct {
     content: []const u8,
     iterator: unicode.Utf8Iterator,
-    currentChar: ?u8 = null,
+    currentChar: ?[]const u8 = null,
     column: usize = 0,
     line: usize = 1,
 
@@ -31,7 +31,15 @@ pub const Lexer = struct {
     pub fn advance(self: *Lexer) ?[]const u8 {
         if (self.iterator.nextCodepointSlice()) |char| {
             self.currentChar = char;
-            self.column = self.column + 1;
+
+            if (char.len == 1 and char[0] == '\n') {
+                self.line += 1;
+                self.column = 0;
+            } else {
+                self.column += 1;
+            }
+
+            self.column += 1;
             return char;
         } else {
             self.currentChar = null;
@@ -44,7 +52,8 @@ pub const Lexer = struct {
     }
 
     pub fn peekByte(self: *Lexer, n: usize) u8 {
-        return self.iterator.peek(n) orelse '';
+        const slice = self.iterator.peek(n) orelse return 0;
+        return if (slice.len > 0) slice[0] else 0;
     }
 
     pub fn eatWhitespace(self: *Lexer) void {
@@ -171,7 +180,7 @@ pub const Lexer = struct {
         return Token.makeToken(Tokens.STRING, str, pos);
     }
 
-    pub fn lexAlphanumeric(self: *Lexer) Token {
+    pub fn lexIdentifier(self: *Lexer) Token {
         var alphaNum = std.ArrayList(u8).init(std.heap.page_allocator);
         defer alphaNum.deinit();
 
@@ -185,7 +194,7 @@ pub const Lexer = struct {
         return self.identifyTypeOfAlphanumeric(identifier);
     }
 
-    pub fn isSymbol(char: u8) bool {
+    pub fn isSymbol(codepointSlice: []const u8) bool {
         return !ascii.isAlphanumeric(char) and
             !ascii.isWhitespace(char) and
             !ascii.isControl(char) and
@@ -268,8 +277,8 @@ pub const Lexer = struct {
             else => {
                 if (ascii.isDigit(ch.?)) {
                     return self.lexNumber();
-                } else if (ascii.isAlphanumeric(ch.?)) {
-                    return self.lexAlphanumeric();
+                } else if (!self.isSymbol(ch.?) || ascii.isAlphanumeric(firstChar)) {
+                    return self.lexIdentifier();
                 } else {
                     return Token.makeIllegalToken("ILLEGAL", pos);
                 }
