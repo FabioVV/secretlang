@@ -53,6 +53,7 @@ pub const Position = struct {
     column: usize = 0,
     line: usize = 0,
     filename: []const u8 = "stdin",
+    lexeme: []const u8 = undefined,
 };
 
 pub const Token = struct {

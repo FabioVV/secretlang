@@ -430,9 +430,7 @@ pub const Parser = struct {
 
     pub inline fn advance(self: *Parser) void {
         self.cur_token = self.peek_token;
-        self.peek_token = self.lexer.nextToken() catch |err| {
-            panic.exitWithError("Unrecoverable error when trying to advance tokens.", err);
-        };
+        self.peek_token = self.lexer.nextToken();
     }
 
     pub inline fn peekBindingPower(self: *Parser) Precedence {

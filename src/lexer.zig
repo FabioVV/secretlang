@@ -48,20 +48,20 @@ pub const Lexer = struct {
     }
 
     pub fn peek(self: *Lexer, n: usize) []const u8 {
-        return self.iterator.peek(n) orelse &[]const u8{};
+        return self.iterator.peek(n);
     }
 
     pub fn peekByte(self: *Lexer, n: usize) u8 {
-        const slice = self.iterator.peek(n) orelse return 0;
-        return if (slice.len > 0) slice[0] else 0;
+        const slice = self.iterator.peek(n);
+        return if (slice.len == 1) slice[0] else 0;
     }
 
     pub fn eatWhitespace(self: *Lexer) void {
-        while (isSpace(self.peek(1)[0] orelse 0)) {
+        while (isSpace(self.peekByte(1))) {
             const codep = self.advance();
 
-            if (codep.len > 0) {
-                switch (codep[0] orelse 0) {
+            if (codep != null and codep.?.len == 1) {
+                switch (codep.?[0]) {
                     ' ', '\t', '\r' => {},
 
                     '\n' => {
@@ -71,6 +71,32 @@ pub const Lexer = struct {
                 }
             }
         }
+    }
+
+    fn isAsciiAlpha(self: *Lexer, ch: []const u8) bool {
+        _ = self;
+        if (ch.len != 1) return false;
+        const c = ch[0];
+        return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z');
+    }
+
+    fn isAsciiDigit(self: *Lexer, ch: []const u8) bool {
+        _ = self;
+        if (ch.len != 1) return false;
+        const c = ch[0];
+        return c >= '0' and c <= '9';
+    }
+
+    fn isIdentifier(self: *Lexer, char: []const u8) bool {
+        _ = self;
+        if (char.len == 0) return false;
+        if (char.len == 1) {
+            const c = char[0];
+            return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_';
+        }
+
+        // For non-ASCII, allow any UTF-8
+        return true;
     }
 
     // trie
@@ -134,22 +160,22 @@ pub const Lexer = struct {
         var numbers = std.ArrayList(u8).init(std.heap.page_allocator);
         defer numbers.deinit();
 
-        numbers.append(self.currentChar.?) catch unreachable;
+        numbers.appendSlice(self.currentChar.?) catch unreachable;
 
-        while (ascii.isDigit(self.peekByte())) {
-            numbers.append(self.advance().?) catch unreachable;
+        while (self.isAsciiDigit(self.peek(1))) {
+            numbers.appendSlice(self.advance().?) catch unreachable;
         }
 
-        if (self.peekByte() == '.') {
-            numbers.append(self.advance().?) catch unreachable; // Consume the .
+        if (self.peekByte(1) == '.') {
+            numbers.appendSlice(self.advance().?) catch unreachable; // Consume the .
 
-            if (!ascii.isDigit(self.peekByte())) {
+            if (!self.isAsciiDigit(self.peek(1))) {
                 const pos = Position{ .column = self.column, .line = self.line };
                 return Token.makeIllegalToken("malformed number", pos);
             }
 
-            while (ascii.isDigit(self.peekByte())) {
-                numbers.append(self.advance().?) catch unreachable;
+            while (self.isAsciiDigit(self.peek(1))) {
+                numbers.appendSlice(self.advance().?) catch unreachable;
             }
         }
 
@@ -162,12 +188,12 @@ pub const Lexer = struct {
         var chars = std.ArrayList(u8).init(std.heap.page_allocator);
         defer chars.deinit();
 
-        while (self.peek() != '"') {
-            if (self.peek() == '\n' or self.currentChar.? == '\n') {
+        while (self.peekByte(1) != '"') {
+            if (self.peekByte(1) == '\n' or self.currentChar.?[0] == '\n') {
                 self.line = self.line + 1;
             }
             if (self.advance()) |c| {
-                chars.append(c) catch unreachable;
+                chars.appendSlice(c) catch unreachable;
             } else {
                 const pos = Position{ .column = self.column, .line = self.line };
                 return Token.makeIllegalToken("unterminated string", pos);
@@ -176,29 +202,23 @@ pub const Lexer = struct {
 
         const pos = Position{ .column = self.column, .line = self.line };
         _ = self.advance(); // ending "
+
         const str = chars.toOwnedSlice() catch unreachable;
         return Token.makeToken(Tokens.STRING, str, pos);
     }
 
     pub fn lexIdentifier(self: *Lexer) Token {
-        var alphaNum = std.ArrayList(u8).init(std.heap.page_allocator);
-        defer alphaNum.deinit();
+        var iden = std.ArrayList(u8).init(std.heap.page_allocator);
+        defer iden.deinit();
 
-        alphaNum.append(self.currentChar.?) catch unreachable;
+        iden.appendSlice(self.currentChar.?) catch unreachable;
 
-        while (ascii.isAlphanumeric(self.peek()) or self.peek() == '_') {
-            alphaNum.append(self.advance().?) catch unreachable;
+        while (self.isIdentifier(self.peek(1))) {
+            iden.appendSlice(self.advance().?) catch unreachable;
         }
 
-        const identifier = alphaNum.toOwnedSlice() catch unreachable;
+        const identifier = iden.toOwnedSlice() catch unreachable;
         return self.identifyTypeOfAlphanumeric(identifier);
-    }
-
-    pub fn isSymbol(codepointSlice: []const u8) bool {
-        return !ascii.isAlphanumeric(char) and
-            !ascii.isWhitespace(char) and
-            !ascii.isControl(char) and
-            !ascii.isHex(char);
     }
 
     pub fn nextToken(self: *Lexer) Token {
@@ -211,7 +231,15 @@ pub const Lexer = struct {
             return Token.makeToken(Tokens.EOF, "EOF", pos);
         }
 
-        const firstChar: ?u8 = ch[0];
+        if (self.isIdentifier(ch.?)) {
+            return self.lexIdentifier();
+        }
+
+        if (self.isAsciiDigit(ch.?)) {
+            return self.lexNumber();
+        }
+
+        const firstChar: u8 = ch.?[0];
         switch (firstChar) {
             ',' => {
                 return Token.makeToken(Tokens.COMMA, ",", pos);
@@ -244,28 +272,28 @@ pub const Lexer = struct {
                 return Token.makeToken(Tokens.RBRACE, "}", pos);
             },
             '!' => {
-                if (self.peekByte() == '=') {
+                if (self.peekByte(1) == '=') {
                     _ = self.advance();
                     return Token.makeToken(Tokens.NOT_EQUAL, "!=", pos);
                 }
                 return Token.makeToken(Tokens.NOT, "!", pos);
             },
             '=' => {
-                if (self.peekByte() == '=') {
+                if (self.peekByte(1) == '=') {
                     _ = self.advance();
                     return Token.makeToken(Tokens.EQUAL_EQUAL, "==", pos);
                 }
                 return Token.makeToken(Tokens.EQUAL, "=", pos);
             },
             '<' => {
-                if (self.peekByte() == '=') {
+                if (self.peekByte(1) == '=') {
                     _ = self.advance();
                     return Token.makeToken(Tokens.LESS_EQUAL, "<=", pos);
                 }
                 return Token.makeToken(Tokens.LESST, "<", pos);
             },
             '>' => {
-                if (self.peekByte() == '=') {
+                if (self.peekByte(1) == '=') {
                     _ = self.advance();
                     return Token.makeToken(Tokens.GREATER_EQUAL, ">=", pos);
                 }
@@ -275,13 +303,7 @@ pub const Lexer = struct {
                 return self.lexString();
             },
             else => {
-                if (ascii.isDigit(ch.?)) {
-                    return self.lexNumber();
-                } else if (!self.isSymbol(ch.?) || ascii.isAlphanumeric(firstChar)) {
-                    return self.lexIdentifier();
-                } else {
-                    return Token.makeIllegalToken("ILLEGAL", pos);
-                }
+                return Token.makeIllegalToken("unexpected character", pos);
             },
         }
     }
@@ -442,6 +464,39 @@ test "Simple utf8 lexing" {
         Token{ .token_type = Tokens.IDENT, .literal = "d" },
         Token{ .token_type = Tokens.EQUAL, .literal = "=" },
         Token{ .token_type = Tokens.NUMBER, .literal = "20.20" },
+    };
+
+    var idx: usize = 0;
+    while (true) : (idx += 1) {
+        const actual = l.nextToken();
+
+        if (actual.token_type == Tokens.EOF) {
+            break;
+        }
+
+        const expected = testArr[idx];
+        if (expected.token_type != actual.token_type) {
+            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+        if (!std.mem.eql(u8, expected.literal, actual.literal)) {
+            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+    }
+}
+
+test "Another Simple utf8 lexing" {
+    const source =
+    \\var 名前 = "私の名前はファビオ・バレラです。"
+    ;
+
+    var l: Lexer = try Lexer.init(source);
+    const testArr: [4]Token = .{
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "名前" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.STRING, .literal = "私の名前はファビオ・バレラです。" },
     };
 
     var idx: usize = 0;
