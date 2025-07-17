@@ -322,7 +322,7 @@ test "Lexer initialization" {
     const input: []const u8 = "test input";
     const l: Lexer = try Lexer.init(input);
 
-    try expect(mem.eql(u8, input, l.content));
+    try expect(mem.eql(u8, input, l.source));
 }
 
 test "Input tokenization" {
@@ -362,11 +362,11 @@ test "Input tokenization" {
         dbg.printToken(actual);
         const expected = testArr[idx];
         if (expected.token_type != actual.token_type) {
-            std.dbg.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
         if (!std.mem.eql(u8, expected.literal, actual.literal)) {
-            std.dbg.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
     }
@@ -434,11 +434,11 @@ test "Variable declaration tokenization" {
         //dbg.printToken(actual);
         const expected = testArr[idx];
         if (expected.token_type != actual.token_type) {
-            std.dbg.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
         if (!std.mem.eql(u8, expected.literal, actual.literal)) {
-            std.dbg.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
     }
@@ -485,11 +485,11 @@ test "Simple utf8 lexing" {
 
         const expected = testArr[idx];
         if (expected.token_type != actual.token_type) {
-            std.dbg.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
         if (!std.mem.eql(u8, expected.literal, actual.literal)) {
-            std.dbg.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
     }
@@ -518,11 +518,11 @@ test "Another Simple utf8 lexing" {
 
         const expected = testArr[idx];
         if (expected.token_type != actual.token_type) {
-            std.dbg.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
         if (!std.mem.eql(u8, expected.literal, actual.literal)) {
-            std.dbg.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
             try expect(false);
         }
     }
