@@ -261,8 +261,11 @@ pub const VM = struct {
                     self.registers.set(RC, Value.createNumber(b + a));
                     self.registers.get(RC).print();
                 },
+                .OBJECT => |o| {
+                    self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(o.*), @tagName(RA) });
+                },
                 else => |p| {
-                    self.rError("type error: operands must be both numeric or string, got {s}", .{@tagName(p)});
+                    self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(p), @tagName(RA) });
                     //std.process.exit(1);
                 },
             },
@@ -280,7 +283,7 @@ pub const VM = struct {
                         self.registers.set(RC, value);
                         self.registers.get(RC).print();
                     } else {
-                        self.rError("type error: operands must be both numeric or string, got {s}", .{@tagName(RB)});
+                        self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(RB), @tagName(a.*) });
                         //std.process.exit(1);
 
                     }
