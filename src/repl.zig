@@ -63,7 +63,7 @@ pub fn launchRepl() !void {
                 continue;
             }
 
-            var c: *Compiler = Compiler.init(allocator, program.?);
+            var c: *Compiler = Compiler.init(allocator, program.?, &l.source);
             defer c.deinit();
 
             c.compile();

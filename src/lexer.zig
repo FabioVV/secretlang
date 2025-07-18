@@ -102,8 +102,8 @@ pub const Lexer = struct {
     }
 
     // trie
-    pub fn identifyTypeOfAlphanumeric(self: *Lexer, identifier: []u8, startOfIden: u32) Token {
-        const pos = Position{ .column = self.column, .line = self.line, .lexeme = self.source[startOfIden..self.current] };
+    pub fn identifyTypeOfAlphanumeric(self: *Lexer, identifier: []u8, startColumn: usize) Token {
+        const pos = Position{ .column = startColumn, .line = self.line };
 
         switch (identifier[0]) {
             'p' => {
@@ -158,7 +158,7 @@ pub const Lexer = struct {
         return Token.makeToken(Tokens.IDENT, identifier, pos);
     }
 
-    pub fn lexNumber(self: *Lexer, startOfNum: u32) Token {
+    pub fn lexNumber(self: *Lexer, startColumn: usize) Token {
         var numbers = std.ArrayList(u8).init(std.heap.page_allocator);
         defer numbers.deinit();
 
@@ -172,7 +172,7 @@ pub const Lexer = struct {
             numbers.appendSlice(self.advance().?) catch unreachable; // Consume the .
 
             if (!self.isAsciiDigit(self.peek(1))) {
-                const pos = Position{ .column = self.column, .line = self.line, .lexeme = self.source[startOfNum..self.current] };
+                const pos = Position{ .column = self.column, .line = self.line };
                 return Token.makeIllegalToken("malformed number", pos);
             }
 
@@ -181,13 +181,13 @@ pub const Lexer = struct {
             }
         }
 
-        const pos = Position{ .column = self.column, .line = self.line, .lexeme = self.source[startOfNum..self.current] };
+        const pos = Position{ .column = startColumn, .line = self.line };
         const fullNumber = numbers.toOwnedSlice() catch unreachable;
 
         return Token.makeToken(Tokens.NUMBER, fullNumber, pos);
     }
 
-    pub fn lexString(self: *Lexer, startOfIden: u32) Token {
+    pub fn lexString(self: *Lexer, startColumn: usize) Token {
         var chars = std.ArrayList(u8).init(std.heap.page_allocator);
         defer chars.deinit();
 
@@ -198,7 +198,7 @@ pub const Lexer = struct {
             if (self.advance()) |c| {
                 chars.appendSlice(c) catch unreachable;
             } else {
-                const pos = Position{ .column = self.column, .line = self.line, .lexeme = self.source[startOfIden..self.current] };
+                const pos = Position{ .column = startColumn + 1, .line = self.line };
                 return Token.makeIllegalToken("unterminated string", pos);
             }
         }
@@ -206,12 +206,12 @@ pub const Lexer = struct {
         _ = self.advance(); // ending "
 
         const str = chars.toOwnedSlice() catch unreachable;
-        const pos = Position{ .column = self.column, .line = self.line, .lexeme = self.source[startOfIden..self.current] };
+        const pos = Position{ .column = startColumn, .line = self.line };
 
         return Token.makeToken(Tokens.STRING, str, pos);
     }
 
-    pub fn lexIdentifier(self: *Lexer, startOfIden: u32) Token {
+    pub fn lexIdentifier(self: *Lexer, startColumn: usize) Token {
         var iden = std.ArrayList(u8).init(std.heap.page_allocator);
         defer iden.deinit();
 
@@ -222,26 +222,26 @@ pub const Lexer = struct {
         }
 
         const identifier = iden.toOwnedSlice() catch unreachable;
-        return self.identifyTypeOfAlphanumeric(identifier, startOfIden);
+        return self.identifyTypeOfAlphanumeric(identifier, startColumn);
     }
 
     pub fn nextToken(self: *Lexer) Token {
         self.eatWhitespace();
-        const start = self.current;
+        const startColumn = self.column;
 
         const ch: ?[]const u8 = self.advance();
-        const pos = Position{ .column = self.column, .line = self.line, .lexeme = self.source[start..self.current] };
+        const pos = Position{ .column = self.column, .line = self.line };
 
         if (ch == null) {
             return Token.makeToken(Tokens.EOF, "EOF", pos);
         }
 
         if (self.isIdentifier(ch.?)) {
-            return self.lexIdentifier(start);
+            return self.lexIdentifier(startColumn);
         }
 
         if (self.isAsciiDigit(ch.?)) {
-            return self.lexNumber(start);
+            return self.lexNumber(startColumn);
         }
 
         const firstChar: u8 = ch.?[0];
@@ -305,12 +305,9 @@ pub const Lexer = struct {
                 return Token.makeToken(Tokens.GREATERT, ">", pos);
             },
             '"' => {
-                return self.lexString(start);
+                return self.lexString(startColumn);
             },
             else => {
-                if (ascii.isWhitespace(firstChar)) {
-                    _ = self.advance();
-                }
                 return Token.makeIllegalToken("unexpected character", pos);
             },
         }

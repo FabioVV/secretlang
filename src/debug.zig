@@ -85,7 +85,6 @@ pub fn printExpression(expr: ?*AST.Expression, message: []const u8) void {
         AST.Expression.call_expr => |callExpr| {
             std.debug.print("{s}{s} of function call {s}:\n", .{ ANSI_GREEN, message, ANSI_RESET });
             printExpression(callExpr.function.?, "Functio call");
-
         },
         else => {},
     }
@@ -164,13 +163,12 @@ pub fn printFnExpression(stmt: AST.fnExpression) void {
 
     if (!DEBUG_PRINT_FN) return;
 
-
-    stdoutwriter.print("Token: {s} - ->\n", .{ @tagName(stmt.token.token_type) }) catch |err| {
+    stdoutwriter.print("Token: {s} - ->\n", .{@tagName(stmt.token.token_type)}) catch |err| {
         std.debug.print("Error debug print fn expression: {any}", .{err});
     };
 
     for (stmt.parameters.constSlice()) |param| {
-        stdoutwriter.print("Param: {s}\n", .{ param.literal }) catch |err| {
+        stdoutwriter.print("Param: {s}\n", .{param.literal}) catch |err| {
             std.debug.print("Error debug print fn expression params: {any}", .{err});
         };
     }
@@ -191,8 +189,7 @@ pub fn printFnExpressionCall(stmt: AST.callExpression) void {
 
     if (!DEBUG_PRINT_FN_CALL) return;
 
-
-    stdoutwriter.print("Token: {s} - ->\n", .{ @tagName(stmt.token.token_type) }) catch |err| {
+    stdoutwriter.print("Token: {s} - ->\n", .{@tagName(stmt.token.token_type)}) catch |err| {
         std.debug.print("Error debug print fn expression: {any}", .{err});
     };
 
@@ -201,4 +198,27 @@ pub fn printFnExpressionCall(stmt: AST.callExpression) void {
     for (stmt.arguments.constSlice()) |param| {
         printExpression(param, "Arg");
     }
+}
+
+pub fn getSourceLine(source: []const u8, token: Token) []const u8 {
+    const lineError = token.position.line;
+    //const columnError = token.position.column;
+    var currentLine: u32 = 0;
+    var startLine: u32 = 0;
+
+    var i: u32 = 0;
+    while (i < source.len and currentLine < lineError) {
+        if (source[i] == '\n') {
+            currentLine += 1;
+            startLine = i + 1;
+        }
+        i += 1;
+    }
+
+    var endLine = startLine;
+    while (endLine < source.len and source[endLine] != '\n') {
+        endLine += 1;
+    }
+
+    return source[startLine..endLine];
 }

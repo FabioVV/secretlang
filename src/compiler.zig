@@ -1,4 +1,6 @@
 const std = @import("std");
+const print = @import("std").debug.print;
+
 const expect = std.testing.expect;
 
 const dbg = @import("debug.zig");
@@ -30,6 +32,7 @@ pub const Local = struct { name: []const u8, depth: i32, register: ?u8 = null };
 pub const Compiler = struct {
     ast_program: *AST.Program,
     cur_node: AST.CurrentNode,
+    source: *[]const u8,
 
     arena: std.heap.ArenaAllocator,
 
@@ -44,23 +47,24 @@ pub const Compiler = struct {
     locals: std.BoundedArray(Local, LOCALS_COUNT),
     scope_depth: i32,
 
-    pub fn init(allocator: std.mem.Allocator, ast: *AST.Program) *Compiler {
+    pub fn init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8) *Compiler {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const compiler = arena.allocator().create(Compiler) catch unreachable;
 
-        compiler.*.arena = arena;
-        compiler.*.ast_program = ast;
-        compiler.*.instructions = std.ArrayList(Instruction).init(compiler.arena.allocator());
-        compiler.*.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.arena.allocator());
-        compiler.*.constantsPool = std.ArrayList(Value).init(compiler.arena.allocator());
+        compiler.arena = arena;
+        compiler.ast_program = ast;
+        compiler.source = source;
+        compiler.instructions = std.ArrayList(Instruction).init(compiler.arena.allocator());
+        compiler.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.arena.allocator());
+        compiler.constantsPool = std.ArrayList(Value).init(compiler.arena.allocator());
 
-        compiler.*.free_registers = .{};
+        compiler.free_registers = .{};
         for (0..REGISTERS_COUNT) |a| {
-            compiler.*.free_registers.append(@intCast(a)) catch unreachable;
+            compiler.free_registers.append(@intCast(a)) catch unreachable;
         }
-        compiler.*.used_registers = .{};
-        compiler.*.locals = .{};
-        compiler.*.scope_depth = 0;
+        compiler.used_registers = .{};
+        compiler.locals = .{};
+        compiler.scope_depth = 0;
 
         return compiler;
     }
@@ -70,7 +74,7 @@ pub const Compiler = struct {
     }
 
     /// Emits a compiler error with a custom message and kills the process
-    pub fn cError(self: *Compiler, errorMessage: []const u8) noreturn {
+    pub fn cError(self: *Compiler, errorMessage: []const u8) void {
         const token: Token = switch (self.cur_node) {
             .statement => |stmt| switch (stmt.*) {
                 inline else => |v| v.token,
@@ -80,8 +84,38 @@ pub const Compiler = struct {
             },
         };
 
-        std.debug.print(" {s}compilation failed{s}: [line {d} column {d}]:  {s}\n", .{ dbg.ANSI_RED, dbg.ANSI_RESET, token.position.line, token.position.column, errorMessage });
-        std.process.exit(1);
+        const source = dbg.getSourceLine(self.source.*, token);
+
+        const msgLocation = std.fmt.allocPrint(self.arena.allocator(), "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RESET }) catch |err| {
+            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        const msgErrorInfo = std.fmt.allocPrint(self.arena.allocator(), "{s}compilation failed{s}: {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, errorMessage }) catch |err| {
+            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        const msgSource = std.fmt.allocPrint(self.arena.allocator(), "{s}", .{source}) catch |err| {
+            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        var msgt: []u8 = &[_]u8{};
+        for (1..source.len + 1) |idx| {
+            //std.debug.print("{d} : {d}\n", .{ idx, token.position.column });
+            if (idx == token.position.column + 1) {
+                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, "^" }) catch |err| {
+                    panic.exitWithError("unrecoverable error", err);
+                    return;
+                };
+            } else {
+                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, " " }) catch |err| {
+                    panic.exitWithError("unrecoverable error", err);
+                    return;
+                };
+            }
+        }
+
+        print("\n\n-> {s}\n {d} | {s}\n   | {s}\n   | {s}", .{ msgLocation, token.position.line, msgSource, msgt, msgErrorInfo });
+        //std.process.exit(1);
     }
 
     pub fn canOpError(self: *Compiler, opcode: Opcode) bool {
