@@ -6,6 +6,7 @@ spelling checking with Levenshtein Distance
 
  - Change error text from the current expected both to be, got ? to this: expect expectec both to be ?, but got ? and ?
 
+ - Just go around parsing showing the errors and do not append to a list of errors, instead set a field hadError, that if its value is true, do not compile the program
 
 Language ideas
 

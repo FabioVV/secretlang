@@ -113,14 +113,41 @@ pub const Parser = struct {
 
     pub fn peekError(self: *Parser, token_literal: []const u8) void {
         const token = self.peek_token;
+        const source = self.getSourceLine(token);
 
-        std.debug.print("aqui: {s}\n\n", .{token.position.lexeme});
-
-        const msg = std.fmt.allocPrint(std.heap.page_allocator, "{s}In [{s}] {d}:{d}:{s} \n syntax error{s}: expected {s} but got: {s}\n", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RED, dbg.ANSI_RESET, token_literal, token.literal }) catch |err| {
+        const msgLocation = std.fmt.allocPrint(self.arena.allocator(), "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RESET }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        self.errors.append(ParserError{ .message = std.heap.page_allocator.dupe(u8, msg) catch |_err| {
+        const msgErrorInfo = std.fmt.allocPrint(self.arena.allocator(), "{s}syntax error{s}: expected {s} but got {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, token_literal, token.literal }) catch |err| {
+            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        const msgSource = std.fmt.allocPrint(self.arena.allocator(), "{s}", .{source}) catch |err| {
+            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        var msgt: []u8 = &[_]u8{};
+        for (1..source.len + 1) |idx| {
+            //debug.print("{d} : {d}\n", .{ idx, token.position.column });
+            if (idx == token.position.column) {
+                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, "^" }) catch |err| {
+                    panic.exitWithError("unrecoverable error", err);
+                    return;
+                };
+            } else {
+                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, " " }) catch |err| {
+                    panic.exitWithError("unrecoverable error", err);
+                    return;
+                };
+            }
+        }
+
+        const fullMsg = std.fmt.allocPrint(self.arena.allocator(), "\n\n-> {s}\n| {s}\n| {s}\n| {s}", .{ msgLocation, msgSource, msgt, msgErrorInfo }) catch |err| {
+            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        self.errors.append(ParserError{ .message = self.arena.allocator().dupe(u8, fullMsg) catch |_err| {
             panic.exitWithError("unrecoverable error trying to dupe parse error message", _err);
         } }) catch |err| {
             panic.exitWithError("unrecoverable error trying to append parse error message", err);
@@ -130,16 +157,68 @@ pub const Parser = struct {
     /// Emits a parser error with a custom message for the current token being processed
     pub fn pError(self: *Parser, errorMessage: []const u8) void {
         const token = self.cur_token;
+        const source = self.getSourceLine(token);
 
-        const msg = std.fmt.allocPrint(std.heap.page_allocator, "{s}In [{s}] {d}:{d}:{s} \n syntax error{s}: {s} but got: {s}\n", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RED, dbg.ANSI_RESET, errorMessage, token.literal }) catch |err| {
+        const msgLocation = std.fmt.allocPrint(self.arena.allocator(), "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RESET }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        self.errors.append(ParserError{ .message = std.heap.page_allocator.dupe(u8, msg) catch |_err| {
+        const msgErrorInfo = std.fmt.allocPrint(self.arena.allocator(), "{s}syntax error{s}: {s} but got {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, errorMessage, token.literal }) catch |err| {
+            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        const msgSource = std.fmt.allocPrint(self.arena.allocator(), "{s}", .{source}) catch |err| {
+            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        var msgt: []u8 = &[_]u8{};
+        for (1..source.len + 1) |idx| {
+            //std.debug.print("{d} : {d}\n", .{ idx, token.position.column });
+            if (idx == token.position.column) {
+                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, "^" }) catch |err| {
+                    panic.exitWithError("unrecoverable error", err);
+                    return;
+                };
+            } else {
+                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, " " }) catch |err| {
+                    panic.exitWithError("unrecoverable error", err);
+                    return;
+                };
+            }
+        }
+
+        const fullMsg = std.fmt.allocPrint(self.arena.allocator(), "\n\n-> {s}\n| {s}\n| {s}\n| {s}", .{ msgLocation, msgSource, msgt, msgErrorInfo }) catch |err| {
+            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        self.errors.append(ParserError{ .message = std.heap.page_allocator.dupe(u8, fullMsg) catch |_err| {
             panic.exitWithError("unrecoverable error trying to dupe parse error message", _err);
         } }) catch |err| {
             panic.exitWithError("unrecoverable error trying to append parse error message", err);
         };
+    }
+
+    fn getSourceLine(self: *Parser, token: Token) []const u8 {
+        const lineError = token.position.line;
+        //const columnError = token.position.column;
+        var currentLine: u32 = 0;
+        var startLine: u32 = 0;
+
+        var i: u32 = 0;
+        while (i < self.lexer.source.len and currentLine < lineError) {
+            if (self.lexer.source[i] == '\n') {
+                currentLine += 1;
+                startLine = i + 1;
+            }
+            i += 1;
+        }
+
+        var endLine = startLine;
+        while (endLine < self.lexer.source.len and self.lexer.source[endLine] != '\n') {
+            endLine += 1;
+        }
+
+        return self.lexer.source[startLine..endLine];
     }
 
     pub fn sync(self: *Parser) void {
