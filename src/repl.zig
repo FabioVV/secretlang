@@ -72,7 +72,7 @@ pub fn launchRepl() !void {
             //   debug.printNodes(node);
             //}
 
-            var vm: *VM = VM.repl_init(allocator, &c.*.constantsPool, &c.*.instructions, &c.instructions_positions, globalStore);
+            var vm: *VM = VM.repl_init(allocator, &c.*.constantsPool, &c.*.instructions, &c.instructions_positions, globalStore, &l.source);
             defer vm.deinit();
 
             vm.run();

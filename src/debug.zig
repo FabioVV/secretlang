@@ -4,6 +4,8 @@ const io = std.io;
 const _token = @import("token.zig");
 const Token = _token.Token;
 const Tokens = _token.Tokens;
+const Position = _token.Position;
+
 const AST = @import("ast.zig");
 
 pub const DEBUG_PRINT_TOKENS: bool = false;
@@ -203,6 +205,29 @@ pub fn printFnExpressionCall(stmt: AST.callExpression) void {
 pub fn getSourceLine(source: []const u8, token: Token) []const u8 {
     const lineError = token.position.line;
     //const columnError = token.position.column;
+    var currentLine: u32 = 0;
+    var startLine: u32 = 0;
+
+    var i: u32 = 0;
+    while (i < source.len and currentLine < lineError) {
+        if (source[i] == '\n') {
+            currentLine += 1;
+            startLine = i + 1;
+        }
+        i += 1;
+    }
+
+    var endLine = startLine;
+    while (endLine < source.len and source[endLine] != '\n') {
+        endLine += 1;
+    }
+
+    return source[startLine..endLine];
+}
+
+pub fn getSourceLineFromPosition(source: []const u8, pos: Position) []const u8 {
+    const lineError = pos.line;
+    //const columnError = pos.column;
     var currentLine: u32 = 0;
     var startLine: u32 = 0;
 

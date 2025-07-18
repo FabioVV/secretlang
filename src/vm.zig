@@ -23,6 +23,7 @@ pub const VM = struct {
 
     arena: std.heap.ArenaAllocator,
 
+    source: *[]const u8,
     instructions: *std.ArrayList(Instruction),
     instructions_positions: *std.AutoHashMap(u32, Position),
 
@@ -32,10 +33,11 @@ pub const VM = struct {
 
     pc: usize,
 
-    pub fn init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position)) *VM {
+    pub fn init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), source: *[]const u8) *VM {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const vm = arena.allocator().create(VM) catch unreachable;
 
+        vm.source = source;
         vm.arena = arena;
         vm.registers = std.BoundedArray(Value, TOTAL_REGISTERS).init(TOTAL_REGISTERS) catch unreachable;
         vm.instructions = instructions;
@@ -48,10 +50,11 @@ pub const VM = struct {
         return vm;
     }
 
-    pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), globals: std.StringHashMap(Value)) *VM {
+    pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), globals: std.StringHashMap(Value), source: *[]const u8) *VM {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const vm = arena.allocator().create(VM) catch unreachable;
 
+        vm.source = source;
         vm.arena = arena;
         vm.registers = std.BoundedArray(Value, TOTAL_REGISTERS).init(TOTAL_REGISTERS) catch unreachable;
         vm.instructions = instructions;
@@ -71,11 +74,42 @@ pub const VM = struct {
 
     /// Emits a runtime error
     fn rError(self: *VM, comptime message: []const u8, varargs: anytype) void {
+        _ = varargs;
         const pos = self.instructions_positions.get(@intCast(self.pc)).?;
-        std.debug.print(" {s}In [{s}] {d}:{d}{s}: \n", .{ dbg.ANSI_CYAN, pos.filename, pos.line, pos.column, dbg.ANSI_RESET });
 
-        std.debug.print(" {s}runtime error{s}: ", .{ dbg.ANSI_RED, dbg.ANSI_RESET });
-        std.debug.print(message, varargs);
+        const source = dbg.getSourceLineFromPosition(self.source.*, pos);
+
+        const msgLocation = std.fmt.allocPrint(self.arena.allocator(), "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, pos.filename, pos.line, pos.column, dbg.ANSI_RESET }) catch |err| {
+            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        const msgErrorInfo = std.fmt.allocPrint(self.arena.allocator(), "{s}runtime error{s}: {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, message }) catch |err| {
+            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        const msgSource = std.fmt.allocPrint(self.arena.allocator(), "{s}", .{source}) catch |err| {
+            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
+
+        var msgt: []u8 = &[_]u8{};
+        for (1..source.len + 1) |idx| {
+            //std.debug.print("{d} : {d}\n", .{ idx, pos.column });
+            if (idx == pos.column + 1) {
+                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, "^" }) catch |err| {
+                    panic.exitWithError("unrecoverable error", err);
+                    return;
+                };
+            } else {
+                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, " " }) catch |err| {
+                    panic.exitWithError("unrecoverable error", err);
+                    return;
+                };
+            }
+        }
+
+        std.debug.print("\n\n-> {s}\n {d} | {s}\n   | {s}\n   | {s}", .{ msgLocation, pos.line, msgSource, msgt, msgErrorInfo });
+
+        //std.debug.print(message, varargs);
         std.debug.print("\n", .{});
     }
 
