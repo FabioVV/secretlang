@@ -60,6 +60,7 @@ pub const Token = struct {
     literal: []const u8,
     position: Position = undefined, // Just to make our life easir during testing, this way we dont need to pass in a position every time we create a token by hand
 
+
     pub inline fn makeToken(token_t: Tokens, literal: []const u8, position: Position) Token {
         return Token{ .token_type = token_t, .literal = literal, .position = position };
     }

@@ -1,6 +1,5 @@
 const std = @import("std");
 const print = @import("std").debug.print;
-
 const expect = std.testing.expect;
 
 const dbg = @import("debug.zig");
@@ -54,9 +53,12 @@ pub const Compiler = struct {
         compiler.arena = arena;
         compiler.ast_program = ast;
         compiler.source = source;
+
         compiler.instructions = std.ArrayList(Instruction).init(compiler.arena.allocator());
         compiler.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.arena.allocator());
+
         compiler.constantsPool = std.ArrayList(Value).init(compiler.arena.allocator());
+
 
         compiler.free_registers = .{};
         for (0..REGISTERS_COUNT) |a| {
@@ -100,7 +102,7 @@ pub const Compiler = struct {
 
         var msgt: []u8 = &[_]u8{};
         for (1..source.len + 1) |idx| {
-            //std.debug.print("{d} : {d}\n", .{ idx, token.position.column });
+            //print("{d} : {d}\n", .{ idx, token.position.column });
             if (idx == token.position.column + 1) {
                 msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, "^" }) catch |err| {
                     panic.exitWithError("unrecoverable error", err);
@@ -140,8 +142,8 @@ pub const Compiler = struct {
     }
 
     fn registers_status(self: *Compiler) void {
-        std.debug.print("FREE REGISTERS: R{d}\n", .{self.free_registers.len});
-        std.debug.print("USED REGISTERS: R{d}\n", .{self.used_registers.len});
+        print("FREE REGISTERS: R{d}\n", .{self.free_registers.len});
+        print("USED REGISTERS: R{d}\n", .{self.used_registers.len});
     }
 
     fn startScope(self: *Compiler) void {
@@ -153,16 +155,19 @@ pub const Compiler = struct {
     }
 
     fn addConstant(self: *Compiler, val: Value) u16 {
+
+        const index = self.constantsPool.items.len;
+
         self.constantsPool.append(val) catch |err| {
-            std.debug.print("{any}\n", .{err});
-            std.process.exit(1); // Fix this later
+            panic.exitWithError("failed to store constant", err);
         };
 
         if (self.constantsPool.items.len > std.math.maxInt(u16)) { // we cant hold more than 65535 constants, because of the bytecode layout
             self.cError("exceeded maximum number of constants (65,535)");
         }
 
-        return @intCast(self.constantsPool.items.len - 1);
+
+        return @intCast(index);
     }
 
     inline fn getCurrentToken(self: *Compiler) Token {
@@ -195,7 +200,7 @@ pub const Compiler = struct {
         const result_register = self.free_registers.pop().?;
         self.used_registers.append(result_register) catch unreachable;
 
-        self.instructions.append(_instruction.ENCODE_CONSTANT(contantIndex, result_register)) catch |err| { // Maybe pass the line so that errors can be nicely reporter later in the vm
+        self.instructions.append(_instruction.ENCODE_LOADK(result_register, contantIndex)) catch |err| {
             panic.exitWithError("unrecoverable error trying to emit constant", err);
         };
 
@@ -262,6 +267,7 @@ pub const Compiler = struct {
                 self.compileExpression(infixExpr.left);
                 self.compileExpression(infixExpr.right);
 
+
                 const result_register = self.free_registers.pop().?;
                 const left_register = self.used_registers.pop().?;
                 const right_register = self.used_registers.pop().?;
@@ -315,7 +321,7 @@ pub const Compiler = struct {
                 const str = std.heap.page_allocator.dupe(u8, idenExpr.literal) catch unreachable;
                 const identifierStrIdx = self.addConstant(Value.createString(std.heap.page_allocator, str)); // find better way
 
-                self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(identifierStrIdx, result_register));
+                self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(result_register, identifierStrIdx));
             },
             else => {},
         }

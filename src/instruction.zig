@@ -8,7 +8,7 @@ pub const Instruction = u32; // Our bytecode is 32 bits in size
 
 pub const Opcode = enum(u8) {
     OP_CONSTANT = 0,
-    OP_LOAD = 1,
+    OP_LOADK = 1,
 
     OP_ADD = 2,
     OP_SUB = 3,
@@ -46,14 +46,9 @@ pub inline fn ENCODE_DEFINE_GLOBAL(r_dest: u8, constantIndex: u16) Instruction {
     return @as(Instruction, @intFromEnum(Opcode.OP_SET_GLOBAL)) << 26 | (@as(Instruction, r_dest) << 18) | @as(Instruction, constantIndex);
 }
 
-pub inline fn ENCODE_GET_GLOBAL(constantIdenIndex: u16, r_dest: u8) Instruction {
+pub inline fn ENCODE_GET_GLOBAL(r_dest: u8, constantIdenIndex: u16) Instruction {
     return @as(Instruction, @intFromEnum(Opcode.OP_GET_GLOBAL)) << 26 | (@as(Instruction, r_dest) << 18) | @as(Instruction, constantIdenIndex);
 }
-
-pub inline fn ENCODE_CONSTANT(constantIndex: u16, r_dest: u8) Instruction {
-    return @as(Instruction, @intFromEnum(Opcode.OP_CONSTANT)) << 26 | (@as(Instruction, r_dest) << 18) | @as(Instruction, constantIndex);
-}
-
 
 pub inline fn ENCODE_BINARY(operator: TokenType, r_dest: u8, ra: u8, rb: u8) Instruction {
     const opcode: Opcode = switch (operator) {
@@ -105,6 +100,10 @@ pub inline fn ENCODE_JUMP_IF_FALSE(r_dest: u8) Instruction { // The instrutions 
 
 pub inline fn ENCODE_JUMP() Instruction { // The instrutions here is incomplete, there is 18 bits which are set during compile time
     return @as(Instruction, @intFromEnum(Opcode.OP_JUMP)) << 26;
+}
+
+pub inline fn ENCODE_LOADK(r_dest: u8, constantIndex: u16) Instruction {
+    return @as(Instruction, @intFromEnum(Opcode.OP_LOADK)) << 26 | (@as(Instruction, r_dest) << 18) | @as(Instruction, constantIndex);
 }
 
 pub inline fn DECODE_JUMP_OFFSET(instruction: Instruction) usize {

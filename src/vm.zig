@@ -74,16 +74,19 @@ pub const VM = struct {
 
     /// Emits a runtime error
     fn rError(self: *VM, comptime message: []const u8, varargs: anytype) void {
-        _ = varargs;
         const pos = self.instructions_positions.get(@intCast(self.pc)).?;
 
         const source = dbg.getSourceLineFromPosition(self.source.*, pos);
+
+        const runtimeErrMsg = std.fmt.allocPrint(self.arena.allocator(), message, varargs) catch |err| {
+            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
 
         const msgLocation = std.fmt.allocPrint(self.arena.allocator(), "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, pos.filename, pos.line, pos.column, dbg.ANSI_RESET }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        const msgErrorInfo = std.fmt.allocPrint(self.arena.allocator(), "{s}runtime error{s}: {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, message }) catch |err| {
+        const msgErrorInfo = std.fmt.allocPrint(self.arena.allocator(), "{s}runtime error{s}: {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, runtimeErrMsg }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
@@ -409,14 +412,18 @@ pub const VM = struct {
             const opcode = _instruction.GET_OPCODE(curInstruction);
 
             switch (opcode) {
-                .OP_CONSTANT => {
+                .OP_LOADK => {
                     const constantIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
                     const RC = _instruction.DECODE_RC(curInstruction);
                     const contantValue = self.GET_CONSTANT(constantIdx).?;
 
+                    std.debug.print("LOADK'\n", .{});
+
                     self.registers.set(RC, contantValue);
                 },
                 .OP_ADD => {
+                    std.debug.print("SUM'\n", .{});
+
                     self.*.mathAdd(curInstruction);
                 },
                 .OP_SUB => {

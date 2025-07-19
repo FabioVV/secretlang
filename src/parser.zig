@@ -241,6 +241,28 @@ pub const Parser = struct {
         return expr;
     }
 
+    fn tryConstantFold(self: *Parser, left_expr: ?*AST.Expression, right_expr: ?*AST.Expression, operator: Tokens) ?f64 {
+        _ = self;
+
+        const left_val = switch (left_expr.?.*) {
+          .number_expr => |n| n.value,
+          else => return null
+        };
+
+        const right_val = switch (right_expr.?.*) {
+            .number_expr => |n| n.value,
+            else => return null
+        };
+
+        return switch (operator) {
+            .PLUS => left_val + right_val,
+            .MINUS => left_val - right_val,
+            .ASTERISK => left_val * right_val,
+            .FSLASH => left_val / right_val,
+            else => null
+        };
+    }
+
     pub fn parseLed(self: *Parser, left_expr: ?*AST.Expression) ?*AST.Expression {
         const cur_token = self.cur_token;
         const prec = self.curBindingPower();
@@ -253,8 +275,14 @@ pub const Parser = struct {
         infixExpr.right = rightExpression;
 
         const expr = self.createExpressionNode();
-        expr.* = AST.Expression{ .infix_expr = infixExpr };
 
+        if (self.tryConstantFold(left_expr, rightExpression, cur_token.token_type)) |folded_value| {
+            const strNum = std.fmt.allocPrint(self.arena.allocator(),"{d}" , .{folded_value}) catch unreachable;
+            expr.* = AST.Expression{ .number_expr = AST.NumberExpression{ .token = Token.makeToken(Tokens.NUMBER, strNum , cur_token.position), .value = folded_value } };
+            return expr;
+        }
+
+        expr.* = AST.Expression{ .infix_expr = infixExpr };
         return expr;
     }
 
