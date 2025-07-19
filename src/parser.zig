@@ -284,6 +284,10 @@ pub const Parser = struct {
     }
 
     fn tryConstantFold(self: *Parser, left_expr: ?*AST.Expression, right_expr: ?*AST.Expression, token: Token) ?AST.Expression {
+
+        if(left_expr == null or right_expr == null) return null;
+
+
         const left = left_expr.?.*;
         const right = right_expr.?.*;
 
@@ -291,17 +295,44 @@ pub const Parser = struct {
             const left_val = left.number_expr.value;
             const right_val = right.number_expr.value;
 
-            const result =  switch (token.token_type) {
-                .PLUS => left_val + right_val,
-                .MINUS => left_val - right_val,
-                .ASTERISK => left_val * right_val,
-                .FSLASH => if (right_val != 0) left_val / right_val else return null,
-                else => return null
+            const makeNumberExpr = struct {
+                fn call(parser: *Parser, value: f64, pos: Position) AST.Expression {
+                    const str_num = std.fmt.allocPrint(parser.arena.allocator(), "{d}", .{value}) catch unreachable;
+                    return AST.Expression{
+                        .number_expr = AST.NumberExpression{
+                            .token = Token.makeToken(Tokens.NUMBER, str_num, pos),
+                            .value = value
+                        }
+                    };
+                }
+            }.call;
+
+            const makeBoolExpr = struct {
+                fn call(value: bool, pos: Position) AST.Expression {
+                    const token_type = if (value) Tokens.TRUE else Tokens.FALSE;
+                    const token_str = if (value) "TRUE" else "FALSE";
+                    return AST.Expression{
+                        .boolean_expr = AST.BooleanExpression{
+                            .token = Token.makeToken(token_type, token_str, pos),
+                            .value = value
+                        }
+                    };
+                }
+            }.call;
+
+            return switch (token.token_type) {
+                .PLUS => makeNumberExpr(self, left_val + right_val, token.position),
+                .MINUS => makeNumberExpr(self, left_val - right_val, token.position),
+                .ASTERISK => makeNumberExpr(self, left_val * right_val, token.position),
+                .FSLASH => if (right_val == 0) null else makeNumberExpr(self, left_val / right_val, token.position),
+                .NOT_EQUAL => makeBoolExpr(left_val != right_val, token.position),
+                .EQUAL_EQUAL => makeBoolExpr(left_val == right_val, token.position),
+                .GREATERT => makeBoolExpr(left_val > right_val, token.position),
+                .LESST => makeBoolExpr(left_val < right_val, token.position),
+                .LESS_EQUAL => makeBoolExpr(left_val <= right_val, token.position),
+                .GREATER_EQUAL => makeBoolExpr(left_val >= right_val, token.position),
+                else => null,
             };
-
-            const strNum = std.fmt.allocPrint(self.arena.allocator(),"{d}" , .{result}) catch unreachable;
-            return AST.Expression{ .number_expr = AST.NumberExpression{ .token = Token.makeToken(Tokens.NUMBER, strNum , token.position), .value = result } };
-
         }
 
         if(left == .string_expr and right == .string_expr and token.token_type == .PLUS){
