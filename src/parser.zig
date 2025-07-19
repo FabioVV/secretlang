@@ -227,15 +227,50 @@ pub const Parser = struct {
         };
     }
 
+    fn tryPrefixConstantFold(self: *Parser, expr: ?*AST.Expression, token: Token) ?AST.Expression {
+        switch (token.token_type) {
+            .NOT => {
+                switch (expr.?.*) {
+                    .boolean_expr => |n| {
+                        if(n.value){
+                            return  AST.Expression{ .boolean_expr = AST.BooleanExpression{ .token = Token.makeToken(Tokens.FALSE, "FALSE" , token.position), .value = false } };
+                        }
+                        return  AST.Expression{ .boolean_expr = AST.BooleanExpression{ .token = Token.makeToken(Tokens.TRUE, "TRUE" , token.position), .value = true } };
+                    },
+                    else => return null
+                }
+
+            },
+            .MINUS => {
+                switch (expr.?.*) {
+                    .number_expr => |n| {
+                        const strNum = std.fmt.allocPrint(self.arena.allocator(),"{d}" , .{-n.value}) catch unreachable;
+                        return  AST.Expression{ .number_expr = AST.NumberExpression{ .token = Token.makeToken(Tokens.NUMBER, strNum , token.position), .value = -n.value } };
+                    },
+                    else => return null
+                }
+            },
+            else => return null
+        }
+
+    }
+
     pub fn parseNud(self: *Parser) ?*AST.Expression {
         const cur_token = self.cur_token;
 
         self.advance();
 
         const rightExpression = self.parseExpression(Precedence.PREFIX);
+        const expr = self.createExpressionNode();
+
+        if (self.tryPrefixConstantFold(rightExpression, cur_token)) |_expr| {
+            expr.* = _expr;
+            return expr;
+        }
+
         const prefixExpr = AST.PrefixExpression{ .token = cur_token, .right = rightExpression };
 
-        const expr = self.createExpressionNode(); // HANDLE THIS BETTER
+
         expr.* = AST.Expression{ .prefix_expr = prefixExpr };
 
         return expr;

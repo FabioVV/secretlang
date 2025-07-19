@@ -420,6 +420,8 @@ pub const VM = struct {
                     std.debug.print("LOADK'\n", .{});
 
                     self.registers.set(RC, contantValue);
+                    self.registers.get(RC).print();
+
                 },
                 .OP_ADD => {
                     std.debug.print("SUM'\n", .{});
@@ -488,6 +490,7 @@ pub const VM = struct {
                 .OP_MINUS => {
                     const RA = self.registers.get(_instruction.DECODE_RA(curInstruction));
                     const RC = _instruction.DECODE_RC(curInstruction);
+                    std.debug.print("MINUS'\n", .{});
 
                     switch (RA) {
                         .NUMBER => |n| self.registers.set(RC, Value.createNumber(-n)),

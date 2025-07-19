@@ -6,8 +6,12 @@ const TokenType = token.Tokens;
 
 pub const Instruction = u32; // Our bytecode is 32 bits in size
 
+inline fn I(value: anytype) u32 { // Convenince function to make the code below less verbose
+    return @as(u32, value);
+}
+
 pub const Opcode = enum(u8) {
-    OP_CONSTANT = 0,
+    RESERVED = 0,
     OP_LOADK = 1,
 
     OP_ADD = 2,
@@ -43,11 +47,11 @@ pub inline fn GET_OPCODE(instruction: Instruction) Opcode {
 }
 
 pub inline fn ENCODE_DEFINE_GLOBAL(r_dest: u8, constantIndex: u16) Instruction {
-    return @as(Instruction, @intFromEnum(Opcode.OP_SET_GLOBAL)) << 26 | (@as(Instruction, r_dest) << 18) | @as(Instruction, constantIndex);
+    return I(@intFromEnum(Opcode.OP_SET_GLOBAL)) << 26 | (I(r_dest) << 18) | I(constantIndex);
 }
 
 pub inline fn ENCODE_GET_GLOBAL(r_dest: u8, constantIdenIndex: u16) Instruction {
-    return @as(Instruction, @intFromEnum(Opcode.OP_GET_GLOBAL)) << 26 | (@as(Instruction, r_dest) << 18) | @as(Instruction, constantIdenIndex);
+    return I(@intFromEnum(Opcode.OP_GET_GLOBAL)) << 26 | (I(r_dest) << 18) | I(constantIdenIndex);
 }
 
 pub inline fn ENCODE_BINARY(operator: TokenType, r_dest: u8, ra: u8, rb: u8) Instruction {
@@ -65,16 +69,16 @@ pub inline fn ENCODE_BINARY(operator: TokenType, r_dest: u8, ra: u8, rb: u8) Ins
         else => return 0,
     };
 
-    return @as(Instruction, @intFromEnum(opcode)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10) | rb;
+    return I(@intFromEnum(opcode)) << 26 | (I(r_dest) << 18) | (I(ra) << 10) | rb;
 }
 
 pub inline fn ENCODE_PREFIX(operator: []const u8, r_dest: u8, ra: u8) Instruction {
     switch (operator[0]) {
         '!' => {
-            return @as(Instruction, @intFromEnum(Opcode.OP_BANG)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10);
+            return I(@intFromEnum(Opcode.OP_BANG)) << 26 | (I(r_dest) << 18) | (I(ra) << 10);
         },
         '-' => {
-            return @as(Instruction, @intFromEnum(Opcode.OP_MINUS)) << 26 | (@as(Instruction, r_dest) << 18) | (@as(Instruction, ra) << 10);
+            return I(@intFromEnum(Opcode.OP_MINUS)) << 26 | (I(r_dest) << 18) | (I(ra) << 10);
         },
         else => {
             return 0;
@@ -83,27 +87,27 @@ pub inline fn ENCODE_PREFIX(operator: []const u8, r_dest: u8, ra: u8) Instructio
 }
 
 pub inline fn ENCODE_BOOLEAN_TRUE(r_dest: u8) Instruction {
-    return @as(Instruction, @intFromEnum(Opcode.OP_TRUE)) << 26 | (@as(Instruction, r_dest) << 18);
+    return I(@intFromEnum(Opcode.OP_TRUE)) << 26 | (I(r_dest) << 18);
 }
 
 pub inline fn ENCODE_BOOLEAN_FALSE(r_dest: u8) Instruction {
-    return @as(Instruction, @intFromEnum(Opcode.OP_FALSE)) << 26 | (@as(Instruction, r_dest) << 18);
+    return I(@intFromEnum(Opcode.OP_FALSE)) << 26 | (I(r_dest) << 18);
 }
 
 pub inline fn ENCODE_NIL(r_dest: u8) Instruction {
-    return @as(Instruction, @intFromEnum(Opcode.OP_NIL)) << 26 | (@as(Instruction, r_dest) << 18);
+    return I(@intFromEnum(Opcode.OP_NIL)) << 26 | (I(r_dest) << 18);
 }
 
 pub inline fn ENCODE_JUMP_IF_FALSE(r_dest: u8) Instruction { // The instrutions here is incomplete, there is 18 bits which are set during compile time
-    return @as(Instruction, @intFromEnum(Opcode.OP_JUMP_IF_FALSE)) << 26 | (@as(Instruction, r_dest) << 18);
+    return I(@intFromEnum(Opcode.OP_JUMP_IF_FALSE)) << 26 | (I(r_dest) << 18);
 }
 
 pub inline fn ENCODE_JUMP() Instruction { // The instrutions here is incomplete, there is 18 bits which are set during compile time
-    return @as(Instruction, @intFromEnum(Opcode.OP_JUMP)) << 26;
+    return I(@intFromEnum(Opcode.OP_JUMP)) << 26;
 }
 
 pub inline fn ENCODE_LOADK(r_dest: u8, constantIndex: u16) Instruction {
-    return @as(Instruction, @intFromEnum(Opcode.OP_LOADK)) << 26 | (@as(Instruction, r_dest) << 18) | @as(Instruction, constantIndex);
+    return I(@intFromEnum(Opcode.OP_LOADK)) << 26 | (I(r_dest) << 18) | I(constantIndex);
 }
 
 pub inline fn DECODE_JUMP_OFFSET(instruction: Instruction) usize {
