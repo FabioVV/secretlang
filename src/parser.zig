@@ -276,26 +276,43 @@ pub const Parser = struct {
         return expr;
     }
 
-    fn tryConstantFold(self: *Parser, left_expr: ?*AST.Expression, right_expr: ?*AST.Expression, operator: Tokens) ?f64 {
-        _ = self;
+    fn concatenateStrings(self: *Parser, left: []const u8, right: []const u8) []const u8 {
+        const result = self.arena.allocator().alloc(u8, left.len + right.len) catch unreachable;
+        @memcpy(result[0..left.len], left);
+        @memcpy(result[left.len..], right);
+        return result;
+    }
 
-        const left_val = switch (left_expr.?.*) {
-          .number_expr => |n| n.value,
-          else => return null
-        };
+    fn tryConstantFold(self: *Parser, left_expr: ?*AST.Expression, right_expr: ?*AST.Expression, token: Token) ?AST.Expression {
+        const left = left_expr.?.*;
+        const right = right_expr.?.*;
 
-        const right_val = switch (right_expr.?.*) {
-            .number_expr => |n| n.value,
-            else => return null
-        };
+        if(left == .number_expr and right == .number_expr){
+            const left_val = left.number_expr.value;
+            const right_val = right.number_expr.value;
 
-        return switch (operator) {
-            .PLUS => left_val + right_val,
-            .MINUS => left_val - right_val,
-            .ASTERISK => left_val * right_val,
-            .FSLASH => left_val / right_val,
-            else => null
-        };
+            const result =  switch (token.token_type) {
+                .PLUS => left_val + right_val,
+                .MINUS => left_val - right_val,
+                .ASTERISK => left_val * right_val,
+                .FSLASH => if (right_val != 0) left_val / right_val else return null,
+                else => return null
+            };
+
+            const strNum = std.fmt.allocPrint(self.arena.allocator(),"{d}" , .{result}) catch unreachable;
+            return AST.Expression{ .number_expr = AST.NumberExpression{ .token = Token.makeToken(Tokens.NUMBER, strNum , token.position), .value = result } };
+
+        }
+
+        if(left == .string_expr and right == .string_expr and token.token_type == .PLUS){
+            const left_val = left.string_expr.value;
+            const right_val = right.string_expr.value;
+
+            const result = self.concatenateStrings(left_val, right_val);
+            return AST.Expression{ .string_expr = AST.StringExpression{ .token = Token.makeToken(Tokens.STRING, result , token.position), .value = result } };
+        }
+
+        return null;
     }
 
     pub fn parseLed(self: *Parser, left_expr: ?*AST.Expression) ?*AST.Expression {
@@ -311,9 +328,8 @@ pub const Parser = struct {
 
         const expr = self.createExpressionNode();
 
-        if (self.tryConstantFold(left_expr, rightExpression, cur_token.token_type)) |folded_value| {
-            const strNum = std.fmt.allocPrint(self.arena.allocator(),"{d}" , .{folded_value}) catch unreachable;
-            expr.* = AST.Expression{ .number_expr = AST.NumberExpression{ .token = Token.makeToken(Tokens.NUMBER, strNum , cur_token.position), .value = folded_value } };
+        if (self.tryConstantFold(left_expr, rightExpression, cur_token)) |folded_node| {
+            expr.* = folded_node;
             return expr;
         }
 
