@@ -16,14 +16,43 @@ pub const String = struct {
 
     pub fn create(allocator: std.mem.Allocator, str: []const u8) *String {
         const string_obj = allocator.create(String) catch unreachable;
-        string_obj.* = String{ .chars = str };
+        const owned_chars = allocator.dupe(u8, str) catch unreachable;
+
+        string_obj.* = String{ .chars = owned_chars };
         return string_obj;
     }
 };
 
-pub const Object = union(ObjectTypes) {
-    STRING: *String,
+pub const Object = struct {
+    type:ObjectTypes,
+
+    next: ?*Object,
+
+    data: union(ObjectTypes){
+        STRING: *String,
+    },
+
+    pub fn init(allocator: std.mem.Allocator, obj_type:ObjectTypes, data: anytype) *Object {
+        const obj = allocator.create(Object) catch unreachable;
+
+        obj.* = Object{
+            .type = obj_type,
+            .data = switch (obj_type) {
+                .STRING => .{.STRING = data},
+            },
+            .next = null,
+        };
+
+        return obj;
+    }
+
+    pub fn asString(self: *Object) ?*String{
+        return switch (self.data) {
+            .STRING => |str| str,
+        };
+    }
 };
+
 
 pub const Value = union(ValueType) {
     NUMBER: f64,
@@ -45,16 +74,23 @@ pub const Value = union(ValueType) {
 
     pub inline fn createString(allocator: std.mem.Allocator, str: []const u8) Value {
         const string_obj = String.create(allocator, str);
-        const obj = allocator.create(Object) catch unreachable;
-        obj.* = Object{ .STRING = string_obj };
+        const obj = Object.init(allocator, .STRING, string_obj);
+
         return Value{ .OBJECT = obj };
     }
 
     pub inline fn asZigString(self: Value) ?[]const u8 {
         return switch (self) {
-            .OBJECT => |obj| switch (obj.*) {
+            .OBJECT => |obj| switch (obj.*.data) {
                 .STRING => |str| str.chars,
             },
+            else => null,
+        };
+    }
+
+    pub inline fn asObject(self: Value) ?*Object{
+        return switch (self) {
+            .OBJECT => |obj| obj,
             else => null,
         };
     }
@@ -68,11 +104,18 @@ pub const Value = union(ValueType) {
     }
 
     pub inline fn isString(self: Value) bool {
-        return self == .STRING;
+        return switch (self) {
+          .OBJECT => |obj| obj.type == .STRING,
+          else => false,
+        };
     }
 
     pub inline fn isNil(self: Value) bool {
         return self == .NIL;
+    }
+
+    pub inline fn isObject(self: Value) bool {
+        return self == .OBJECT;
     }
 
     pub inline fn isTruthy(self: Value) bool {
@@ -80,15 +123,9 @@ pub const Value = union(ValueType) {
             .BOOLEAN => |b| b,
             .NIL => false,
             .NUMBER => |n| n != 0,
-            .OBJECT => |obj| switch (obj.*) {
+            .OBJECT => |obj| switch (obj.data) {
                 .STRING => |str| str.chars.len > 0,
             },
-        };
-    }
-
-    inline fn getType(self: Value) ObjectTypes {
-        return switch (self.*) {
-            .STRING => .STRING,
         };
     }
 
@@ -96,9 +133,9 @@ pub const Value = union(ValueType) {
         return switch (self) {
             .BOOLEAN => |b| std.debug.print("{}\n", .{b}),
             .NIL => std.debug.print("nil\n", .{}),
-            .NUMBER => |n| std.debug.print("{d:6.2}\n", .{n}),
-            .OBJECT => |obj| switch (obj.*) {
-                .STRING => |str| std.debug.print("{s}\n", .{str.chars}),
+            .NUMBER => |n| std.debug.print("{d:.2}\n", .{n}),
+            .OBJECT => |obj| switch (obj.*.data) {
+                .STRING => std.debug.print("{s}\n", .{obj.data.STRING.chars}),
             },
         };
     }

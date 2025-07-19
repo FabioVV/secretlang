@@ -14,6 +14,8 @@ const AST = @import("ast.zig");
 const _instruction = @import("instruction.zig");
 const _value = @import("value.zig");
 const Value = _value.Value;
+const Object = _value.Object;
+
 const Instruction = _instruction.Instruction;
 
 pub const TOTAL_REGISTERS = 255;
@@ -30,6 +32,7 @@ pub const VM = struct {
     constantsPool: *std.ArrayList(Value),
 
     globals: std.StringHashMap(Value),
+    objects: ?*Object,
 
     pc: usize,
 
@@ -44,8 +47,9 @@ pub const VM = struct {
         vm.constantsPool = constantsPool;
         vm.instructions_positions = instructions_positions;
         vm.globals = std.StringHashMap(Value).init(vm.arena.allocator());
-
         vm.pc = 0;
+
+        vm.objects = null;
 
         return vm;
     }
@@ -62,6 +66,7 @@ pub const VM = struct {
         vm.instructions_positions = instructions_positions;
 
         vm.globals = globals.clone() catch unreachable; // Clone the existing globals
+        vm.objects = null;
 
         vm.pc = 0;
 
@@ -69,7 +74,33 @@ pub const VM = struct {
     }
 
     pub fn deinit(self: *VM) void {
+//         var current = self.objects;
+//         while(current) |obj|{
+//             const next = obj.next;
+//
+//             switch (obj.*.data) {
+//                 .STRING => |str| {
+//                     self.arena.allocator().free(str.chars);
+//                     self.arena.allocator().destroy(str);
+//                 }
+//             }
+//
+//             self.arena.allocator().destroy(obj);
+//             current = next;
+//         }
+
         self.arena.deinit();
+    }
+
+    pub fn addObject(self: *VM, obj: *Object) void {
+        obj.next = self.objects;
+        self.objects = obj;
+    }
+
+    pub fn createString(self: *VM, str: []const u8) Value {
+        const v = Value.createString(self.arena.allocator(), str);
+        self.addObject(v.OBJECT);
+        return v;
     }
 
     /// Emits a runtime error
@@ -121,12 +152,13 @@ pub const VM = struct {
             return null;
         }
         return self.constantsPool.*.items[idx];
+
     }
 
     inline fn GET_CONSTANT_STRING(self: *VM, idx: u16) ?[]const u8 {
         const v = self.GET_CONSTANT(idx);
         if (v != null) {
-            switch (v.?.OBJECT.*) {
+            switch (v.?.OBJECT.data) {
                 .STRING => |str| {
                     return str.chars;
                 },
@@ -149,7 +181,7 @@ pub const VM = struct {
                 .BOOLEAN => |b| b == a,
                 else => false,
             },
-            .OBJECT => |a| switch (a.*) {
+            .OBJECT => |a| switch (a.data) {
                 .STRING => |str_a| if (RB.asZigString()) |str_b|
                     std.mem.eql(u8, str_b, str_a.chars)
                 else
@@ -179,7 +211,7 @@ pub const VM = struct {
                 .BOOLEAN => |b| b != a,
                 else => true,
             },
-            .OBJECT => |a| switch (a.*) {
+            .OBJECT => |a| switch (a.data) {
                 .STRING => |str_a| if (RB.asZigString()) |str_b|
                     !std.mem.eql(u8, str_b, str_a.chars)
                 else
@@ -287,7 +319,7 @@ pub const VM = struct {
         }
     }
 
-    inline fn mathAdd(self: *VM, instruction: Instruction) void { // add string concatenation
+    inline fn mathAdd(self: *VM, instruction: Instruction) void {
         const RA = self.registers.get(_instruction.DECODE_RA(instruction));
         const RB = self.registers.get(_instruction.DECODE_RB(instruction));
         const RC = _instruction.DECODE_RC(instruction);
@@ -299,14 +331,14 @@ pub const VM = struct {
                     self.registers.get(RC).print();
                 },
                 .OBJECT => |o| {
-                    self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(o.*), @tagName(RA) });
+                    self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(o.data), @tagName(RA) });
                 },
                 else => |p| {
                     self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(p), @tagName(RA) });
                     //std.process.exit(1);
                 },
             },
-            .OBJECT => |a| switch (a.*) {
+            .OBJECT => |a| switch (a.data) {
                 .STRING => |str_a| {
                     if (RB.asZigString()) |str_b| {
                         const result = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ str_b, str_a.chars }) catch |err| {
@@ -315,12 +347,12 @@ pub const VM = struct {
                             return;
                         };
 
-                        const value = Value.createString(self.arena.allocator(), result); // need to fix memory for gc stuff
+                        const value = self.createString(result); // need to fix memory for gc stuff
 
                         self.registers.set(RC, value);
                         self.registers.get(RC).print();
                     } else {
-                        self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(RB), @tagName(a.*) });
+                        self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(RB), @tagName(a.data) });
                         //std.process.exit(1);
 
                     }
