@@ -27,8 +27,17 @@ pub const SymbolTable = struct {
         return st;
     }
 
+    pub fn deinit(self: *SymbolTable) void {
+        self.table.deinit();
+
+        if (self.parent_table) |paren_table| {
+            paren_table.table.deinit();
+            paren_table.deinit();
+        }
+    }
+
     pub inline fn define(self: *SymbolTable, name: []const u8) Symbol {
-        const symbol = Symbol{.name = name, .index = self.total_definitions, .scope = .GLOBAL};
+        const symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .GLOBAL };
 
         self.table.put(name, symbol) catch unreachable;
         self.total_definitions += 1;
@@ -37,12 +46,11 @@ pub const SymbolTable = struct {
     }
 
     pub fn resolve(self: *SymbolTable, name: []const u8) ?Symbol {
-
-        if(self.table.get(name)) |s|{
+        if (self.table.get(name)) |s| {
             return s;
         }
 
-        if(self.parent_table) |parent| {
+        if (self.parent_table) |parent| {
             return parent.resolve(name);
         }
 

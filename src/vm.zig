@@ -26,7 +26,8 @@ pub const MAX_GLOBALS = 65535;
 pub const VM = struct {
     registers: std.BoundedArray(Value, MAX_REGISTERS),
 
-    arena: std.heap.ArenaAllocator,
+    allocator: std.mem.Allocator,
+    arena: ?std.heap.ArenaAllocator,
 
     source: *[]const u8,
     instructions: *std.ArrayList(Instruction),
@@ -48,6 +49,8 @@ pub const VM = struct {
 
         vm.source = source;
         vm.arena = arena;
+        vm.allocator = vm.arena.?.allocator();
+
         vm.registers = std.BoundedArray(Value, MAX_REGISTERS).init(MAX_REGISTERS) catch unreachable;
         vm.instructions = instructions;
         vm.constantsPool = constantsPool;
@@ -60,11 +63,11 @@ pub const VM = struct {
     }
 
     pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), globals: *std.BoundedArray(Value, MAX_GLOBALS), source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
-        var arena = std.heap.ArenaAllocator.init(allocator);
-        const vm = arena.allocator().create(VM) catch unreachable;
+        const vm = allocator.create(VM) catch unreachable;
 
         vm.source = source;
-        vm.arena = arena;
+        vm.arena = null;
+        vm.allocator = allocator;
         vm.registers = std.BoundedArray(Value, MAX_REGISTERS).init(MAX_REGISTERS) catch unreachable;
         vm.instructions = instructions;
         vm.constantsPool = constantsPool;
@@ -86,16 +89,17 @@ pub const VM = struct {
         //
         //             switch (obj.*.data) {
         //                 .STRING => |str| {
-        //                     self.arena.allocator().free(str.chars);
-        //                     self.arena.allocator().destroy(str);
+        //                     self.allocator.free(str.chars);
+        //                     self.allocator.destroy(str);
         //                 }
         //             }
         //
-        //             self.arena.allocator().destroy(obj);
+        //             self.allocator.destroy(obj);
         //             current = next;
         //         }
-
-        self.arena.deinit();
+        if (self.arena) |arena| {
+            arena.deinit();
+        }
     }
 
     /// Emits a runtime error
@@ -104,19 +108,19 @@ pub const VM = struct {
 
         const source = dbg.getSourceLineFromPosition(self.source.*, pos);
 
-        const runtimeErrMsg = std.fmt.allocPrint(self.arena.allocator(), message, varargs) catch |err| {
+        const runtimeErrMsg = std.fmt.allocPrint(self.allocator, message, varargs) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        const msgLocation = std.fmt.allocPrint(self.arena.allocator(), "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, pos.filename, pos.line, pos.column, dbg.ANSI_RESET }) catch |err| {
+        const msgLocation = std.fmt.allocPrint(self.allocator, "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, pos.filename, pos.line, pos.column, dbg.ANSI_RESET }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        const msgErrorInfo = std.fmt.allocPrint(self.arena.allocator(), "{s}runtime error{s}: {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, runtimeErrMsg }) catch |err| {
+        const msgErrorInfo = std.fmt.allocPrint(self.allocator, "{s}runtime error{s}: {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, runtimeErrMsg }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        const msgSource = std.fmt.allocPrint(self.arena.allocator(), "{s}", .{source}) catch |err| {
+        const msgSource = std.fmt.allocPrint(self.allocator, "{s}", .{source}) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
@@ -124,12 +128,12 @@ pub const VM = struct {
         for (1..source.len + 1) |idx| {
             //std.debug.print("{d} : {d}\n", .{ idx, pos.column });
             if (idx == pos.column + 1) {
-                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, "^" }) catch |err| {
+                msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, "^" }) catch |err| {
                     panic.exitWithError("unrecoverable error", err);
                     return;
                 };
             } else {
-                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, " " }) catch |err| {
+                msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, " " }) catch |err| {
                     panic.exitWithError("unrecoverable error", err);
                     return;
                 };
@@ -441,14 +445,10 @@ pub const VM = struct {
                     const RC = _instruction.DECODE_RC(curInstruction);
                     const contantValue = self.GET_CONSTANT(constantIdx).?;
 
-                    std.debug.print("LOADK'\n", .{});
-
                     self.registers.set(RC, contantValue);
                     self.registers.get(RC).print();
                 },
                 .OP_ADD => {
-                    std.debug.print("SUM'\n", .{});
-
                     self.*.mathAdd(curInstruction);
                 },
                 .OP_SUB => {
@@ -513,7 +513,6 @@ pub const VM = struct {
                 .OP_MINUS => {
                     const RA = self.registers.get(_instruction.DECODE_RA(curInstruction));
                     const RC = _instruction.DECODE_RC(curInstruction);
-                    std.debug.print("MINUS'\n", .{});
 
                     switch (RA) {
                         .NUMBER => |n| self.registers.set(RC, Value.createNumber(-n)),

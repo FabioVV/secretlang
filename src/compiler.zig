@@ -33,7 +33,8 @@ pub const Compiler = struct {
     cur_node: AST.CurrentNode,
     source: *[]const u8,
 
-    arena: std.heap.ArenaAllocator,
+    allocator: std.mem.Allocator,
+    arena: ?std.heap.ArenaAllocator,
 
     instructions: std.ArrayList(Instruction),
     instructions_positions: std.AutoHashMap(u32, Position),
@@ -53,14 +54,15 @@ pub const Compiler = struct {
         const compiler = arena.allocator().create(Compiler) catch unreachable;
 
         compiler.arena = arena;
+        compiler.allocator = compiler.arena.?.allocator();
         compiler.ast_program = ast;
         compiler.source = source;
 
-        compiler.instructions = std.ArrayList(Instruction).init(compiler.arena.allocator());
-        compiler.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.arena.allocator());
+        compiler.instructions = std.ArrayList(Instruction).init(compiler.allocator);
+        compiler.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.allocator);
 
-        compiler.constantsPool = std.ArrayList(Value).init(compiler.arena.allocator());
-        compiler.strings = std.StringHashMap(Value).init(compiler.arena.allocator());
+        compiler.constantsPool = std.ArrayList(Value).init(compiler.allocator);
+        compiler.strings = std.StringHashMap(Value).init(compiler.allocator);
 
         compiler.free_registers = .{};
         for (0..REGISTERS_COUNT) |a| {
@@ -68,24 +70,26 @@ pub const Compiler = struct {
         }
         compiler.used_registers = .{};
 
-        compiler.symbol_table = SymbolTable.init(compiler.arena.allocator());
+        compiler.symbol_table = SymbolTable.init(compiler.allocator);
         compiler.objects = null;
+        compiler.cur_node = undefined;
 
         return compiler;
     }
 
     pub fn repl_init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8, symbol_table: *SymbolTable, strings_table: *std.StringHashMap(Value)) *Compiler {
-        var arena = std.heap.ArenaAllocator.init(allocator);
-        const compiler = arena.allocator().create(Compiler) catch unreachable;
+        const compiler = allocator.create(Compiler) catch unreachable;
 
-        compiler.arena = arena;
+        compiler.arena = null;
+        compiler.allocator = allocator;
+
         compiler.ast_program = ast;
         compiler.source = source;
 
-        compiler.instructions = std.ArrayList(Instruction).init(compiler.arena.allocator());
-        compiler.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.arena.allocator());
+        compiler.instructions = std.ArrayList(Instruction).init(compiler.allocator);
+        compiler.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.allocator);
 
-        compiler.constantsPool = std.ArrayList(Value).init(compiler.arena.allocator());
+        compiler.constantsPool = std.ArrayList(Value).init(compiler.allocator);
         compiler.strings = strings_table;
 
         compiler.free_registers = .{};
@@ -96,12 +100,17 @@ pub const Compiler = struct {
 
         compiler.symbol_table = symbol_table;
         compiler.objects = null;
+        compiler.cur_node = undefined;
 
         return compiler;
     }
 
     pub fn deinit(self: *Compiler) void {
-        self.arena.deinit();
+        if (self.arena) |arena| {
+            self.symbol_table.deinit();
+            self.allocator.destroy(self.symbol_table);
+            arena.deinit();
+        }
     }
 
     /// Emits a compiler error with a custom message and kills the process
@@ -117,15 +126,15 @@ pub const Compiler = struct {
 
         const source = dbg.getSourceLine(self.source.*, token);
 
-        const msgLocation = std.fmt.allocPrint(self.arena.allocator(), "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RESET }) catch |err| {
+        const msgLocation = std.fmt.allocPrint(self.allocator, "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RESET }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        const msgErrorInfo = std.fmt.allocPrint(self.arena.allocator(), "{s}compilation failed{s}: {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, errorMessage }) catch |err| {
+        const msgErrorInfo = std.fmt.allocPrint(self.allocator, "{s}compilation failed{s}: {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, errorMessage }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        const msgSource = std.fmt.allocPrint(self.arena.allocator(), "{s}", .{source}) catch |err| {
+        const msgSource = std.fmt.allocPrint(self.allocator, "{s}", .{source}) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
@@ -133,19 +142,19 @@ pub const Compiler = struct {
         for (1..source.len + 1) |idx| {
             //print("{d} : {d}\n", .{ idx, token.position.column });
             if (idx == token.position.column + 1) {
-                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, "^" }) catch |err| {
+                msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, "^" }) catch |err| {
                     panic.exitWithError("unrecoverable error", err);
                     return;
                 };
             } else {
-                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, " " }) catch |err| {
+                msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, " " }) catch |err| {
                     panic.exitWithError("unrecoverable error", err);
                     return;
                 };
             }
         }
 
-        print("\n\n-> {s}\n {d} | {s}\n   | {s}\n   | {s}", .{ msgLocation, token.position.line, msgSource, msgt, msgErrorInfo });
+        print("\n\n-> {s}\n {d} | {s}\n   | {s}\n   | {s}\n", .{ msgLocation, token.position.line, msgSource, msgt, msgErrorInfo });
         //std.process.exit(1);
     }
 
@@ -337,8 +346,8 @@ pub const Compiler = struct {
                 const result_register = self.free_registers.pop().?;
                 self.used_registers.append(result_register) catch unreachable;
 
-                //                 const identifierName = self.arena.allocator().dupe(u8, idenExpr.literal) catch unreachable;
-                //                 _ = self.addConstant(Value.createString(self.arena.allocator(), identifierName)); // Is this necessary?
+                //                 const identifierName = self.allocator.dupe(u8, idenExpr.literal) catch unreachable;
+                //                 _ = self.addConstant(Value.createString(self.allocator, identifierName)); // Is this necessary?
 
                 if (self.symbol_table.resolve(idenExpr.literal)) |v| {
                     self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(result_register, v.index));
@@ -351,8 +360,8 @@ pub const Compiler = struct {
     }
 
     fn compileVarStatement(self: *Compiler, stmt: AST.VarStatement) void {
-        //const identifierName = self.arena.allocator().dupe(u8, stmt.identifier.literal) catch unreachable;
-        //_ = self.addConstant(Value.createString(self.arena.allocator(), identifierName)); // Is this necessary?
+        //const identifierName = self.allocator.dupe(u8, stmt.identifier.literal) catch unreachable;
+        //_ = self.addConstant(Value.createString(self.allocator, identifierName)); // Is this necessary?
 
         const identifierName = stmt.identifier.literal;
 

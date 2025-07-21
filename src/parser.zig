@@ -36,7 +36,8 @@ const ParserError = struct {
 };
 
 pub const Parser = struct {
-    arena: std.heap.ArenaAllocator,
+    allocator: std.mem.Allocator,
+    arena: ?std.heap.ArenaAllocator,
 
     lexer: *Lexer,
 
@@ -53,14 +54,71 @@ pub const Parser = struct {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const parser = arena.allocator().create(Parser) catch unreachable;
 
-        parser.lexer = lexer;
         parser.arena = arena;
-        parser.errors = std.ArrayList(ParserError).init(parser.arena.allocator());
+        parser.allocator = parser.arena.?.allocator();
+        parser.lexer = lexer;
+
+        parser.errors = std.ArrayList(ParserError).init(parser.allocator);
 
         // Initializing hashmaps
-        parser.nud_handlers = std.AutoHashMap(Tokens, NudParseFn).init(parser.arena.allocator());
-        parser.led_handlers = std.AutoHashMap(Tokens, LedParseFn).init(parser.arena.allocator());
-        parser.binding_powers = std.AutoHashMap(Tokens, Precedence).init(parser.arena.allocator());
+        parser.nud_handlers = std.AutoHashMap(Tokens, NudParseFn).init(parser.allocator);
+        parser.led_handlers = std.AutoHashMap(Tokens, LedParseFn).init(parser.allocator);
+        parser.binding_powers = std.AutoHashMap(Tokens, Precedence).init(parser.allocator);
+
+        // Setting up the binding power hashtable
+        parser.bindingPower(Tokens.EQUAL_EQUAL, Precedence.EQUALS);
+        parser.bindingPower(Tokens.NOT_EQUAL, Precedence.EQUALS);
+        parser.bindingPower(Tokens.LESST, Precedence.LESS_GREATER);
+        parser.bindingPower(Tokens.GREATERT, Precedence.LESS_GREATER);
+        parser.bindingPower(Tokens.LESS_EQUAL, Precedence.LESS_GREATER);
+        parser.bindingPower(Tokens.GREATER_EQUAL, Precedence.LESS_GREATER);
+        parser.bindingPower(Tokens.PLUS, Precedence.SUM);
+        parser.bindingPower(Tokens.MINUS, Precedence.SUM);
+        parser.bindingPower(Tokens.FSLASH, Precedence.PRODUCT);
+        parser.bindingPower(Tokens.ASTERISK, Precedence.PRODUCT);
+        parser.bindingPower(Tokens.LPAREN, Precedence.CALL);
+        parser.bindingPower(Tokens.LBRACKET, Precedence.INDEX);
+
+        // Setting up the parsing functions
+        parser.nud(Tokens.IDENT, parseIdentifier);
+        parser.nud(Tokens.NUMBER, parseNumber);
+        parser.nud(Tokens.TRUE, parseBoolean);
+        parser.nud(Tokens.FALSE, parseBoolean);
+        parser.nud(Tokens.STRING, parseString);
+        parser.nud(Tokens.NOT, parseNud);
+        parser.nud(Tokens.MINUS, parseNud);
+        parser.nud(Tokens.LPAREN, parseGroupExpression);
+        parser.nud(Tokens.IF, parseIfExpression);
+        parser.nud(Tokens.FN, parseFnExpression);
+
+        parser.led(Tokens.PLUS, parseLed);
+        parser.led(Tokens.MINUS, parseLed);
+        parser.led(Tokens.FSLASH, parseLed);
+        parser.led(Tokens.ASTERISK, parseLed);
+        parser.led(Tokens.EQUAL_EQUAL, parseLed);
+        parser.led(Tokens.NOT_EQUAL, parseLed);
+        parser.led(Tokens.LESST, parseLed);
+        parser.led(Tokens.GREATERT, parseLed);
+        parser.led(Tokens.LESS_EQUAL, parseLed);
+        parser.led(Tokens.GREATER_EQUAL, parseLed);
+        parser.led(Tokens.LPAREN, parseCallExpression);
+
+        return parser;
+    }
+
+    pub fn repl_init(lexer: *Lexer, allocator: std.mem.Allocator) *Parser {
+        const parser = allocator.create(Parser) catch unreachable;
+
+        parser.arena = null;
+        parser.allocator = allocator;
+        parser.lexer = lexer;
+
+        parser.errors = std.ArrayList(ParserError).init(parser.allocator);
+
+        // Initializing hashmaps
+        parser.nud_handlers = std.AutoHashMap(Tokens, NudParseFn).init(parser.allocator);
+        parser.led_handlers = std.AutoHashMap(Tokens, LedParseFn).init(parser.allocator);
+        parser.binding_powers = std.AutoHashMap(Tokens, Precedence).init(parser.allocator);
 
         // Setting up the binding power hashtable
         parser.bindingPower(Tokens.EQUAL_EQUAL, Precedence.EQUALS);
@@ -104,26 +162,28 @@ pub const Parser = struct {
     }
 
     pub fn deinit(self: *Parser) void {
-        for (self.errors.items) |err| {
-            self.arena.allocator().free(err.message);
-        }
+        if (self.arena) |arena| {
+            for (self.errors.items) |err| {
+                self.allocator.free(err.message);
+            }
 
-        self.arena.deinit();
+            arena.deinit();
+        }
     }
 
     pub fn peekError(self: *Parser, token_literal: []const u8) void {
         const token = self.peek_token;
         const source = dbg.getSourceLine(self.lexer.source, token);
 
-        const msgLocation = std.fmt.allocPrint(self.arena.allocator(), "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RESET }) catch |err| {
+        const msgLocation = std.fmt.allocPrint(self.allocator, "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RESET }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        const msgErrorInfo = std.fmt.allocPrint(self.arena.allocator(), "{s}syntax error{s}: expected {s} but got {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, token_literal, token.literal }) catch |err| {
+        const msgErrorInfo = std.fmt.allocPrint(self.allocator, "{s}syntax error{s}: expected {s} but got {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, token_literal, token.literal }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        const msgSource = std.fmt.allocPrint(self.arena.allocator(), "{s}", .{source}) catch |err| {
+        const msgSource = std.fmt.allocPrint(self.allocator, "{s}", .{source}) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
@@ -131,23 +191,23 @@ pub const Parser = struct {
         for (1..source.len + 1) |idx| {
             //debug.print("{d} : {d}\n", .{ idx, token.position.column });
             if (idx == token.position.column) {
-                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, "^" }) catch |err| {
+                msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, "^" }) catch |err| {
                     panic.exitWithError("unrecoverable error", err);
                     return;
                 };
             } else {
-                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, " " }) catch |err| {
+                msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, " " }) catch |err| {
                     panic.exitWithError("unrecoverable error", err);
                     return;
                 };
             }
         }
 
-        const fullMsg = std.fmt.allocPrint(self.arena.allocator(), "\n\n-> {s}\n {d} | {s}\n   | {s}\n   | {s}", .{ msgLocation, token.position.line, msgSource, msgt, msgErrorInfo }) catch |err| {
+        const fullMsg = std.fmt.allocPrint(self.allocator, "\n\n-> {s}\n {d} | {s}\n   | {s}\n   | {s}", .{ msgLocation, token.position.line, msgSource, msgt, msgErrorInfo }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        self.errors.append(ParserError{ .message = self.arena.allocator().dupe(u8, fullMsg) catch |_err| {
+        self.errors.append(ParserError{ .message = self.allocator.dupe(u8, fullMsg) catch |_err| {
             panic.exitWithError("unrecoverable error trying to dupe parse error message", _err);
         } }) catch |err| {
             panic.exitWithError("unrecoverable error trying to append parse error message", err);
@@ -159,15 +219,15 @@ pub const Parser = struct {
         const token = self.cur_token;
         const source = dbg.getSourceLine(self.lexer.source, token);
 
-        const msgLocation = std.fmt.allocPrint(self.arena.allocator(), "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RESET }) catch |err| {
+        const msgLocation = std.fmt.allocPrint(self.allocator, "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RESET }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        const msgErrorInfo = std.fmt.allocPrint(self.arena.allocator(), "{s}syntax error{s}: {s} but got {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, errorMessage, token.literal }) catch |err| {
+        const msgErrorInfo = std.fmt.allocPrint(self.allocator, "{s}syntax error{s}: {s} but got {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, errorMessage, token.literal }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        const msgSource = std.fmt.allocPrint(self.arena.allocator(), "{s}", .{source}) catch |err| {
+        const msgSource = std.fmt.allocPrint(self.allocator, "{s}", .{source}) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
@@ -175,19 +235,19 @@ pub const Parser = struct {
         for (1..source.len + 1) |idx| {
             //std.debug.print("{d} : {d}\n", .{ idx, token.position.column });
             if (idx == token.position.column) {
-                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, "^" }) catch |err| {
+                msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, "^" }) catch |err| {
                     panic.exitWithError("unrecoverable error", err);
                     return;
                 };
             } else {
-                msgt = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ msgt, " " }) catch |err| {
+                msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, " " }) catch |err| {
                     panic.exitWithError("unrecoverable error", err);
                     return;
                 };
             }
         }
 
-        const fullMsg = std.fmt.allocPrint(self.arena.allocator(), "\n\n-> {s}\n {d} | {s}\n   | {s}\n   | {s}", .{ msgLocation, token.position.line, msgSource, msgt, msgErrorInfo }) catch |err| {
+        const fullMsg = std.fmt.allocPrint(self.allocator, "\n\n-> {s}\n {d} | {s}\n   | {s}\n   | {s}", .{ msgLocation, token.position.line, msgSource, msgt, msgErrorInfo }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
@@ -232,27 +292,25 @@ pub const Parser = struct {
             .NOT => {
                 switch (expr.?.*) {
                     .boolean_expr => |n| {
-                        if(n.value){
-                            return  AST.Expression{ .boolean_expr = AST.BooleanExpression{ .token = Token.makeToken(Tokens.FALSE, "FALSE" , token.position), .value = false } };
+                        if (n.value) {
+                            return AST.Expression{ .boolean_expr = AST.BooleanExpression{ .token = Token.makeToken(Tokens.FALSE, "FALSE", token.position), .value = false } };
                         }
-                        return  AST.Expression{ .boolean_expr = AST.BooleanExpression{ .token = Token.makeToken(Tokens.TRUE, "TRUE" , token.position), .value = true } };
+                        return AST.Expression{ .boolean_expr = AST.BooleanExpression{ .token = Token.makeToken(Tokens.TRUE, "TRUE", token.position), .value = true } };
                     },
-                    else => return null
+                    else => return null,
                 }
-
             },
             .MINUS => {
                 switch (expr.?.*) {
                     .number_expr => |n| {
-                        const strNum = std.fmt.allocPrint(self.arena.allocator(),"{d}" , .{-n.value}) catch unreachable;
-                        return  AST.Expression{ .number_expr = AST.NumberExpression{ .token = Token.makeToken(Tokens.NUMBER, strNum , token.position), .value = -n.value } };
+                        const strNum = std.fmt.allocPrint(self.allocator, "{d}", .{-n.value}) catch unreachable;
+                        return AST.Expression{ .number_expr = AST.NumberExpression{ .token = Token.makeToken(Tokens.NUMBER, strNum, token.position), .value = -n.value } };
                     },
-                    else => return null
+                    else => return null,
                 }
             },
-            else => return null
+            else => return null,
         }
-
     }
 
     pub fn parseNud(self: *Parser) ?*AST.Expression {
@@ -270,40 +328,32 @@ pub const Parser = struct {
 
         const prefixExpr = AST.PrefixExpression{ .token = cur_token, .right = rightExpression };
 
-
         expr.* = AST.Expression{ .prefix_expr = prefixExpr };
 
         return expr;
     }
 
     fn concatenateStrings(self: *Parser, left: []const u8, right: []const u8) []const u8 {
-        const result = self.arena.allocator().alloc(u8, left.len + right.len) catch unreachable;
+        const result = self.allocator.alloc(u8, left.len + right.len) catch unreachable;
         @memcpy(result[0..left.len], left);
         @memcpy(result[left.len..], right);
         return result;
     }
 
     fn tryConstantFold(self: *Parser, left_expr: ?*AST.Expression, right_expr: ?*AST.Expression, token: Token) ?AST.Expression {
-
-        if(left_expr == null or right_expr == null) return null;
-
+        if (left_expr == null or right_expr == null) return null;
 
         const left = left_expr.?.*;
         const right = right_expr.?.*;
 
-        if(left == .number_expr and right == .number_expr){
+        if (left == .number_expr and right == .number_expr) {
             const left_val = left.number_expr.value;
             const right_val = right.number_expr.value;
 
             const makeNumberExpr = struct {
                 fn call(parser: *Parser, value: f64, pos: Position) AST.Expression {
-                    const str_num = std.fmt.allocPrint(parser.arena.allocator(), "{d}", .{value}) catch unreachable;
-                    return AST.Expression{
-                        .number_expr = AST.NumberExpression{
-                            .token = Token.makeToken(Tokens.NUMBER, str_num, pos),
-                            .value = value
-                        }
-                    };
+                    const str_num = std.fmt.allocPrint(parser.allocator, "{d}", .{value}) catch unreachable;
+                    return AST.Expression{ .number_expr = AST.NumberExpression{ .token = Token.makeToken(Tokens.NUMBER, str_num, pos), .value = value } };
                 }
             }.call;
 
@@ -311,12 +361,7 @@ pub const Parser = struct {
                 fn call(value: bool, pos: Position) AST.Expression {
                     const token_type = if (value) Tokens.TRUE else Tokens.FALSE;
                     const token_str = if (value) "TRUE" else "FALSE";
-                    return AST.Expression{
-                        .boolean_expr = AST.BooleanExpression{
-                            .token = Token.makeToken(token_type, token_str, pos),
-                            .value = value
-                        }
-                    };
+                    return AST.Expression{ .boolean_expr = AST.BooleanExpression{ .token = Token.makeToken(token_type, token_str, pos), .value = value } };
                 }
             }.call;
 
@@ -335,12 +380,12 @@ pub const Parser = struct {
             };
         }
 
-        if(left == .string_expr and right == .string_expr and token.token_type == .PLUS){
+        if (left == .string_expr and right == .string_expr and token.token_type == .PLUS) {
             const left_val = left.string_expr.value;
             const right_val = right.string_expr.value;
 
             const result = self.concatenateStrings(left_val, right_val);
-            return AST.Expression{ .string_expr = AST.StringExpression{ .token = Token.makeToken(Tokens.STRING, result , token.position), .value = result } };
+            return AST.Expression{ .string_expr = AST.StringExpression{ .token = Token.makeToken(Tokens.STRING, result, token.position), .value = result } };
         }
 
         return null;
@@ -589,7 +634,7 @@ pub const Parser = struct {
     }
 
     pub fn createExpressionNode(self: *Parser) *AST.Expression {
-        const expr = self.arena.allocator().create(AST.Expression) catch |err| {
+        const expr = self.allocator.create(AST.Expression) catch |err| {
             panic.exitWithError("Unrecoverable error when trying to create expression node.", err);
         };
 

@@ -25,18 +25,27 @@ const Instruction = _instruction.Instruction;
 pub fn launchRepl() !void {
     const stdin = std.io.getStdIn().reader();
     const stdout = std.io.getStdOut().writer();
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
-    const allocator = gpa.allocator();
+    const gpa_allocator = gpa.allocator();
+    var arena_allocator = std.heap.ArenaAllocator.init(gpa_allocator);
+    const allocator = arena_allocator.allocator();
 
     const globals = std.BoundedArray(Value, _vm.MAX_GLOBALS).init(_vm.MAX_GLOBALS) catch unreachable;
     const symbol_table = SymbolTable.init(allocator);
     var strings = std.StringHashMap(Value).init(allocator);
 
     defer {
+        strings.deinit();
+        symbol_table.deinit();
+
         const deinit_status = gpa.deinit();
+
         if (deinit_status == .leak) {
             @panic("MEMORY LEAK");
         }
+
+        arena_allocator.deinit();
     }
 
     while (true) {
@@ -46,7 +55,6 @@ pub fn launchRepl() !void {
         if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |input_text| {
             var l: Lexer = try Lexer.init(input_text);
             var p: *Parser = Parser.init(&l, allocator);
-            defer p.deinit();
 
             const program = try p.parseProgram(allocator);
             defer program.?.deinit();
@@ -63,7 +71,6 @@ pub fn launchRepl() !void {
             }
 
             var c: *Compiler = Compiler.repl_init(allocator, program.?, &l.source, symbol_table, &strings);
-            defer c.deinit();
 
             c.compile();
 
@@ -72,7 +79,6 @@ pub fn launchRepl() !void {
             //}
 
             var vm: *VM = VM.repl_init(allocator, &c.constantsPool, &c.instructions, &c.instructions_positions, @constCast(&globals), &l.source, c.strings, c.objects);
-            defer vm.deinit();
 
             vm.run();
         }
