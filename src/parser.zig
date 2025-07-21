@@ -79,6 +79,13 @@ pub const Parser = struct {
         parser.bindingPower(Tokens.LPAREN, Precedence.CALL);
         parser.bindingPower(Tokens.LBRACKET, Precedence.INDEX);
 
+        // This precedences here might be 'wrong', need to test more later
+        parser.bindingPower(Tokens.MODULO, Precedence.PRODUCT);
+        parser.bindingPower(Tokens.BIT_AND, Precedence.LESS_GREATER);
+        parser.bindingPower(Tokens.LEFT_SHIFT, Precedence.SUM);
+        parser.bindingPower(Tokens.RIGHT_SHIFT, Precedence.SUM);
+        parser.bindingPower(Tokens.PIPE, Precedence.EQUALS);
+
         // Setting up the parsing functions
         parser.nud(Tokens.IDENT, parseIdentifier);
         parser.nud(Tokens.NUMBER, parseNumber);
