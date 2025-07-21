@@ -346,24 +346,25 @@ pub const Compiler = struct {
                 const result_register = self.free_registers.pop().?;
                 self.used_registers.append(result_register) catch unreachable;
 
-                const identifierName = self.arena.allocator().dupe(u8, idenExpr.literal) catch unreachable;
-                _ = self.addConstant(Value.createString(self.arena.allocator(), identifierName)); // Is this necessary?
+//                 const identifierName = self.arena.allocator().dupe(u8, idenExpr.literal) catch unreachable;
+//                 _ = self.addConstant(Value.createString(self.arena.allocator(), identifierName)); // Is this necessary?
 
-
-                if(self.symbol_table.resolve(identifierName)) |v|{
+                if(self.symbol_table.resolve(idenExpr.literal)) |v|{
                     self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(result_register, v.index));
-                    return;
+                } else {
+                    self.cError("undefined variable");
                 }
 
-                self.cError("undefined variable");
             },
             else => {},
         }
     }
 
     fn compileVarStatement(self: *Compiler, stmt: AST.VarStatement) void {
-        const identifierName = self.arena.allocator().dupe(u8, stmt.identifier.literal) catch unreachable;
-        _ = self.addConstant(Value.createString(self.arena.allocator(), identifierName)); // Is this necessary?
+        //const identifierName = self.arena.allocator().dupe(u8, stmt.identifier.literal) catch unreachable;
+        //_ = self.addConstant(Value.createString(self.arena.allocator(), identifierName)); // Is this necessary?
+
+        const identifierName = stmt.identifier.literal;
 
         if (stmt.expression != null) {
             self.compileExpression(stmt.expression);

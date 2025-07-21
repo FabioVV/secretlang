@@ -564,8 +564,6 @@ pub const VM = struct {
                     const RC = self.registers.get(_instruction.DECODE_RC(curInstruction));
                     const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
 
-                    std.debug.print("set {d} as {d:.2}\n", .{globalIdx, RC.NUMBER});
-
                     self.globals.slice()[globalIdx] = RC;
 
                 },
@@ -573,7 +571,6 @@ pub const VM = struct {
                     const RC = _instruction.DECODE_RC(curInstruction);
                     const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
 
-                    std.debug.print("aaaa {d}\n", .{globalIdx});
                     self.registers.set(RC, self.globals.slice()[globalIdx]);
                     self.registers.get(RC).print();
                 },
