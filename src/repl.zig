@@ -22,7 +22,6 @@ const _value = @import("value.zig");
 const Value = _value.Value;
 const Instruction = _instruction.Instruction;
 
-
 pub fn launchRepl() !void {
     const stdin = std.io.getStdIn().reader();
     const stdout = std.io.getStdOut().writer();
@@ -31,6 +30,7 @@ pub fn launchRepl() !void {
 
     const globals = std.BoundedArray(Value, _vm.MAX_GLOBALS).init(_vm.MAX_GLOBALS) catch unreachable;
     const symbol_table = SymbolTable.init(allocator);
+    var strings = std.StringHashMap(Value).init(allocator);
 
     defer {
         const deinit_status = gpa.deinit();
@@ -38,7 +38,6 @@ pub fn launchRepl() !void {
             @panic("MEMORY LEAK");
         }
     }
-
 
     while (true) {
         var buf: [2048]u8 = undefined;
@@ -63,7 +62,7 @@ pub fn launchRepl() !void {
                 continue;
             }
 
-            var c: *Compiler = Compiler.repl_init(allocator, program.?, &l.source, symbol_table);
+            var c: *Compiler = Compiler.repl_init(allocator, program.?, &l.source, symbol_table, &strings);
             defer c.deinit();
 
             c.compile();
@@ -72,11 +71,10 @@ pub fn launchRepl() !void {
             //   debug.printNodes(node);
             //}
 
-            var vm: *VM = VM.repl_init(allocator, &c.*.constantsPool, &c.*.instructions, &c.instructions_positions, @constCast( &globals), &l.source, &c.strings);
+            var vm: *VM = VM.repl_init(allocator, &c.constantsPool, &c.instructions, &c.instructions_positions, @constCast(&globals), &l.source, c.strings, c.objects);
             defer vm.deinit();
 
             vm.run();
-
         }
     }
 }

@@ -17,13 +17,11 @@ const Value = _value.Value;
 const Object = _value.Object;
 const String = _value.String;
 
-
-const NIL = Value{.NIL = void{}};
+const NIL = Value{ .NIL = void{} };
 const Instruction = _instruction.Instruction;
 
 pub const MAX_REGISTERS = 255;
 pub const MAX_GLOBALS = 65535;
-
 
 pub const VM = struct {
     registers: std.BoundedArray(Value, MAX_REGISTERS),
@@ -42,7 +40,7 @@ pub const VM = struct {
 
     pc: usize,
 
-    pub fn init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), source: *[]const u8, strings: *std.StringHashMap(Value)) *VM {
+    pub fn init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const vm = arena.allocator().create(VM) catch unreachable;
 
@@ -56,12 +54,12 @@ pub const VM = struct {
         vm.instructions_positions = instructions_positions;
         vm.globals = std.BoundedArray(Value, MAX_GLOBALS).init(MAX_GLOBALS) catch unreachable;
         vm.strings = strings;
-        vm.objects = null;
+        vm.objects = objects;
 
         return vm;
     }
 
-    pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), globals: *std.BoundedArray(Value, MAX_GLOBALS), source: *[]const u8, strings: *std.StringHashMap(Value)) *VM {
+    pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), globals: *std.BoundedArray(Value, MAX_GLOBALS), source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const vm = arena.allocator().create(VM) catch unreachable;
 
@@ -74,7 +72,7 @@ pub const VM = struct {
 
         vm.globals = globals;
         vm.strings = strings;
-        vm.objects = null;
+        vm.objects = objects;
 
         vm.pc = 0;
 
@@ -82,39 +80,22 @@ pub const VM = struct {
     }
 
     pub fn deinit(self: *VM) void {
-//         var current = self.objects;
-//         while(current) |obj|{
-//             const next = obj.next;
-//
-//             switch (obj.*.data) {
-//                 .STRING => |str| {
-//                     self.arena.allocator().free(str.chars);
-//                     self.arena.allocator().destroy(str);
-//                 }
-//             }
-//
-//             self.arena.allocator().destroy(obj);
-//             current = next;
-//         }
+        //         var current = self.objects;
+        //         while(current) |obj|{
+        //             const next = obj.next;
+        //
+        //             switch (obj.*.data) {
+        //                 .STRING => |str| {
+        //                     self.arena.allocator().free(str.chars);
+        //                     self.arena.allocator().destroy(str);
+        //                 }
+        //             }
+        //
+        //             self.arena.allocator().destroy(obj);
+        //             current = next;
+        //         }
 
         self.arena.deinit();
-    }
-
-    pub fn addObject(self: *VM, obj: *Object) void {
-        obj.next = self.objects;
-        self.objects = obj;
-    }
-
-    pub fn createStringOwned(self: *VM, str: []const u8) Value {
-        if(self.strings.get(str)) |str_ob|{
-            self.arena.allocator().free(str);
-            return str_ob;
-        }
-
-        const v = Value.createString(self.arena.allocator(), str);
-        self.strings.put(v.OBJECT.data.STRING.chars, v) catch unreachable;
-        self.addObject(v.OBJECT);
-        return v;
     }
 
     /// Emits a runtime error
@@ -166,7 +147,6 @@ pub const VM = struct {
             return null;
         }
         return self.constantsPool.*.items[idx];
-
     }
 
     inline fn GET_CONSTANT_STRING(self: *VM, idx: u16) ?[]const u8 {
@@ -355,13 +335,11 @@ pub const VM = struct {
             .OBJECT => |a| switch (a.data) {
                 .STRING => |str_a| {
                     if (RB.asZigString()) |str_b| {
-                        const result = std.mem.concat(self.arena.allocator(), u8, &[_][]const u8{ str_b, str_a.chars }) catch |err| {
-                            self.rError("out of memory during string concatenation: {any}", .{err});
-                            //std.process.exit(1);
-                            return;
-                        };
+                        const result = std.heap.page_allocator.alloc(u8, str_b.len + str_a.chars.len) catch unreachable;
+                        @memcpy(result[0..str_b.len], str_b);
+                        @memcpy(result[str_b.len..], str_a.chars);
 
-                        const value = self.createStringOwned(result);
+                        const value = Value.kidnapString(std.heap.page_allocator, result, self.strings, &self.objects);
 
                         self.registers.set(RC, value);
                         self.registers.get(RC).print();
@@ -467,7 +445,6 @@ pub const VM = struct {
 
                     self.registers.set(RC, contantValue);
                     self.registers.get(RC).print();
-
                 },
                 .OP_ADD => {
                     std.debug.print("SUM'\n", .{});
@@ -565,7 +542,6 @@ pub const VM = struct {
                     const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
 
                     self.globals.slice()[globalIdx] = RC;
-
                 },
                 .OP_GET_GLOBAL => {
                     const RC = _instruction.DECODE_RC(curInstruction);

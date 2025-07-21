@@ -25,35 +25,36 @@ pub const String = struct {
 };
 
 pub const Object = struct {
-    type:ObjectTypes,
+    type: ObjectTypes,
 
     next: ?*Object,
 
-    data: union(ObjectTypes){
+    data: union(ObjectTypes) {
         STRING: *String,
     },
 
-    pub fn init(allocator: std.mem.Allocator, obj_type:ObjectTypes, data: anytype) *Object {
+    pub fn init(allocator: std.mem.Allocator, obj_type: ObjectTypes, data: anytype, objects: *?*Object) *Object {
         const obj = allocator.create(Object) catch unreachable;
 
         obj.* = Object{
             .type = obj_type,
             .data = switch (obj_type) {
-                .STRING => .{.STRING = data},
+                .STRING => .{ .STRING = data },
             },
-            .next = null,
+            .next = objects.*,
         };
+
+        objects.* = obj;
 
         return obj;
     }
 
-    pub fn asString(self: *Object) ?*String{
+    pub fn asString(self: *Object) ?*String {
         return switch (self.data) {
             .STRING => |str| str,
         };
     }
 };
-
 
 pub const Value = union(ValueType) {
     NUMBER: f64,
@@ -73,15 +74,31 @@ pub const Value = union(ValueType) {
         return Value{ .BOOLEAN = boolean };
     }
 
-    pub inline fn createString(allocator: std.mem.Allocator, str: []const u8) Value {
+    pub inline fn allocString(allocator: std.mem.Allocator, str: []const u8, string_table: *std.StringHashMap(Value), objects: *?*Object) Value {
+        const string_obj = String.init(allocator, str);
+        const obj = Object.init(allocator, .STRING, string_obj, objects);
+        const val = Value{ .OBJECT = obj };
 
-        const our_string = allocator.dupe(u8, str) catch unreachable;
+        string_table.put(string_obj.chars, val) catch unreachable;
 
+        return val;
+    }
 
-        const string_obj = String.init(allocator, our_string);
-        const obj = Object.init(allocator, .STRING, string_obj);
+    pub fn kidnapString(allocator: std.mem.Allocator, str: []const u8, string_table: *std.StringHashMap(Value), objects: *?*Object) Value {
+        if (string_table.get(str)) |our_str| {
+            allocator.free(str);
+            return our_str;
+        }
 
-        return Value{ .OBJECT = obj };
+        return allocString(allocator, str, string_table, objects);
+    }
+
+    pub fn copyString(allocator: std.mem.Allocator, str: []const u8, string_table: *std.StringHashMap(Value), objects: *?*Object) Value {
+        if (string_table.get(str)) |our_str| {
+            return our_str;
+        }
+
+        return allocString(allocator, str, string_table, objects);
     }
 
     pub inline fn asZigString(self: Value) ?[]const u8 {
@@ -93,7 +110,7 @@ pub const Value = union(ValueType) {
         };
     }
 
-    pub inline fn asObject(self: Value) ?*Object{
+    pub inline fn asObject(self: Value) ?*Object {
         return switch (self) {
             .OBJECT => |obj| obj,
             else => null,
@@ -110,8 +127,8 @@ pub const Value = union(ValueType) {
 
     pub inline fn isString(self: Value) bool {
         return switch (self) {
-          .OBJECT => |obj| obj.type == .STRING,
-          else => false,
+            .OBJECT => |obj| obj.type == .STRING,
+            else => false,
         };
     }
 

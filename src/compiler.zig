@@ -16,6 +16,7 @@ const _instruction = @import("instruction.zig");
 const _value = @import("value.zig");
 const Value = _value.Value;
 const String = _value.String;
+const Object = _value.Object;
 const Instruction = _instruction.Instruction;
 const Opcode = _instruction.Opcode;
 
@@ -39,13 +40,13 @@ pub const Compiler = struct {
 
     constantsPool: std.ArrayList(Value),
 
-    strings: std.StringHashMap(Value),
+    strings: *std.StringHashMap(Value),
 
     symbol_table: *SymbolTable,
+    objects: ?*Object,
 
     free_registers: std.BoundedArray(u8, REGISTERS_COUNT),
     used_registers: std.BoundedArray(u8, REGISTERS_COUNT),
-
 
     pub fn init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8) *Compiler {
         var arena = std.heap.ArenaAllocator.init(allocator);
@@ -61,7 +62,6 @@ pub const Compiler = struct {
         compiler.constantsPool = std.ArrayList(Value).init(compiler.arena.allocator());
         compiler.strings = std.StringHashMap(Value).init(compiler.arena.allocator());
 
-
         compiler.free_registers = .{};
         for (0..REGISTERS_COUNT) |a| {
             compiler.free_registers.append(@intCast(a)) catch unreachable;
@@ -69,11 +69,12 @@ pub const Compiler = struct {
         compiler.used_registers = .{};
 
         compiler.symbol_table = SymbolTable.init(compiler.arena.allocator());
+        compiler.objects = null;
 
         return compiler;
     }
 
-    pub fn repl_init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8, symbol_table: *SymbolTable) *Compiler {
+    pub fn repl_init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8, symbol_table: *SymbolTable, strings_table: *std.StringHashMap(Value)) *Compiler {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const compiler = arena.allocator().create(Compiler) catch unreachable;
 
@@ -85,8 +86,7 @@ pub const Compiler = struct {
         compiler.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.arena.allocator());
 
         compiler.constantsPool = std.ArrayList(Value).init(compiler.arena.allocator());
-        compiler.strings = std.StringHashMap(Value).init(compiler.arena.allocator());
-
+        compiler.strings = strings_table;
 
         compiler.free_registers = .{};
         for (0..REGISTERS_COUNT) |a| {
@@ -95,6 +95,7 @@ pub const Compiler = struct {
         compiler.used_registers = .{};
 
         compiler.symbol_table = symbol_table;
+        compiler.objects = null;
 
         return compiler;
     }
@@ -175,7 +176,6 @@ pub const Compiler = struct {
     }
 
     fn addConstant(self: *Compiler, val: Value) u16 {
-
         const index = self.constantsPool.items.len;
 
         self.constantsPool.append(val) catch |err| {
@@ -185,7 +185,6 @@ pub const Compiler = struct {
         if (self.constantsPool.items.len > std.math.maxInt(u16)) { // we cant hold more than 65535 constants, because of the bytecode layout
             self.cError("exceeded maximum number of constants (65,535)");
         }
-
 
         return @intCast(index);
     }
@@ -269,15 +268,8 @@ pub const Compiler = struct {
                 _ = self.emitConstant(Value.createNumber(numExpr.value));
             },
             AST.Expression.string_expr => |strExpr| {
-
-                if(self.strings.get(strExpr.value)) |str_ob|{
-                    self.arena.allocator().free(strExpr.value);
-
-                    _ = self.emitConstant(str_ob);
-                    return;
-                }
-
-                _ = self.emitConstant(Value.createString(self.arena.allocator(), strExpr.value));
+                const str = Value.copyString(std.heap.page_allocator, strExpr.value, self.strings, &self.objects);
+                _ = self.emitConstant(str);
             },
             AST.Expression.boolean_expr => |boolExpr| {
                 const result_register = self.free_registers.pop().?;
@@ -294,7 +286,6 @@ pub const Compiler = struct {
 
                 self.compileExpression(infixExpr.left);
                 self.compileExpression(infixExpr.right);
-
 
                 const result_register = self.free_registers.pop().?;
                 const left_register = self.used_registers.pop().?;
@@ -346,15 +337,14 @@ pub const Compiler = struct {
                 const result_register = self.free_registers.pop().?;
                 self.used_registers.append(result_register) catch unreachable;
 
-//                 const identifierName = self.arena.allocator().dupe(u8, idenExpr.literal) catch unreachable;
-//                 _ = self.addConstant(Value.createString(self.arena.allocator(), identifierName)); // Is this necessary?
+                //                 const identifierName = self.arena.allocator().dupe(u8, idenExpr.literal) catch unreachable;
+                //                 _ = self.addConstant(Value.createString(self.arena.allocator(), identifierName)); // Is this necessary?
 
-                if(self.symbol_table.resolve(idenExpr.literal)) |v|{
+                if (self.symbol_table.resolve(idenExpr.literal)) |v| {
                     self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(result_register, v.index));
                 } else {
                     self.cError("undefined variable");
                 }
-
             },
             else => {},
         }
@@ -374,7 +364,6 @@ pub const Compiler = struct {
 
         const result_register = self.used_registers.pop().?;
         self.free_registers.append(result_register) catch unreachable;
-
 
         self.defineGlobal(result_register, identifierName);
     }
