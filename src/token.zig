@@ -1,7 +1,9 @@
+const std = @import("std");
+
 pub const Tokens = enum {
     IDENT, // variables or const names
 
-    NUMBER, // 1234
+    NUMBER, // 1234, 1.23, 12.232
     STRING, // "this is a string"
 
     COMMA, // ,
@@ -30,7 +32,15 @@ pub const Tokens = enum {
     LESS_EQUAL, //<=
     QUOTE, // "
 
-    PRINT, // Print token, it will work as a function, accepts a single expression like: print 1 + 1 or print 1 or print "str" etc..
+    LEFT_SHIFT, //<<
+    RIGHT_SHIFT, //>>
+    BIT_AND, // &
+
+    MODULO, // %
+    PIPE, // |
+
+    THEN, //then keyword
+    END, // end keyword
 
     VAR, // variable declartion token
 
@@ -50,6 +60,22 @@ pub const Tokens = enum {
     EOF, // end of file
 };
 
+pub const Keywords = enum { FN, IF, ELSE, THEN, END, FOR, VAR, NIL, TRUE, FALSE, RETURN };
+
+pub const KeywordMap = std.StaticStringMap(Keywords).initComptime(.{
+    .{ "fn", Keywords.FN },
+    .{ "if", Keywords.IF },
+    .{ "else", Keywords.ELSE },
+    .{ "var", Keywords.VAR },
+    .{ "then", Keywords.THEN },
+    .{ "end", Keywords.END },
+    .{ "true", Keywords.TRUE },
+    .{ "false", Keywords.FALSE },
+    .{ "nil", Keywords.NIL },
+    .{ "return", Keywords.RETURN },
+    .{ "for", Keywords.FOR },
+});
+
 pub const Position = struct {
     column: usize = 0,
     line: usize = 0,
@@ -60,7 +86,6 @@ pub const Token = struct {
     token_type: Tokens,
     literal: []const u8,
     position: Position = undefined, // Just to make our life easir during testing, this way we dont need to pass in a position every time we create a token by hand
-
 
     pub inline fn makeToken(token_t: Tokens, literal: []const u8, position: Position) Token {
         return Token{ .token_type = token_t, .literal = literal, .position = position };

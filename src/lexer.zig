@@ -8,6 +8,8 @@ const unicode = std.unicode;
 const _token = @import("token.zig");
 const Token = _token.Token;
 const Tokens = _token.Tokens;
+const Keywords = _token.Keywords;
+const KeywordMap = _token.KeywordMap;
 const Position = _token.Position;
 const dbg = @import("debug.zig");
 
@@ -101,65 +103,26 @@ pub const Lexer = struct {
         return true;
     }
 
-    // trie
     pub fn identifyTypeOfAlphanumeric(self: *Lexer, identifier: []u8, startColumn: usize) Token {
         const pos = Position{ .column = startColumn, .line = self.line };
 
-        switch (identifier[0]) {
-            'p' => {
-                if (mem.eql(u8, identifier, "print")) {
-                    return Token.makeToken(Tokens.PRINT, "PRINT", pos);
-                }
-            },
-            'v' => {
-                if (mem.eql(u8, identifier, "var")) {
-                    return Token.makeToken(Tokens.VAR, "VAR", pos);
-                }
-            },
-            'e' => {
-                if (mem.eql(u8, identifier, "else")) {
-                    return Token.makeToken(Tokens.ELSE, "ELSE", pos);
-                }
-            },
-            'i' => {
-                if (mem.eql(u8, identifier, "if")) {
-                    return Token.makeToken(Tokens.IF, "IF", pos);
-                }
-            },
-            'n' => {
-                if (mem.eql(u8, identifier, "nil")) {
-                    return Token.makeToken(Tokens.NIL, "NIL", pos);
-                }
-            },
-            'r' => {
-                if (mem.eql(u8, identifier, "return")) {
-                    return Token.makeToken(Tokens.RETURN, "RETURN", pos);
-                }
-            },
-            't' => {
-                if (mem.eql(u8, identifier, "true")) {
-                    return Token.makeToken(Tokens.TRUE, "TRUE", pos);
-                }
-            },
-            'f' => {
-                if (mem.eql(u8, identifier, "false")) {
-                    return Token.makeToken(Tokens.FALSE, "FALSE", pos);
-                }
-
-                if (mem.eql(u8, identifier, "fn")) {
-                    return Token.makeToken(Tokens.FN, "FN", pos);
-                }
-
-                if (mem.eql(u8, identifier, "for")) {
-                    return Token.makeToken(Tokens.FOR, "FOR", pos);
-                }
-            },
-            else => {
-                return Token.makeToken(Tokens.IDENT, identifier, pos);
-            },
+        if (KeywordMap.get(identifier)) |kw| {
+            return switch (kw) {
+                .FN => Token.makeToken(Tokens.FN, "FN", pos),
+                .VAR => Token.makeToken(Tokens.VAR, "VAR", pos),
+                .IF => Token.makeToken(Tokens.IF, "IF", pos),
+                .ELSE => Token.makeToken(Tokens.ELSE, "ELSE", pos),
+                .FOR => Token.makeToken(Tokens.FOR, "FOR", pos),
+                .THEN => Token.makeToken(Tokens.THEN, "THEN", pos),
+                .END => Token.makeToken(Tokens.END, "END", pos),
+                .NIL => Token.makeToken(Tokens.NIL, "NIL", pos),
+                .TRUE => Token.makeToken(Tokens.TRUE, "TRUE", pos),
+                .FALSE => Token.makeToken(Tokens.FALSE, "FALSE", pos),
+                else => unreachable,
+            };
+        } else {
+            return Token.makeToken(Tokens.IDENT, identifier, pos);
         }
-
-        return Token.makeToken(Tokens.IDENT, identifier, pos);
     }
 
     pub fn lexNumber(self: *Lexer, startColumn: usize) Token {
@@ -250,6 +213,15 @@ pub const Lexer = struct {
 
         const firstChar: u8 = ch.?[0];
         switch (firstChar) {
+            '|' => {
+                return Token.makeToken(Tokens.PIPE, "|", pos);
+            },
+            '%' => {
+                return Token.makeToken(Tokens.MODULO, "%", pos);
+            },
+            '&' => {
+                return Token.makeToken(Tokens.BIT_AND, "&", pos);
+            },
             ',' => {
                 return Token.makeToken(Tokens.COMMA, ",", pos);
             },
@@ -299,12 +271,22 @@ pub const Lexer = struct {
                     _ = self.advance();
                     return Token.makeToken(Tokens.LESS_EQUAL, "<=", pos);
                 }
+
+                if (self.peekByte(1) == '<') {
+                    _ = self.advance();
+                    return Token.makeToken(Tokens.LEFT_SHIFT, "<<", pos);
+                }
                 return Token.makeToken(Tokens.LESST, "<", pos);
             },
             '>' => {
                 if (self.peekByte(1) == '=') {
                     _ = self.advance();
                     return Token.makeToken(Tokens.GREATER_EQUAL, ">=", pos);
+                }
+
+                if (self.peekByte(1) == '>') {
+                    _ = self.advance();
+                    return Token.makeToken(Tokens.RIGHT_SHIFT, ">>", pos);
                 }
                 return Token.makeToken(Tokens.GREATERT, ">", pos);
             },
