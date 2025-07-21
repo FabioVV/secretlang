@@ -14,6 +14,7 @@ const Lexer = @import("lexer.zig").Lexer;
 const Parser = @import("parser.zig").Parser;
 const Compiler = @import("compiler.zig").Compiler;
 const AST = @import("ast.zig");
+const SymbolTable = @import("symbol.zig").SymbolTable;
 const _vm = @import("vm.zig");
 const VM = _vm.VM;
 const _instruction = @import("instruction.zig");
@@ -21,16 +22,16 @@ const _value = @import("value.zig");
 const Value = _value.Value;
 const Instruction = _instruction.Instruction;
 
-extern "kernel32" fn ReadConsoleW(handle: os.fd_t, buffer: [*]u16, len: os.windows.DWORD, read: *os.windows.DWORD, input_ctrl: ?*void) i32;
-extern "kernel32" fn SetConsoleOutputCP(cp: os.windows.UINT) i32;
 
 pub fn launchRepl() !void {
     const stdin = std.io.getStdIn().reader();
     const stdout = std.io.getStdOut().writer();
-
-    var globalStore = std.StringHashMap(Value).init(std.heap.page_allocator);
-
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
+    const allocator = gpa.allocator();
+
+    const globals = std.BoundedArray(Value, _vm.MAX_GLOBALS).init(_vm.MAX_GLOBALS) catch unreachable;
+    const symbol_table = SymbolTable.init(allocator);
+
     defer {
         const deinit_status = gpa.deinit();
         if (deinit_status == .leak) {
@@ -38,7 +39,6 @@ pub fn launchRepl() !void {
         }
     }
 
-    const allocator = gpa.allocator();
 
     while (true) {
         var buf: [2048]u8 = undefined;
@@ -63,7 +63,7 @@ pub fn launchRepl() !void {
                 continue;
             }
 
-            var c: *Compiler = Compiler.init(allocator, program.?, &l.source);
+            var c: *Compiler = Compiler.repl_init(allocator, program.?, &l.source, symbol_table);
             defer c.deinit();
 
             c.compile();
@@ -72,15 +72,11 @@ pub fn launchRepl() !void {
             //   debug.printNodes(node);
             //}
 
-            var vm: *VM = VM.repl_init(allocator, &c.*.constantsPool, &c.*.instructions, &c.instructions_positions, globalStore, &l.source, &c.strings);
+            var vm: *VM = VM.repl_init(allocator, &c.*.constantsPool, &c.*.instructions, &c.instructions_positions, @constCast( &globals), &l.source, &c.strings);
             defer vm.deinit();
 
             vm.run();
 
-            // Workaround for globals in the VM, i copy them back and forth here and in the VM so that the REPL session can keep track of variables, functions etc.
-            // I choose this over allocating memory for the globals in the heap for performance reasons, which while negligible in the REPL, it does matters in normal programs
-            globalStore.deinit();
-            globalStore = vm.*.globals.clone() catch unreachable;
         }
     }
 }

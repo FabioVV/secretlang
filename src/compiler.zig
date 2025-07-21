@@ -11,6 +11,7 @@ const Position = _token.Position;
 const Lexer = @import("lexer.zig").Lexer;
 const Parser = @import("parser.zig").Parser;
 const AST = @import("ast.zig");
+const SymbolTable = @import("symbol.zig").SymbolTable;
 const _instruction = @import("instruction.zig");
 const _value = @import("value.zig");
 const Value = _value.Value;
@@ -40,6 +41,7 @@ pub const Compiler = struct {
 
     strings: std.StringHashMap(Value),
 
+    symbol_table: *SymbolTable,
 
     free_registers: std.BoundedArray(u8, REGISTERS_COUNT),
     used_registers: std.BoundedArray(u8, REGISTERS_COUNT),
@@ -65,6 +67,34 @@ pub const Compiler = struct {
             compiler.free_registers.append(@intCast(a)) catch unreachable;
         }
         compiler.used_registers = .{};
+
+        compiler.symbol_table = SymbolTable.init(compiler.arena.allocator());
+
+        return compiler;
+    }
+
+    pub fn repl_init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8, symbol_table: *SymbolTable) *Compiler {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        const compiler = arena.allocator().create(Compiler) catch unreachable;
+
+        compiler.arena = arena;
+        compiler.ast_program = ast;
+        compiler.source = source;
+
+        compiler.instructions = std.ArrayList(Instruction).init(compiler.arena.allocator());
+        compiler.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.arena.allocator());
+
+        compiler.constantsPool = std.ArrayList(Value).init(compiler.arena.allocator());
+        compiler.strings = std.StringHashMap(Value).init(compiler.arena.allocator());
+
+
+        compiler.free_registers = .{};
+        for (0..REGISTERS_COUNT) |a| {
+            compiler.free_registers.append(@intCast(a)) catch unreachable;
+        }
+        compiler.used_registers = .{};
+
+        compiler.symbol_table = symbol_table;
 
         return compiler;
     }
@@ -225,8 +255,10 @@ pub const Compiler = struct {
         self.instructions.items[pos] = self.instructions.items[pos] | (@as(Instruction, @intCast(jump)) & 0x3FFFF);
     }
 
-    fn defineGlobal(self: *Compiler, constantIdx: u16, result_register: u8) void {
-        self.emitInstruction(_instruction.ENCODE_DEFINE_GLOBAL(result_register, constantIdx));
+    fn defineGlobal(self: *Compiler, result_register: u8, name: []const u8) void {
+        const sb = self.symbol_table.define(name);
+
+        self.emitInstruction(_instruction.ENCODE_DEFINE_GLOBAL(result_register, sb.index));
     }
 
     fn compileExpression(self: *Compiler, expr: ?*AST.Expression) void {
@@ -314,18 +346,24 @@ pub const Compiler = struct {
                 const result_register = self.free_registers.pop().?;
                 self.used_registers.append(result_register) catch unreachable;
 
-                const str = std.heap.page_allocator.dupe(u8, idenExpr.literal) catch unreachable;
-                const identifierStrIdx = self.addConstant(Value.createString(std.heap.page_allocator, str)); // find better way
+                const identifierName = self.arena.allocator().dupe(u8, idenExpr.literal) catch unreachable;
+                _ = self.addConstant(Value.createString(self.arena.allocator(), identifierName)); // Is this necessary?
 
-                self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(result_register, identifierStrIdx));
+
+                if(self.symbol_table.resolve(identifierName)) |v|{
+                    self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(result_register, v.index));
+                    return;
+                }
+
+                self.cError("undefined variable");
             },
             else => {},
         }
     }
 
     fn compileVarStatement(self: *Compiler, stmt: AST.VarStatement) void {
-        const str = std.heap.page_allocator.dupe(u8, stmt.identifier.literal) catch unreachable;
-        const idenIdx = self.addConstant(Value.createString(std.heap.page_allocator, str)); // find better way
+        const identifierName = self.arena.allocator().dupe(u8, stmt.identifier.literal) catch unreachable;
+        _ = self.addConstant(Value.createString(self.arena.allocator(), identifierName)); // Is this necessary?
 
         if (stmt.expression != null) {
             self.compileExpression(stmt.expression);
@@ -336,7 +374,8 @@ pub const Compiler = struct {
         const result_register = self.used_registers.pop().?;
         self.free_registers.append(result_register) catch unreachable;
 
-        self.defineGlobal(idenIdx, result_register);
+
+        self.defineGlobal(result_register, identifierName);
     }
 
     fn compileReturnStatement(self: *Compiler, stmt: AST.ReturnStatement) void {

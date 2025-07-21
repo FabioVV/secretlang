@@ -21,10 +21,12 @@ const String = _value.String;
 const NIL = Value{.NIL = void{}};
 const Instruction = _instruction.Instruction;
 
-pub const TOTAL_REGISTERS = 255;
+pub const MAX_REGISTERS = 255;
+pub const MAX_GLOBALS = 65535;
+
 
 pub const VM = struct {
-    registers: std.BoundedArray(Value, TOTAL_REGISTERS),
+    registers: std.BoundedArray(Value, MAX_REGISTERS),
 
     arena: std.heap.ArenaAllocator,
 
@@ -33,7 +35,7 @@ pub const VM = struct {
     instructions_positions: *std.AutoHashMap(u32, Position),
 
     constantsPool: *std.ArrayList(Value),
-    globals: std.StringHashMap(Value),
+    globals: *std.BoundedArray(Value, MAX_GLOBALS),
 
     objects: ?*Object,
     strings: *std.StringHashMap(Value),
@@ -48,29 +50,29 @@ pub const VM = struct {
 
         vm.source = source;
         vm.arena = arena;
-        vm.registers = std.BoundedArray(Value, TOTAL_REGISTERS).init(TOTAL_REGISTERS) catch unreachable;
+        vm.registers = std.BoundedArray(Value, MAX_REGISTERS).init(MAX_REGISTERS) catch unreachable;
         vm.instructions = instructions;
         vm.constantsPool = constantsPool;
         vm.instructions_positions = instructions_positions;
-        vm.globals = std.StringHashMap(Value).init(vm.arena.allocator());
+        vm.globals = std.BoundedArray(Value, MAX_GLOBALS).init(MAX_GLOBALS) catch unreachable;
         vm.strings = strings;
         vm.objects = null;
 
         return vm;
     }
 
-    pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), globals: std.StringHashMap(Value), source: *[]const u8, strings: *std.StringHashMap(Value)) *VM {
+    pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), globals: *std.BoundedArray(Value, MAX_GLOBALS), source: *[]const u8, strings: *std.StringHashMap(Value)) *VM {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const vm = arena.allocator().create(VM) catch unreachable;
 
         vm.source = source;
         vm.arena = arena;
-        vm.registers = std.BoundedArray(Value, TOTAL_REGISTERS).init(TOTAL_REGISTERS) catch unreachable;
+        vm.registers = std.BoundedArray(Value, MAX_REGISTERS).init(MAX_REGISTERS) catch unreachable;
         vm.instructions = instructions;
         vm.constantsPool = constantsPool;
         vm.instructions_positions = instructions_positions;
 
-        vm.globals = globals.clone() catch unreachable; // Clone the existing globals
+        vm.globals = globals;
         vm.strings = strings;
         vm.objects = null;
 
@@ -560,28 +562,19 @@ pub const VM = struct {
                 },
                 .OP_SET_GLOBAL => {
                     const RC = self.registers.get(_instruction.DECODE_RC(curInstruction));
-                    const constantIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
-                    const identifier = self.GET_CONSTANT_STRING(constantIdx).?;
+                    const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
 
-                    self.globals.put(identifier, RC) catch |err| {
-                        panic.exitWithError("Error trying to store global variable", err);
-                    };
+                    std.debug.print("set {d} as {d:.2}\n", .{globalIdx, RC.NUMBER});
+
+                    self.globals.slice()[globalIdx] = RC;
+
                 },
                 .OP_GET_GLOBAL => {
                     const RC = _instruction.DECODE_RC(curInstruction);
-                    const constantIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
-                    const identifier = self.GET_CONSTANT_STRING(constantIdx).?;
+                    const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
 
-                    var identifierValue: Value = undefined;
-                    if (self.globals.get(identifier)) |v| {
-                        identifierValue = v;
-                    } else {
-                        self.rError("undefined variable: {s}", .{identifier});
-                        //std.process.exit(1);
-                    }
-
-                    self.registers.set(RC, identifierValue);
-
+                    std.debug.print("aaaa {d}\n", .{globalIdx});
+                    self.registers.set(RC, self.globals.slice()[globalIdx]);
                     self.registers.get(RC).print();
                 },
                 else => {
