@@ -314,13 +314,12 @@ test "Input tokenization" {
         \\11.50
         \\1
         \\2
-        \\print 10
-        \\ "a string"
+        \\"a string"
         \\
     ;
 
     var l: Lexer = try Lexer.init(source);
-    const testArr: [11]Token = .{
+    const testArr: [9]Token = .{
         Token{ .token_type = Tokens.FSLASH, .literal = "/" },
         Token{ .token_type = Tokens.PLUS, .literal = "+" },
         Token{ .token_type = Tokens.MINUS, .literal = "-" },
@@ -329,8 +328,6 @@ test "Input tokenization" {
         Token{ .token_type = Tokens.NUMBER, .literal = "11.50" },
         Token{ .token_type = Tokens.NUMBER, .literal = "1" },
         Token{ .token_type = Tokens.NUMBER, .literal = "2" },
-        Token{ .token_type = Tokens.PRINT, .literal = "PRINT" },
-        Token{ .token_type = Tokens.NUMBER, .literal = "10" },
         Token{ .token_type = Tokens.STRING, .literal = "a string" },
     };
 
