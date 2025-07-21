@@ -1,4 +1,5 @@
 const std = @import("std");
+const VM = @import("vm.zig").VM;
 
 pub const ValueType = enum {
     NUMBER,
@@ -14,7 +15,7 @@ pub const ObjectTypes = enum {
 pub const String = struct {
     chars: []const u8,
 
-    pub fn create(allocator: std.mem.Allocator, str: []const u8) *String {
+    pub fn init(allocator: std.mem.Allocator, str: []const u8) *String {
         const string_obj = allocator.create(String) catch unreachable;
         const owned_chars = allocator.dupe(u8, str) catch unreachable;
 
@@ -73,7 +74,11 @@ pub const Value = union(ValueType) {
     }
 
     pub inline fn createString(allocator: std.mem.Allocator, str: []const u8) Value {
-        const string_obj = String.create(allocator, str);
+
+        const our_string = allocator.dupe(u8, str) catch unreachable;
+
+
+        const string_obj = String.init(allocator, our_string);
         const obj = Object.init(allocator, .STRING, string_obj);
 
         return Value{ .OBJECT = obj };

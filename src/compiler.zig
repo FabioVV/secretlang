@@ -14,6 +14,7 @@ const AST = @import("ast.zig");
 const _instruction = @import("instruction.zig");
 const _value = @import("value.zig");
 const Value = _value.Value;
+const String = _value.String;
 const Instruction = _instruction.Instruction;
 const Opcode = _instruction.Opcode;
 
@@ -40,6 +41,9 @@ pub const Compiler = struct {
 
     constantsPool: std.ArrayList(Value),
 
+    strings: std.StringHashMap(Value),
+
+
     free_registers: std.BoundedArray(u8, REGISTERS_COUNT),
     used_registers: std.BoundedArray(u8, REGISTERS_COUNT),
 
@@ -58,6 +62,7 @@ pub const Compiler = struct {
         compiler.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.arena.allocator());
 
         compiler.constantsPool = std.ArrayList(Value).init(compiler.arena.allocator());
+        compiler.strings = std.StringHashMap(Value).init(compiler.arena.allocator());
 
 
         compiler.free_registers = .{};
@@ -247,9 +252,15 @@ pub const Compiler = struct {
                 _ = self.emitConstant(Value.createNumber(numExpr.value));
             },
             AST.Expression.string_expr => |strExpr| {
-                const str = std.heap.page_allocator.dupe(u8, strExpr.value) catch unreachable;
 
-                _ = self.emitConstant(Value.createString(std.heap.page_allocator, str)); // find better way
+                if(self.strings.get(strExpr.value)) |str_ob|{
+                    self.arena.allocator().free(strExpr.value);
+
+                    _ = self.emitConstant(str_ob);
+                    return;
+                }
+
+                _ = self.emitConstant(Value.createString(self.arena.allocator(), strExpr.value));
             },
             AST.Expression.boolean_expr => |boolExpr| {
                 const result_register = self.free_registers.pop().?;

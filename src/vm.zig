@@ -15,7 +15,10 @@ const _instruction = @import("instruction.zig");
 const _value = @import("value.zig");
 const Value = _value.Value;
 const Object = _value.Object;
+const String = _value.String;
 
+
+const NIL = Value{.NIL = void{}};
 const Instruction = _instruction.Instruction;
 
 pub const TOTAL_REGISTERS = 255;
@@ -30,15 +33,18 @@ pub const VM = struct {
     instructions_positions: *std.AutoHashMap(u32, Position),
 
     constantsPool: *std.ArrayList(Value),
-
     globals: std.StringHashMap(Value),
+
     objects: ?*Object,
+    strings: *std.StringHashMap(Value),
 
     pc: usize,
 
-    pub fn init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), source: *[]const u8) *VM {
+    pub fn init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), source: *[]const u8, strings: *std.StringHashMap(Value)) *VM {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const vm = arena.allocator().create(VM) catch unreachable;
+
+        vm.pc = 0;
 
         vm.source = source;
         vm.arena = arena;
@@ -47,14 +53,13 @@ pub const VM = struct {
         vm.constantsPool = constantsPool;
         vm.instructions_positions = instructions_positions;
         vm.globals = std.StringHashMap(Value).init(vm.arena.allocator());
-        vm.pc = 0;
-
+        vm.strings = strings;
         vm.objects = null;
 
         return vm;
     }
 
-    pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), globals: std.StringHashMap(Value), source: *[]const u8) *VM {
+    pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), globals: std.StringHashMap(Value), source: *[]const u8, strings: *std.StringHashMap(Value)) *VM {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const vm = arena.allocator().create(VM) catch unreachable;
 
@@ -66,6 +71,7 @@ pub const VM = struct {
         vm.instructions_positions = instructions_positions;
 
         vm.globals = globals.clone() catch unreachable; // Clone the existing globals
+        vm.strings = strings;
         vm.objects = null;
 
         vm.pc = 0;
@@ -97,8 +103,14 @@ pub const VM = struct {
         self.objects = obj;
     }
 
-    pub fn createString(self: *VM, str: []const u8) Value {
+    pub fn createStringOwned(self: *VM, str: []const u8) Value {
+        if(self.strings.get(str)) |str_ob|{
+            self.arena.allocator().free(str);
+            return str_ob;
+        }
+
         const v = Value.createString(self.arena.allocator(), str);
+        self.strings.put(v.OBJECT.data.STRING.chars, v) catch unreachable;
         self.addObject(v.OBJECT);
         return v;
     }
@@ -347,7 +359,7 @@ pub const VM = struct {
                             return;
                         };
 
-                        const value = self.createString(result); // need to fix memory for gc stuff
+                        const value = self.createStringOwned(result);
 
                         self.registers.set(RC, value);
                         self.registers.get(RC).print();
