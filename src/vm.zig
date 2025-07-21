@@ -563,7 +563,7 @@ pub const VM = struct {
                     const constantIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
                     const identifier = self.GET_CONSTANT_STRING(constantIdx).?;
 
-                    self.*.globals.put(identifier, RC) catch |err| {
+                    self.globals.put(identifier, RC) catch |err| {
                         panic.exitWithError("Error trying to store global variable", err);
                     };
                 },
@@ -573,10 +573,9 @@ pub const VM = struct {
                     const identifier = self.GET_CONSTANT_STRING(constantIdx).?;
 
                     var identifierValue: Value = undefined;
-                    if (self.*.globals.get(identifier)) |v| {
+                    if (self.globals.get(identifier)) |v| {
                         identifierValue = v;
                     } else {
-                        // runtime error, variable not defined
                         self.rError("undefined variable: {s}", .{identifier});
                         //std.process.exit(1);
                     }

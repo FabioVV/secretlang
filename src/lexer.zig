@@ -149,6 +149,10 @@ pub const Lexer = struct {
                 if (mem.eql(u8, identifier, "fn")) {
                     return Token.makeToken(Tokens.FN, "FN", pos);
                 }
+
+                if (mem.eql(u8, identifier, "for")) {
+                    return Token.makeToken(Tokens.FOR, "FOR", pos);
+                }
             },
             else => {
                 return Token.makeToken(Tokens.IDENT, identifier, pos);
@@ -445,7 +449,6 @@ test "Simple utf8 lexing" {
         \\var ço = 5
         \\var á = "até"
         \\var _name = "Fábio Gabriel Rodrigues Varela"
-        \\var d = 20.20
     ;
 
     var l: Lexer = try Lexer.init(source);

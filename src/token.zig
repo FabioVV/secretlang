@@ -36,6 +36,7 @@ pub const Tokens = enum {
 
     IF, // if
     ELSE, // else
+    FOR, //
 
     FN, // Function
 

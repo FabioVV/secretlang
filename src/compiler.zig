@@ -21,13 +21,10 @@ const Opcode = _instruction.Opcode;
 // todo: Transform values into pointers
 
 pub const REGISTERS_COUNT: u8 = 255;
-pub const LOCALS_COUNT: u8 = 200;
 
 const CompilerError = struct {
     message: []const u8,
 };
-
-pub const Local = struct { name: []const u8, depth: i32, register: ?u8 = null };
 
 pub const Compiler = struct {
     ast_program: *AST.Program,
@@ -47,8 +44,6 @@ pub const Compiler = struct {
     free_registers: std.BoundedArray(u8, REGISTERS_COUNT),
     used_registers: std.BoundedArray(u8, REGISTERS_COUNT),
 
-    locals: std.BoundedArray(Local, LOCALS_COUNT),
-    scope_depth: i32,
 
     pub fn init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8) *Compiler {
         var arena = std.heap.ArenaAllocator.init(allocator);
@@ -70,8 +65,6 @@ pub const Compiler = struct {
             compiler.free_registers.append(@intCast(a)) catch unreachable;
         }
         compiler.used_registers = .{};
-        compiler.locals = .{};
-        compiler.scope_depth = 0;
 
         return compiler;
     }
@@ -149,14 +142,6 @@ pub const Compiler = struct {
     fn registers_status(self: *Compiler) void {
         print("FREE REGISTERS: R{d}\n", .{self.free_registers.len});
         print("USED REGISTERS: R{d}\n", .{self.used_registers.len});
-    }
-
-    fn startScope(self: *Compiler) void {
-        self.*.scope_depth += 1;
-    }
-
-    fn endScope(self: *Compiler) void {
-        self.*.scope_depth -= 1;
     }
 
     fn addConstant(self: *Compiler, val: Value) u16 {
@@ -351,9 +336,7 @@ pub const Compiler = struct {
         const result_register = self.used_registers.pop().?;
         self.free_registers.append(result_register) catch unreachable;
 
-        if (self.scope_depth > 0) {} else {
-            self.defineGlobal(idenIdx, result_register);
-        }
+        self.defineGlobal(idenIdx, result_register);
     }
 
     fn compileReturnStatement(self: *Compiler, stmt: AST.ReturnStatement) void {
