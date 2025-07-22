@@ -27,6 +27,16 @@ pub const SymbolTable = struct {
         return st;
     }
 
+    pub fn initEnclosed(allocator: std.mem.Allocator, outer: *SymbolTable) *SymbolTable {
+        const st = allocator.create(SymbolTable) catch unreachable;
+
+        st.table = std.StringHashMap(Symbol).init(allocator);
+        st.total_definitions = 0;
+        st.parent_table = outer;
+
+        return st;
+    }
+
     pub fn deinit(self: *SymbolTable) void {
         self.table.deinit();
 
@@ -36,8 +46,15 @@ pub const SymbolTable = struct {
         }
     }
 
-    pub inline fn define(self: *SymbolTable, name: []const u8) Symbol {
-        const symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .GLOBAL };
+    pub inline fn define(self: *SymbolTable, name: []const u8) Symbol { // Maybe create a defineLocal so it can have register states etc
+        var symbol: Symbol = undefined;
+
+        if(self.parent_table != null){
+            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .LOCAL };
+        } else {
+            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .GLOBAL };
+
+        }
 
         self.table.put(name, symbol) catch unreachable;
         self.total_definitions += 1;

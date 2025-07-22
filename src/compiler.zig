@@ -11,7 +11,9 @@ const Position = _token.Position;
 const Lexer = @import("lexer.zig").Lexer;
 const Parser = @import("parser.zig").Parser;
 const AST = @import("ast.zig");
-const SymbolTable = @import("symbol.zig").SymbolTable;
+const _symbol_table = @import("symbol.zig");
+const SymbolTable = _symbol_table.SymbolTable;
+const Scopes = _symbol_table.Scope;
 const _instruction = @import("instruction.zig");
 const _value = @import("value.zig");
 const Value = _value.Value;
@@ -184,6 +186,14 @@ pub const Compiler = struct {
         print("USED REGISTERS: R{d}\n", .{self.used_registers.len});
     }
 
+    fn enterScope(self: *Compiler) void {
+        self.symbol_table = SymbolTable.initEnclosed(self.allocator, self.symbol_table);
+    }
+
+    fn leaveScope(self: *Compiler) void {
+        self.symbol_table = self.symbol_table.parent_table.?;
+    }
+
     fn addConstant(self: *Compiler, val: Value) u16 {
         const index = self.constantsPool.items.len;
 
@@ -266,7 +276,11 @@ pub const Compiler = struct {
     fn defineGlobal(self: *Compiler, result_register: u8, name: []const u8) void {
         const sb = self.symbol_table.define(name);
 
-        self.emitInstruction(_instruction.ENCODE_DEFINE_GLOBAL(result_register, sb.index));
+        if(sb.scope == Scopes.GLOBAL){
+            self.emitInstruction(_instruction.ENCODE_DEFINE_GLOBAL(result_register, sb.index));
+        } else {
+            // define local
+        }
     }
 
     fn compileExpression(self: *Compiler, expr: ?*AST.Expression) void {
@@ -342,6 +356,10 @@ pub const Compiler = struct {
 
                 self.patchJump(elseJump);
             },
+            //AST.ArrayExpression => |arr_expr|{
+
+
+            // },
             AST.Expression.identifier_expr => |idenExpr| {
                 const result_register = self.free_registers.pop().?;
                 self.used_registers.append(result_register) catch unreachable;
@@ -349,11 +367,19 @@ pub const Compiler = struct {
                 //                 const identifierName = self.allocator.dupe(u8, idenExpr.literal) catch unreachable;
                 //                 _ = self.addConstant(Value.createString(self.allocator, identifierName)); // Is this necessary?
 
-                if (self.symbol_table.resolve(idenExpr.literal)) |v| {
-                    self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(result_register, v.index));
-                } else {
+                const sb = self.symbol_table.resolve(idenExpr.literal);
+
+                if(sb == null){
                     self.cError("undefined variable");
                 }
+
+                if(sb.?.scope == Scopes.GLOBAL){
+                    self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(result_register, sb.index));
+
+                } else {
+                    // get local
+                }
+
             },
             else => {},
         }
@@ -383,9 +409,13 @@ pub const Compiler = struct {
     }
 
     fn compileBlockStatement(self: *Compiler, stmt: AST.BlockStatement) void {
+        self.enterScope();
+
         for (stmt.statements.items) |stmt_node| {
             self.compile_stmts(stmt_node);
         }
+
+        self.leaveScope();
     }
 
     inline fn compileExpressionStatement(self: *Compiler, stmt: AST.ExpressionStatement) void {

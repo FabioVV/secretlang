@@ -142,6 +142,7 @@ pub const ArrayExpression = struct {
             .token = token,
             .items = std.ArrayList(?*Expression).init(allocator),
         };
+
         return arr;
     }
 };
