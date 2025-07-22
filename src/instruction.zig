@@ -6,7 +6,7 @@ const TokenType = token.Tokens;
 
 pub const Instruction = u32; // Our bytecode is 32 bits in size
 
-inline fn I(value: anytype) u32 { // Convenince function to make the code below less verbose
+inline fn I(value: anytype) u32 { // Convenience function to make the code below less verbose
     return @as(u32, value);
 }
 

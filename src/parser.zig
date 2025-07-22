@@ -97,6 +97,8 @@ pub const Parser = struct {
         parser.nud(Tokens.LPAREN, parseGroupExpression);
         parser.nud(Tokens.IF, parseIfExpression);
         parser.nud(Tokens.FN, parseFnExpression);
+        parser.nud(Tokens.LBRACKET, parseArrayExpression);
+
 
         parser.led(Tokens.PLUS, parseLed);
         parser.led(Tokens.MINUS, parseLed);
@@ -109,6 +111,7 @@ pub const Parser = struct {
         parser.led(Tokens.LESS_EQUAL, parseLed);
         parser.led(Tokens.GREATER_EQUAL, parseLed);
         parser.led(Tokens.LPAREN, parseCallExpression);
+        parser.led(Tokens.LBRACKET, parseIndexExpression);
 
         return parser;
     }
@@ -468,6 +471,20 @@ pub const Parser = struct {
         return expr;
     }
 
+    pub fn parseIndexExpression(self: *Parser, left_expr: ?*AST.Expression) ?*AST.Expression {
+        const expr = self.createExpressionNode();
+        const cur_token = self.cur_token;
+
+        self.advance();
+        expr.* = AST.Expression{ .index_expr = AST.IndexExpression{ .token = cur_token, .left = left_expr, .index = self.parseExpression(Precedence.DEFAULT) }};
+
+        if (!self.expect(Tokens.RBRACKET, "]")) {
+            return null;
+        }
+
+        return expr;
+    }
+
     pub fn parseGroupExpression(self: *Parser) ?*AST.Expression {
         self.advance();
 
@@ -603,6 +620,46 @@ pub const Parser = struct {
 
         const expr = self.createExpressionNode();
         expr.* = AST.Expression{ .fn_expr = fnLiteral };
+
+        return expr;
+    }
+
+    pub fn parseExpressionItems(self: *Parser) ?[]?*AST.Expression{
+        var items = std.ArrayList(?*AST.Expression).init(self.allocator);
+
+        if (self.peekIs(Tokens.RBRACKET)) {
+            self.advance();
+            return null;
+        }
+
+        self.advance();
+        items.append(self.parseExpression(Precedence.DEFAULT)) catch unreachable;
+
+        while (self.peekIs(Tokens.COMMA)) {
+            self.advance(); // advance after the comma
+            self.advance(); // advance again, this time cur_token becomes the next item
+
+            items.append(self.parseExpression(Precedence.DEFAULT)) catch |err| {
+                panic.exitWithError("Unrecoverable error when trying to append function parameter.", err);
+            };
+        }
+
+        if (!self.expect(Tokens.RBRACKET, "]")) {
+            return null;
+        }
+
+        return items.toOwnedSlice() catch unreachable;
+    }
+
+    pub fn parseArrayExpression(self: *Parser) ?*AST.Expression {
+        var arrayLiteral = AST.ArrayExpression.init(self.allocator, self.cur_token);
+
+        if(self.parseExpressionItems()) |list|{
+            arrayLiteral.items.appendSlice(list) catch unreachable;
+        }
+
+        const expr = self.createExpressionNode();
+        expr.* = AST.Expression{ .array_expr = arrayLiteral };
 
         return expr;
     }

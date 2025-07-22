@@ -240,6 +240,12 @@ pub const Lexer = struct {
             '*' => {
                 return Token.makeToken(Tokens.ASTERISK, "*", pos);
             },
+            '[' => {
+                return Token.makeToken(Tokens.LBRACKET, "[", pos);
+            },
+            ']' => {
+                return Token.makeToken(Tokens.RBRACKET, "]", pos);
+            },
             '(' => {
                 return Token.makeToken(Tokens.LPAREN, "(", pos);
             },

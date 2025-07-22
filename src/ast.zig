@@ -133,6 +133,25 @@ pub const callExpression = struct {
     }
 };
 
+pub const ArrayExpression = struct {
+    token: Token, // [ token
+    items: std.ArrayList(?*Expression),
+
+    pub fn init(allocator: std.mem.Allocator, token: Token) ArrayExpression {
+        const arr = ArrayExpression{
+            .token = token,
+            .items = std.ArrayList(?*Expression).init(allocator),
+        };
+        return arr;
+    }
+};
+
+pub const IndexExpression = struct {
+    token: Token, // [ token
+    left: ?*Expression,
+    index: ?*Expression,
+};
+
 pub const StmtTypes = enum {
     var_stmt,
     return_stmt,
@@ -157,6 +176,9 @@ pub const ExprTypes = enum {
     if_expr,
     fn_expr,
     call_expr,
+    array_expr,
+    index_expr,
+    //hash_expr
 };
 
 pub const Expression = union(ExprTypes) {
@@ -169,6 +191,8 @@ pub const Expression = union(ExprTypes) {
     if_expr: IfExpression,
     fn_expr: fnExpression,
     call_expr: callExpression,
+    array_expr: ArrayExpression,
+    index_expr: IndexExpression,
 };
 
 pub const NodeTypes = enum {
