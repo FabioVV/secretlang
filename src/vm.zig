@@ -55,7 +55,7 @@ pub const VM = struct {
         vm.instructions = instructions;
         vm.constantsPool = constantsPool;
         vm.instructions_positions = instructions_positions;
-        vm.globals = std.BoundedArray(Value, MAX_GLOBALS).init(MAX_GLOBALS) catch unreachable;
+        vm.globals = std.BoundedArray(Value, MAX_GLOBALS).init(0) catch unreachable;
         vm.strings = strings;
         vm.objects = objects;
 

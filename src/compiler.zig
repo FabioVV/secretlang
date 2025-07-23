@@ -11,6 +11,7 @@ const Position = _token.Position;
 const Lexer = @import("lexer.zig").Lexer;
 const Parser = @import("parser.zig").Parser;
 const AST = @import("ast.zig");
+const _vm = @import("vm.zig");
 const _symbol_table = @import("symbol.zig");
 const SymbolTable = _symbol_table.SymbolTable;
 const Scopes = _symbol_table.Scope;
@@ -24,7 +25,6 @@ const Opcode = _instruction.Opcode;
 
 // todo: Transform values into pointers
 
-pub const REGISTERS_COUNT: u8 = 255;
 
 const CompilerError = struct {
     message: []const u8,
@@ -48,8 +48,10 @@ pub const Compiler = struct {
     symbol_table: *SymbolTable,
     objects: ?*Object,
 
-    free_registers: std.BoundedArray(u8, REGISTERS_COUNT),
-    used_registers: std.BoundedArray(u8, REGISTERS_COUNT),
+    registers: std.BoundedArray(bool, _vm.MAX_REGISTERS),
+    current_scope_registers: std.ArrayList(u8),
+    //free_registers: std.BoundedArray(u8, _vm.MAX_REGISTERS),
+    //used_registers: std.BoundedArray(u8, _vm.MAX_REGISTERS),
 
     pub fn init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8) *Compiler {
         var arena = std.heap.ArenaAllocator.init(allocator);
@@ -66,11 +68,9 @@ pub const Compiler = struct {
         compiler.constantsPool = std.ArrayList(Value).init(compiler.allocator);
         compiler.strings = std.StringHashMap(Value).init(compiler.allocator);
 
-        compiler.free_registers = .{};
-        for (0..REGISTERS_COUNT) |a| {
-            compiler.free_registers.append(@intCast(a)) catch unreachable;
-        }
-        compiler.used_registers = .{};
+        compiler.registers = std.BoundedArray(bool, _vm.MAX_REGISTERS).init(_vm.MAX_REGISTERS) catch unreachable;
+        @memset(compiler.registers.slice(), false);
+        compiler.current_scope_registers = std.ArrayList(u8).init(compiler.allocator);
 
         compiler.symbol_table = SymbolTable.init(compiler.allocator);
         compiler.objects = null;
@@ -94,11 +94,9 @@ pub const Compiler = struct {
         compiler.constantsPool = std.ArrayList(Value).init(compiler.allocator);
         compiler.strings = strings_table;
 
-        compiler.free_registers = .{};
-        for (0..REGISTERS_COUNT) |a| {
-            compiler.free_registers.append(@intCast(a)) catch unreachable;
-        }
-        compiler.used_registers = .{};
+        compiler.registers = std.BoundedArray(bool, _vm.MAX_REGISTERS).init(_vm.MAX_REGISTERS) catch unreachable;
+        @memset(compiler.registers.slice(), false);
+        compiler.current_scope_registers = std.ArrayList(u8).init(compiler.allocator);
 
         compiler.symbol_table = symbol_table;
         compiler.objects = null;
@@ -181,9 +179,41 @@ pub const Compiler = struct {
         };
     }
 
-    fn registers_status(self: *Compiler) void {
-        print("FREE REGISTERS: R{d}\n", .{self.free_registers.len});
-        print("USED REGISTERS: R{d}\n", .{self.used_registers.len});
+    fn registersState(self: *Compiler, op: []const u8) void {
+        std.debug.print("\n=== {s} ===\n", .{op});
+        std.debug.print("Allocated registers: ", .{});
+        for (0.._vm.MAX_REGISTERS) |i| {
+            if (self.registers.get(i)) {
+                std.debug.print("R{} ", .{i});
+            }
+        }
+        std.debug.print("\n", .{});
+    }
+
+    /// allocates a single register for use and returns it, in case of no register available, a OutOfRegisters error is returned
+    inline fn allocateRegister(self: *Compiler) !u8 {
+        for(0.._vm.MAX_REGISTERS) |i|{
+            if(!self.registers.get(i)){
+                self.registers.set(i, true);
+                self.current_scope_registers.append(@intCast(i)) catch unreachable;
+                return @intCast(i);
+            }
+        }
+
+        return error.OutOfRegisters;
+    }
+
+    /// free`s the given register
+    inline fn freeRegister(self: *Compiler, reg: u8) void {
+        self.registers.set(reg, false);
+    }
+
+    inline fn freeScopeRegisters(self: *Compiler) void {
+        for(self.current_scope_registers.items) |reg| {
+            self.freeRegister(reg);
+        }
+
+        self.current_scope_registers.clearRetainingCapacity();
     }
 
     fn enterScope(self: *Compiler) void {
@@ -235,10 +265,13 @@ pub const Compiler = struct {
 
     fn emitConstant(self: *Compiler, val: Value) u16 {
         const contantIndex = self.addConstant(val);
-        const result_register = self.free_registers.pop().?;
-        self.used_registers.append(result_register) catch unreachable;
 
-        self.instructions.append(_instruction.ENCODE_LOADK(result_register, contantIndex)) catch |err| {
+        const reg = self.allocateRegister() catch {
+            self.cError("out of registers");
+            return 0;
+        };
+
+        self.instructions.append(_instruction.ENCODE_LOADK(reg, contantIndex)) catch |err| {
             panic.exitWithError("unrecoverable error trying to emit constant", err);
         };
 
@@ -256,9 +289,11 @@ pub const Compiler = struct {
     }
 
     fn emitNil(self: *Compiler) void {
-        const result_register = self.free_registers.pop().?;
-        self.used_registers.append(result_register) catch unreachable;
-        self.emitInstruction(_instruction.ENCODE_NIL(result_register));
+        const reg = self.allocateRegister() catch {
+            self.cError("out of registers");
+            return;
+        };
+        self.emitInstruction(_instruction.ENCODE_NIL(reg));
     }
 
     fn patchJump(self: *Compiler, pos: usize) void {
@@ -268,6 +303,7 @@ pub const Compiler = struct {
         // ensure the jump doesn't exceed the allowed 18-bit range
         if (jump > 0x3FFFF) { // jump > 18 bits
             self.cError("jump instruction too large");
+            return;
         }
 
         self.instructions.items[pos] = self.instructions.items[pos] | (@as(Instruction, @intCast(jump)) & 0x3FFFF);
@@ -286,6 +322,9 @@ pub const Compiler = struct {
     fn compileExpression(self: *Compiler, expr: ?*AST.Expression) void {
         self.cur_node = AST.CurrentNode{ .expression = @constCast(&expr.?.*) };
 
+        self.registersState("before expr");
+        defer self.registersState("after expr");
+
         switch (expr.?.*) {
             AST.Expression.number_expr => |numExpr| {
                 _ = self.emitConstant(Value.createNumber(numExpr.value));
@@ -295,13 +334,15 @@ pub const Compiler = struct {
                 _ = self.emitConstant(str);
             },
             AST.Expression.boolean_expr => |boolExpr| {
-                const result_register = self.free_registers.pop().?;
-                self.used_registers.append(result_register) catch unreachable;
+                const reg = self.allocateRegister() catch {
+                    self.cError("out of registers");
+                    return;
+                };
 
                 if (boolExpr.value) {
-                    self.emitInstruction(_instruction.ENCODE_BOOLEAN_TRUE(result_register));
+                    self.emitInstruction(_instruction.ENCODE_BOOLEAN_TRUE(reg));
                 } else {
-                    self.emitInstruction(_instruction.ENCODE_BOOLEAN_FALSE(result_register));
+                    self.emitInstruction(_instruction.ENCODE_BOOLEAN_FALSE(reg));
                 }
             },
             AST.Expression.infix_expr => |infixExpr| {
@@ -310,37 +351,42 @@ pub const Compiler = struct {
                 self.compileExpression(infixExpr.left);
                 self.compileExpression(infixExpr.right);
 
-                const result_register = self.free_registers.pop().?;
-                const left_register = self.used_registers.pop().?;
-                const right_register = self.used_registers.pop().?;
+                const left_register = self.current_scope_registers.pop().?;
+                const right_register = self.current_scope_registers.pop().?;
 
-                self.emitInstruction(_instruction.ENCODE_BINARY(operator, result_register, left_register, right_register));
+                const reg = self.allocateRegister() catch {
+                    self.cError("out of registers");
+                    return;
+                };
 
-                self.used_registers.append(result_register) catch unreachable;
-                self.free_registers.append(left_register) catch unreachable;
-                self.free_registers.append(right_register) catch unreachable;
+                self.emitInstruction(_instruction.ENCODE_BINARY(operator, reg, left_register, right_register));
+
+                self.freeRegister(left_register);
+                self.freeRegister(right_register);
             },
             AST.Expression.prefix_expr => |infixExpr| {
                 const operator = infixExpr.token.literal;
 
                 self.compileExpression(infixExpr.right);
 
-                const result_register = self.free_registers.pop().?;
-                const right_register = self.used_registers.pop().?;
+                const reg = self.allocateRegister() catch {
+                    self.cError("out of registers");
+                    return;
+                };
+                const right_register = self.current_scope_registers.pop().?;
 
-                self.emitInstruction(_instruction.ENCODE_PREFIX(operator, result_register, right_register));
+                self.emitInstruction(_instruction.ENCODE_PREFIX(operator, reg, right_register));
 
-                self.used_registers.append(result_register) catch unreachable;
-                self.free_registers.append(right_register) catch unreachable;
+                self.freeRegister(right_register);
             },
             AST.Expression.if_expr => |ifExpr| {
                 self.compileExpression(ifExpr.condition);
 
-                const condtition_register = self.used_registers.pop().?;
+                const cond_register = self.current_scope_registers.pop().?;
 
-                const ifJump = self.emitJumpIfFalse(condtition_register);
+                const ifJump = self.emitJumpIfFalse(cond_register);
 
-                self.free_registers.append(condtition_register) catch unreachable;
+                self.freeRegister(cond_register);
 
                 self.compileBlockStatement(ifExpr.ifBlock.?);
 
@@ -361,25 +407,28 @@ pub const Compiler = struct {
 
             // },
             AST.Expression.identifier_expr => |idenExpr| {
-                const result_register = self.free_registers.pop().?;
-                self.used_registers.append(result_register) catch unreachable;
+                const reg = self.allocateRegister() catch {
+                    self.cError("out of registers");
+                    return;
+                };
 
-                //                 const identifierName = self.allocator.dupe(u8, idenExpr.literal) catch unreachable;
-                //                 _ = self.addConstant(Value.createString(self.allocator, identifierName)); // Is this necessary?
+                // const identifierName = self.allocator.dupe(u8, idenExpr.literal) catch unreachable;
+                // _ = self.addConstant(Value.createString(self.allocator, identifierName)); // Is this necessary?
 
-                const sb = self.symbol_table.resolve(idenExpr.literal);
+                if(self.symbol_table.resolve(idenExpr.literal)) |sb| {
+                    if(sb.scope == Scopes.GLOBAL){
+                        self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(reg, sb.index));
 
-                if(sb == null){
-                    self.cError("undefined variable");
+                    } else {
+                        // get local
+                    }
+
+                    //self.freeRegister(reg);
+                    return;
                 }
 
-                if(sb.?.scope == Scopes.GLOBAL){
-                    self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(result_register, sb.index));
-
-                } else {
-                    // get local
-                }
-
+                //self.freeRegister(reg);
+                self.cError("undefined variable");
             },
             else => {},
         }
@@ -397,10 +446,10 @@ pub const Compiler = struct {
             self.emitNil();
         }
 
-        const result_register = self.used_registers.pop().?;
-        self.free_registers.append(result_register) catch unreachable;
+        const reg = self.current_scope_registers.pop().?;
+        self.freeRegister(reg);
 
-        self.defineGlobal(result_register, identifierName);
+        self.defineGlobal(reg, identifierName);
     }
 
     fn compileReturnStatement(self: *Compiler, stmt: AST.ReturnStatement) void {
@@ -444,8 +493,10 @@ pub const Compiler = struct {
     pub fn compile(self: *Compiler) void {
         for (self.ast_program.nodes.items) |node| {
             self.compile_stmts(node);
-
-            //self.registers_status();
         }
+        //          for (0.._vm.MAX_REGISTERS) |i| {
+        //              std.debug.assert(!self.registers.get(i)); // All registers should be freed
+        //          }
+
     }
 };
