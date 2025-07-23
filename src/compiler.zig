@@ -25,7 +25,6 @@ const Opcode = _instruction.Opcode;
 
 // todo: Transform values into pointers
 
-
 const CompilerError = struct {
     message: []const u8,
 };
@@ -42,6 +41,7 @@ pub const Compiler = struct {
     instructions_positions: std.AutoHashMap(u32, Position),
 
     constantsPool: std.ArrayList(Value),
+    constantsPoolHashes: std.AutoHashMap(u64, u16), // For deduplication of constants
 
     strings: *std.StringHashMap(Value),
 
@@ -50,8 +50,6 @@ pub const Compiler = struct {
 
     registers: std.BoundedArray(bool, _vm.MAX_REGISTERS),
     current_scope_registers: std.ArrayList(u8),
-    //free_registers: std.BoundedArray(u8, _vm.MAX_REGISTERS),
-    //used_registers: std.BoundedArray(u8, _vm.MAX_REGISTERS),
 
     pub fn init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8) *Compiler {
         var arena = std.heap.ArenaAllocator.init(allocator);
@@ -92,6 +90,8 @@ pub const Compiler = struct {
         compiler.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.allocator);
 
         compiler.constantsPool = std.ArrayList(Value).init(compiler.allocator);
+        compiler.constantsPoolHashes = std.AutoHashMap(u64, u16).init(compiler.allocator);
+
         compiler.strings = strings_table;
 
         compiler.registers = std.BoundedArray(bool, _vm.MAX_REGISTERS).init(_vm.MAX_REGISTERS) catch unreachable;
@@ -101,6 +101,8 @@ pub const Compiler = struct {
         compiler.symbol_table = symbol_table;
         compiler.objects = null;
         compiler.cur_node = undefined;
+
+        _ = compiler.addConstant(Value.createNumber(1));
 
         return compiler;
     }
@@ -192,8 +194,8 @@ pub const Compiler = struct {
 
     /// allocates a single register for use and returns it, in case of no register available, a OutOfRegisters error is returned
     inline fn allocateRegister(self: *Compiler) !u8 {
-        for(0.._vm.MAX_REGISTERS) |i|{
-            if(!self.registers.get(i)){
+        for (0.._vm.MAX_REGISTERS) |i| {
+            if (!self.registers.get(i)) {
                 self.registers.set(i, true);
                 self.current_scope_registers.append(@intCast(i)) catch unreachable;
                 return @intCast(i);
@@ -209,7 +211,7 @@ pub const Compiler = struct {
     }
 
     inline fn freeScopeRegisters(self: *Compiler) void {
-        for(self.current_scope_registers.items) |reg| {
+        for (self.current_scope_registers.items) |reg| {
             self.freeRegister(reg);
         }
 
@@ -225,6 +227,12 @@ pub const Compiler = struct {
     }
 
     fn addConstant(self: *Compiler, val: Value) u16 {
+        const value_hash = val.hash();
+
+        if (self.constantsPoolHashes.get(value_hash)) |v| {
+            return v;
+        }
+
         const index = self.constantsPool.items.len;
 
         self.constantsPool.append(val) catch |err| {
@@ -235,6 +243,7 @@ pub const Compiler = struct {
             self.cError("exceeded maximum number of constants (65,535)");
         }
 
+        self.constantsPoolHashes.put(value_hash, @intCast(index)) catch unreachable;
         return @intCast(index);
     }
 
@@ -312,7 +321,7 @@ pub const Compiler = struct {
     fn defineGlobal(self: *Compiler, result_register: u8, name: []const u8) void {
         const sb = self.symbol_table.define(name);
 
-        if(sb.scope == Scopes.GLOBAL){
+        if (sb.scope == Scopes.GLOBAL) {
             self.emitInstruction(_instruction.ENCODE_DEFINE_GLOBAL(result_register, sb.index));
         } else {
             // define local
@@ -322,7 +331,7 @@ pub const Compiler = struct {
     fn compileExpression(self: *Compiler, expr: ?*AST.Expression) void {
         self.cur_node = AST.CurrentNode{ .expression = @constCast(&expr.?.*) };
 
-        self.registersState("before expr");
+        //self.registersState("before expr");
         defer self.registersState("after expr");
 
         switch (expr.?.*) {
@@ -404,7 +413,6 @@ pub const Compiler = struct {
             },
             //AST.ArrayExpression => |arr_expr|{
 
-
             // },
             AST.Expression.identifier_expr => |idenExpr| {
                 const reg = self.allocateRegister() catch {
@@ -415,10 +423,9 @@ pub const Compiler = struct {
                 // const identifierName = self.allocator.dupe(u8, idenExpr.literal) catch unreachable;
                 // _ = self.addConstant(Value.createString(self.allocator, identifierName)); // Is this necessary?
 
-                if(self.symbol_table.resolve(idenExpr.literal)) |sb| {
-                    if(sb.scope == Scopes.GLOBAL){
+                if (self.symbol_table.resolve(idenExpr.literal)) |sb| {
+                    if (sb.scope == Scopes.GLOBAL) {
                         self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(reg, sb.index));
-
                     } else {
                         // get local
                     }

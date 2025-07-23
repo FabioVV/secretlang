@@ -182,7 +182,8 @@ pub const VM = struct {
             .OBJECT => |a| switch (a.data) {
                 .STRING => |str_a| if (RB.asZigString()) |str_b|
                     std.mem.eql(u8, str_b, str_a.chars)
-                else false,
+                else
+                    false,
                 .ARRAY => false,
             },
             .NIL => switch (RB) {
@@ -212,7 +213,8 @@ pub const VM = struct {
             .OBJECT => |a| switch (a.data) {
                 .STRING => |str_a| if (RB.asZigString()) |str_b|
                     !std.mem.eql(u8, str_b, str_a.chars)
-                else true,
+                else
+                    true,
                 .ARRAY => false,
             },
             .NIL => switch (RB) {
@@ -439,8 +441,8 @@ pub const VM = struct {
     }
 
     pub fn run(self: *VM) void {
-        while (self.*.pc < self.instructions.*.items.len) : (self.*.pc += 1) {
-            const curInstruction = self.instructions.*.items[self.*.pc];
+        while (self.pc < self.instructions.*.items.len) : (self.pc += 1) {
+            const curInstruction = self.instructions.*.items[self.pc];
             const opcode = _instruction.GET_OPCODE(curInstruction);
 
             switch (opcode) {

@@ -11,8 +11,8 @@ inline fn I(value: anytype) u32 { // Convenience function to make the code below
 }
 
 pub const Opcode = enum(u8) {
-    RESERVED = 0,
-    OP_LOADK = 1,
+    OP_LOADK = 0,
+    OP_LOADK_LONG = 1,
 
     OP_ADD = 2,
     OP_SUB = 3,

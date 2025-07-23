@@ -70,7 +70,6 @@ pub const Object = struct {
 
         return obj;
     }
-
 };
 
 pub const Value = union(ValueType) {
@@ -78,6 +77,27 @@ pub const Value = union(ValueType) {
     BOOLEAN: bool,
     NIL: void,
     OBJECT: *Object,
+
+    pub inline fn hash(self: Value) u64 {
+        var hasher = std.hash.Wyhash.init(0);
+
+        switch (self) {
+            .NUMBER => |n| {
+                const bits = @as(u64, @bitCast(n));
+                hasher.update(&std.mem.toBytes(bits));
+            },
+            .BOOLEAN => |b| hasher.update(&std.mem.toBytes(b)),
+            .NIL => |n| hasher.update(&std.mem.toBytes(n)),
+            .OBJECT => |o| switch (o.data) {
+                .STRING => |s| hasher.update(&std.mem.toBytes(s.chars)),
+                .ARRAY => |a| {
+                    hasher.update(&std.mem.toBytes(a.*));
+                },
+            },
+        }
+
+        return hasher.final();
+    }
 
     pub inline fn createNumber(num: f64) Value {
         return Value{ .NUMBER = num };
@@ -98,7 +118,6 @@ pub const Value = union(ValueType) {
         const val = Value{ .OBJECT = obj };
 
         return val;
-
     }
 
     pub inline fn allocString(allocator: std.mem.Allocator, str: []const u8, string_table: *std.StringHashMap(Value), objects: *?*Object) Value {
@@ -195,7 +214,7 @@ pub const Value = union(ValueType) {
 
     pub fn printArrItems(arr: *Array) void {
         std.debug.print("[", .{});
-        for(arr.items.items) |arr_i|{
+        for (arr.items.items) |arr_i| {
             switch (arr_i) {
                 .BOOLEAN => |b| std.debug.print("{},", .{b}),
                 .NIL => std.debug.print("nil,", .{}),
