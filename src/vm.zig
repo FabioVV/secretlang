@@ -182,8 +182,8 @@ pub const VM = struct {
             .OBJECT => |a| switch (a.data) {
                 .STRING => |str_a| if (RB.asZigString()) |str_b|
                     std.mem.eql(u8, str_b, str_a.chars)
-                else
-                    false,
+                else false,
+                .ARRAY => false,
             },
             .NIL => switch (RB) {
                 .NIL => true,
@@ -212,8 +212,8 @@ pub const VM = struct {
             .OBJECT => |a| switch (a.data) {
                 .STRING => |str_a| if (RB.asZigString()) |str_b|
                     !std.mem.eql(u8, str_b, str_a.chars)
-                else
-                    true,
+                else true,
+                .ARRAY => false,
             },
             .NIL => switch (RB) {
                 .NIL => false,
@@ -352,6 +352,10 @@ pub const VM = struct {
                         //std.process.exit(1);
 
                     }
+                },
+                else => |p| {
+                    self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(p), @tagName(RA) });
+                    //std.process.exit(1);
                 },
             },
             else => |p| {

@@ -10,6 +10,19 @@ pub const ValueType = enum {
 
 pub const ObjectTypes = enum {
     STRING,
+    ARRAY,
+};
+
+pub const Array = struct {
+    items: std.ArrayList(Value),
+
+    pub fn init(allocator: std.mem.Allocator) *Array {
+        const arr = allocator.create(Array) catch unreachable;
+
+        arr.items = std.ArrayList(Value).init(allocator) catch unreachable;
+
+        return arr;
+    }
 };
 
 pub const String = struct {
@@ -25,22 +38,18 @@ pub const String = struct {
 };
 
 pub const Object = struct {
-    type: ObjectTypes,
-
     next: ?*Object,
 
     data: union(ObjectTypes) {
         STRING: *String,
+        ARRAY: *Array,
     },
 
-    pub fn init(allocator: std.mem.Allocator, obj_type: ObjectTypes, data: anytype, objects: *?*Object) *Object {
+    pub fn initString(allocator: std.mem.Allocator, data: *String, objects: *?*Object) *Object {
         const obj = allocator.create(Object) catch unreachable;
 
         obj.* = Object{
-            .type = obj_type,
-            .data = switch (obj_type) {
-                .STRING => .{ .STRING = data },
-            },
+            .data = .{ .STRING = data },
             .next = objects.*,
         };
 
@@ -49,11 +58,19 @@ pub const Object = struct {
         return obj;
     }
 
-    pub fn asString(self: *Object) ?*String {
-        return switch (self.data) {
-            .STRING => |str| str,
+    pub fn initArray(allocator: std.mem.Allocator, data: *Array, objects: *?*Object) *Object {
+        const obj = allocator.create(Object) catch unreachable;
+
+        obj.* = Object{
+            .data = .{ .ARRAY = data },
+            .next = objects.*,
         };
+
+        objects.* = obj;
+
+        return obj;
     }
+
 };
 
 pub const Value = union(ValueType) {
@@ -74,9 +91,19 @@ pub const Value = union(ValueType) {
         return Value{ .BOOLEAN = boolean };
     }
 
+    pub inline fn createArray(allocator: std.mem.Allocator, objects: *?*Object) Value {
+        const array_obj = Array.init(allocator);
+        const obj = Object.initArray(allocator, array_obj, objects);
+
+        const val = Value{ .OBJECT = obj };
+
+        return val;
+
+    }
+
     pub inline fn allocString(allocator: std.mem.Allocator, str: []const u8, string_table: *std.StringHashMap(Value), objects: *?*Object) Value {
         const string_obj = String.init(allocator, str);
-        const obj = Object.init(allocator, .STRING, string_obj, objects);
+        const obj = Object.initString(allocator, string_obj, objects);
         const val = Value{ .OBJECT = obj };
 
         string_table.put(string_obj.chars, val) catch unreachable;
@@ -105,6 +132,17 @@ pub const Value = union(ValueType) {
         return switch (self) {
             .OBJECT => |obj| switch (obj.*.data) {
                 .STRING => |str| str.chars,
+                else => null,
+            },
+            else => null,
+        };
+    }
+
+    pub inline fn asZigArray(self: Value) ?*Array {
+        return switch (self) {
+            .OBJECT => |obj| switch (obj.*.data) {
+                .ARRAY => |arr| arr,
+                else => null,
             },
             else => null,
         };
@@ -127,7 +165,10 @@ pub const Value = union(ValueType) {
 
     pub inline fn isString(self: Value) bool {
         return switch (self) {
-            .OBJECT => |obj| obj.type == .STRING,
+            .OBJECT => |obj| switch (obj.data) {
+                .STRING => true,
+                else => false,
+            },
             else => false,
         };
     }
@@ -147,8 +188,25 @@ pub const Value = union(ValueType) {
             .NUMBER => |n| n != 0,
             .OBJECT => |obj| switch (obj.data) {
                 .STRING => |str| str.chars.len > 0,
+                .ARRAY => |arr| arr.items.items.len > 0,
             },
         };
+    }
+
+    pub fn printArrItems(arr: *Array) void {
+        std.debug.print("[", .{});
+        for(arr.items.items) |arr_i|{
+            switch (arr_i) {
+                .BOOLEAN => |b| std.debug.print("{},", .{b}),
+                .NIL => std.debug.print("nil,", .{}),
+                .NUMBER => |n| std.debug.print("{d:.2},", .{n}),
+                .OBJECT => |inn_obj| switch (inn_obj.*.data) {
+                    .STRING => std.debug.print("{s},", .{inn_obj.data.STRING.chars}),
+                    .ARRAY => printArrItems(inn_obj.data.ARRAY),
+                },
+            }
+        }
+        std.debug.print("]", .{});
     }
 
     pub inline fn print(self: Value) void {
@@ -158,6 +216,7 @@ pub const Value = union(ValueType) {
             .NUMBER => |n| std.debug.print("{d:.2}\n", .{n}),
             .OBJECT => |obj| switch (obj.*.data) {
                 .STRING => std.debug.print("{s}\n", .{obj.data.STRING.chars}),
+                .ARRAY => printArrItems(obj.data.ARRAY),
             },
         };
     }
