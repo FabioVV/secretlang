@@ -129,7 +129,7 @@ pub const Compiler = struct {
             },
         };
 
-        const source = dbg.getSourceLine(self.source.*, token);
+        const source = dbg.getSourceLine(self.source.*, token.position);
 
         const msgLocation = std.fmt.allocPrint(self.allocator, "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RESET }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);

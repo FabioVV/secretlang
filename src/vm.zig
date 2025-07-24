@@ -106,7 +106,7 @@ pub const VM = struct {
     fn rError(self: *VM, comptime message: []const u8, varargs: anytype) void {
         const pos = self.instructions_positions.get(@intCast(self.pc)).?;
 
-        const source = dbg.getSourceLineFromPosition(self.source.*, pos);
+        const source = dbg.getSourceLine(self.source.*, pos);
 
         const runtimeErrMsg = std.fmt.allocPrint(self.allocator, message, varargs) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);

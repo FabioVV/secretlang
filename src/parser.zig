@@ -26,7 +26,7 @@ const Precedence = enum(u32) {
     INDEX = 10,
 };
 
-const SyncTokens = &[_]Tokens{ .EOF, .VAR, .RBRACE, .RETURN }; // Tokens that can be used as a stop point to syncronize the parser if it encounters an error
+const SyncTokens = &[_]Tokens{ .EOF, .VAR, .RBRACE, .IF, .FN }; // Tokens that can be used as a stop point to syncronize the parser if it encounters an error
 
 const NudParseFn = *const fn (*Parser) ?*AST.Expression;
 const LedParseFn = *const fn (*Parser, ?*AST.Expression) ?*AST.Expression;
@@ -190,7 +190,7 @@ pub const Parser = struct {
         self.in_panic = true;
 
         const token = self.peek_token;
-        const source = dbg.getSourceLine(self.lexer.source, token);
+        const source = dbg.getSourceLine(self.lexer.source, token.position);
 
         const msgLocation = std.fmt.allocPrint(self.allocator, "In [{s}] {d}:{d}", .{ token.position.filename, token.position.line, token.position.column }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
@@ -233,13 +233,16 @@ pub const Parser = struct {
 
     /// Emits a parser error with a custom message for the current token being processed
     pub fn pError(self: *Parser, errorMessage: []const u8) void {
-        if (self.in_panic) return;
+        if (self.in_panic) {
+            self.sync();
+            return;
+        }
 
         self.had_error = true;
         self.in_panic = true;
 
-        const token = self.cur_token;
-        const source = dbg.getSourceLine(self.lexer.source, token);
+        const token = self.previous_token;
+        const source = dbg.getSourceLine(self.lexer.source, token.position);
 
         var caret_line = self.allocator.alloc(u8, source.len + 1) catch {
             panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
@@ -825,8 +828,6 @@ pub const Parser = struct {
     }
 
     pub fn parseNode(self: *Parser) ?AST.Statement {
-        //if (self.in_panic) self.sync();
-
         switch (self.cur_token.token_type) {
             Tokens.VAR => {
                 const var_stmt = self.parseVarToken();

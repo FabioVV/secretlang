@@ -202,48 +202,23 @@ pub fn printFnExpressionCall(stmt: AST.callExpression) void {
     }
 }
 
-pub fn getSourceLine(source: []const u8, token: Token) []const u8 {
-    const lineError = token.position.line;
-    //const columnError = token.position.column;
-    var currentLine: u32 = 0;
-    var startLine: u32 = 0;
-
-    var i: u32 = 0;
-    while (i < source.len and currentLine < lineError) {
-        if (source[i] == '\n') {
-            currentLine += 1;
-            startLine = i + 1;
-        }
-        i += 1;
-    }
-
-    var endLine = startLine;
-    while (endLine < source.len and source[endLine] != '\n') {
-        endLine += 1;
-    }
-
-    return source[startLine..endLine];
-}
-
-pub fn getSourceLineFromPosition(source: []const u8, pos: Position) []const u8 {
+pub fn getSourceLine(source: []const u8, pos: Position) []const u8 {
     const lineError = pos.line;
-    //const columnError = pos.column;
-    var currentLine: u32 = 0;
-    var startLine: u32 = 0;
+    var line_start: usize = 0;
+    var line_end: usize = 0;
+    var current_line: u32 = 1;
 
-    var i: u32 = 0;
-    while (i < source.len and currentLine < lineError) {
-        if (source[i] == '\n') {
-            currentLine += 1;
-            startLine = i + 1;
+    for (source, 0..) |c, i| {
+        if (current_line == lineError) {
+            if (line_start == 0) line_start = i;
+            if (c == '\n') {
+                line_end = i;
+                break;
+            }
         }
-        i += 1;
+        if (c == '\n') current_line += 1;
     }
 
-    var endLine = startLine;
-    while (endLine < source.len and source[endLine] != '\n') {
-        endLine += 1;
-    }
-
-    return source[startLine..endLine];
+    if (line_end == 0) line_end = source.len;
+    return source[line_start..line_end];
 }
