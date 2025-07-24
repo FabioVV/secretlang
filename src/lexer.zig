@@ -13,22 +13,19 @@ const KeywordMap = _token.KeywordMap;
 const Position = _token.Position;
 const dbg = @import("debug.zig");
 
-inline fn isSpace(char: u8) bool {
-    return mem.indexOfScalar(u8, &ascii.whitespace, char) != null;
-}
 
 pub const Lexer = struct {
     source: []const u8,
+    filename: []const u8,
     iterator: unicode.Utf8Iterator,
     currentChar: ?[]const u8 = null,
-    column: usize = 0,
+    column: usize = 1,
     line: usize = 1,
     current: u32 = 0,
-    currentLine: []const u8,
 
-    pub fn init(source: []const u8) !Lexer {
+    pub fn init(source: []const u8, filename: []const u8) !Lexer {
         var iterator = (try unicode.Utf8View.init(source));
-        const lexer = Lexer{ .source = source, .iterator = iterator.iterator(), .currentLine = source[0..] };
+        const lexer = Lexer{ .source = source, .iterator = iterator.iterator(), .filename = filename };
         return lexer;
     }
 
@@ -36,10 +33,12 @@ pub const Lexer = struct {
         if (self.iterator.nextCodepointSlice()) |char| {
             self.currentChar = char;
 
-            self.current += @intCast(self.currentChar.?.len);
+
+            self.current += @intCast(char.len);
+
             if (char.len == 1 and char[0] == '\n') {
                 self.line += 1;
-                self.column = 0;
+                self.column = 1;
             } else {
                 self.column += 1;
             }
@@ -61,19 +60,26 @@ pub const Lexer = struct {
     }
 
     pub fn eatWhitespace(self: *Lexer) void {
-        while (isSpace(self.peekByte(1))) {
-            const codep = self.advance();
+        while (true) {
+            const codep = self.peekByte(1);
 
-            if (codep != null and codep.?.len == 1) {
-                switch (codep.?[0]) {
-                    ' ', '\t', '\r' => {},
-
-                    '\n' => {
-                        self.line = self.line + 1;
-                    },
-                    else => {},
-                }
+            switch (codep) {
+                ' ', '\n', '\t', '\r',ascii.control_code.vt, ascii.control_code.ff => {
+                    _= self.advance();
+                    continue;
+                },
+                '/' =>{
+                    if(self.peekByte(2) == '/'){
+                        while(self.peekByte(1) != '\n' and self.peekByte(1) != 0){
+                            _ = self.advance();
+                        }
+                    } else {
+                        return;
+                    }
+                },
+                else => return,
             }
+
         }
     }
 
@@ -103,8 +109,8 @@ pub const Lexer = struct {
         return true;
     }
 
-    pub fn identifyTypeOfAlphanumeric(self: *Lexer, identifier: []u8, startColumn: usize) Token {
-        const pos = Position{ .column = startColumn, .line = self.line };
+    pub fn identifyTypeOfAlphanumeric(self: *Lexer, identifier: []u8, startColumn: usize, startLine: usize) Token {
+        const pos = Position{ .column = startColumn, .line = startLine, .filename = self.filename };
 
         if (KeywordMap.get(identifier)) |kw| {
             return switch (kw) {
@@ -125,7 +131,7 @@ pub const Lexer = struct {
         }
     }
 
-    pub fn lexNumber(self: *Lexer, startColumn: usize) Token {
+    pub fn lexNumber(self: *Lexer, startColumn: usize, startLine: usize) Token {
         var numbers = std.ArrayList(u8).init(std.heap.page_allocator);
         defer numbers.deinit();
 
@@ -139,7 +145,7 @@ pub const Lexer = struct {
             numbers.appendSlice(self.advance().?) catch unreachable; // Consume the .
 
             if (!self.isAsciiDigit(self.peek(1))) {
-                const pos = Position{ .column = self.column, .line = self.line };
+                const pos = Position{ .column = self.column, .line = startLine, .filename = self.filename };
                 return Token.makeIllegalToken("malformed number", pos);
             }
 
@@ -148,7 +154,7 @@ pub const Lexer = struct {
             }
         }
 
-        const pos = Position{ .column = startColumn, .line = self.line };
+        const pos = Position{ .column = startColumn, .line = startLine, .filename = self.filename };
         const fullNumber = numbers.toOwnedSlice() catch unreachable;
 
         return Token.makeToken(Tokens.NUMBER, fullNumber, pos);
@@ -165,7 +171,7 @@ pub const Lexer = struct {
             if (self.advance()) |c| {
                 chars.appendSlice(c) catch unreachable;
             } else {
-                const pos = Position{ .column = startColumn + 1, .line = self.line };
+                const pos = Position{ .column = startColumn + 1, .line = self.line, .filename = self.filename };
                 return Token.makeIllegalToken("unterminated string", pos);
             }
         }
@@ -173,12 +179,12 @@ pub const Lexer = struct {
         _ = self.advance(); // ending "
 
         const str = chars.toOwnedSlice() catch unreachable;
-        const pos = Position{ .column = startColumn, .line = self.line };
+        const pos = Position{ .column = startColumn, .line = self.line, .filename = self.filename };
 
         return Token.makeToken(Tokens.STRING, str, pos);
     }
 
-    pub fn lexIdentifier(self: *Lexer, startColumn: usize) Token {
+    pub fn lexIdentifier(self: *Lexer, startColumn: usize, startLine: usize) Token {
         var iden = std.ArrayList(u8).init(std.heap.page_allocator);
         defer iden.deinit();
 
@@ -189,26 +195,30 @@ pub const Lexer = struct {
         }
 
         const identifier = iden.toOwnedSlice() catch unreachable;
-        return self.identifyTypeOfAlphanumeric(identifier, startColumn);
+        return self.identifyTypeOfAlphanumeric(identifier, startColumn, startLine);
     }
 
     pub fn nextToken(self: *Lexer) Token {
         self.eatWhitespace();
         const startColumn = self.column;
+        const startLine = self.line;
 
         const ch: ?[]const u8 = self.advance();
-        const pos = Position{ .column = self.column, .line = self.line };
+
+
+        const pos = Position{ .column = startColumn, .line = startLine, .filename = self.filename };
+
 
         if (ch == null) {
             return Token.makeToken(Tokens.EOF, "EOF", pos);
         }
 
         if (self.isIdentifier(ch.?)) {
-            return self.lexIdentifier(startColumn);
+            return self.lexIdentifier(startColumn, startLine);
         }
 
         if (self.isAsciiDigit(ch.?)) {
-            return self.lexNumber(startColumn);
+            return self.lexNumber(startColumn, startLine);
         }
 
         const firstChar: u8 = ch.?[0];

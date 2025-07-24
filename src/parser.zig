@@ -241,23 +241,36 @@ pub const Parser = struct {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        var msgt: []u8 = &[_]u8{};
-        for (1..source.len + 1) |idx| {
-            //std.debug.print("{d} : {d}\n", .{ idx, token.position.column });
-            if (idx == token.position.column) {
-                msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, "^" }) catch |err| {
-                    panic.exitWithError("unrecoverable error", err);
-                    return;
-                };
-            } else {
-                msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, " " }) catch |err| {
-                    panic.exitWithError("unrecoverable error", err);
-                    return;
-                };
-            }
-        }
 
-        const fullMsg = std.fmt.allocPrint(self.allocator, "\n\n-> {s}\n {d} | {s}\n   | {s}\n   | {s}", .{ msgLocation, token.position.line, msgSource, msgt, msgErrorInfo }) catch |err| {
+        var caret_line = self.allocator.alloc(u8, source.len+2) catch {
+            panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
+            return;
+        };
+        defer self.allocator.free(caret_line);
+
+        @memset(caret_line, ' ');
+        if (token.position.column > 0 and token.position.column <= caret_line.len) {
+            caret_line[token.position.column] = '^';
+        }
+        std.debug.print("{d} : {d}\n", .{ caret_line.len, token.position.column });
+
+//         var msgt: []u8 = &[_]u8{};
+//         for (1..source.len + 1) |idx| {
+//             std.debug.print("{d} : {d}\n", .{ idx, token.position.column });
+//             if (idx == token.position.column) {
+//                 msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, "^" }) catch |err| {
+//                     panic.exitWithError("unrecoverable error", err);
+//                     return;
+//                 };
+//             } else {
+//                 msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, "_" }) catch |err| {
+//                     panic.exitWithError("unrecoverable error", err);
+//                     return;
+//                 };
+//             }
+//         }
+
+        const fullMsg = std.fmt.allocPrint(self.allocator, "\n\n-> {s}\n {d} | {s}\n    | {s}\n    | {s}", .{ msgLocation, token.position.line, msgSource, caret_line, msgErrorInfo }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 

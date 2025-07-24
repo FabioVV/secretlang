@@ -33,6 +33,7 @@ pub const Compiler = struct {
     ast_program: *AST.Program,
     cur_node: AST.CurrentNode,
     source: *[]const u8,
+    filename: *[]const u8,
 
     allocator: std.mem.Allocator,
     arena: ?std.heap.ArenaAllocator,
@@ -51,7 +52,7 @@ pub const Compiler = struct {
     registers: std.BoundedArray(bool, _vm.MAX_REGISTERS),
     current_scope_registers: std.ArrayList(u8),
 
-    pub fn init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8) *Compiler {
+    pub fn init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8, filename: *[]const u8) *Compiler {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const compiler = arena.allocator().create(Compiler) catch unreachable;
 
@@ -59,12 +60,16 @@ pub const Compiler = struct {
         compiler.allocator = compiler.arena.?.allocator();
         compiler.ast_program = ast;
         compiler.source = source;
+        compiler.filename = filename;
+
 
         compiler.instructions = std.ArrayList(Instruction).init(compiler.allocator);
         compiler.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.allocator);
 
         compiler.constantsPool = std.ArrayList(Value).init(compiler.allocator);
-        compiler.strings = std.StringHashMap(Value).init(compiler.allocator);
+        compiler.constantsPoolHashes = std.AutoHashMap(u64, u16).init(compiler.allocator);
+
+        compiler.strings = @constCast(&std.StringHashMap(Value).init(compiler.allocator));
 
         compiler.registers = std.BoundedArray(bool, _vm.MAX_REGISTERS).init(_vm.MAX_REGISTERS) catch unreachable;
         @memset(compiler.registers.slice(), false);
@@ -77,7 +82,7 @@ pub const Compiler = struct {
         return compiler;
     }
 
-    pub fn repl_init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8, symbol_table: *SymbolTable, strings_table: *std.StringHashMap(Value)) *Compiler {
+    pub fn repl_init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8, filename: *[]const u8, symbol_table: *SymbolTable, strings_table: *std.StringHashMap(Value)) *Compiler {
         const compiler = allocator.create(Compiler) catch unreachable;
 
         compiler.arena = null;
@@ -85,6 +90,7 @@ pub const Compiler = struct {
 
         compiler.ast_program = ast;
         compiler.source = source;
+        compiler.filename = filename;
 
         compiler.instructions = std.ArrayList(Instruction).init(compiler.allocator);
         compiler.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.allocator);
@@ -101,8 +107,6 @@ pub const Compiler = struct {
         compiler.symbol_table = symbol_table;
         compiler.objects = null;
         compiler.cur_node = undefined;
-
-        _ = compiler.addConstant(Value.createNumber(1));
 
         return compiler;
     }
@@ -266,7 +270,7 @@ pub const Compiler = struct {
         const opcode = _instruction.GET_OPCODE(instruction);
         if (self.canOpError(opcode)) {
             const token = self.getCurrentToken();
-            self.instructions_positions.put(@as(u32, @intCast(self.instructions.items.len - 1)), Position{ .line = token.position.line, .column = token.position.column }) catch |err| {
+            self.instructions_positions.put(@as(u32, @intCast(self.instructions.items.len - 1)), Position{ .line = token.position.line, .column = token.position.column, .filename = self.filename.* }) catch |err| {
                 panic.exitWithError("failed to store debug for instruction", err);
             };
         }

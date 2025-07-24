@@ -1,11 +1,5 @@
 const std = @import("std");
-const mem = std.mem;
-const os = std.os;
-const proc = std.process;
-const expect = std.testing.expect;
 
-const errorHandling = @import("error.zig");
-const debug = @import("debug.zig");
 const _token = @import("token.zig");
 const Position = _token.Position;
 const Token = _token.Token;
@@ -48,12 +42,14 @@ pub fn launchRepl() !void {
         arena_allocator.deinit();
     }
 
-    while (true) {
+    var lineCount: u32 = 1;
+    while (true) : (lineCount += 1) {
         var buf: [2048]u8 = undefined;
-        try stdout.print(">> ", .{});
+        try stdout.print("{d}:>  ", .{lineCount});
 
         if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |input_text| {
-            var l: Lexer = try Lexer.init(input_text);
+            var l: Lexer = try Lexer.init(input_text, "stdin");
+
             var p: *Parser = Parser.init(&l, allocator);
 
             const program = try p.parseProgram(allocator);
@@ -70,13 +66,9 @@ pub fn launchRepl() !void {
                 continue;
             }
 
-            var c: *Compiler = Compiler.repl_init(allocator, program.?, &l.source, symbol_table, &strings);
+            var c: *Compiler = Compiler.repl_init(allocator, program.?, &l.source, &l.filename, symbol_table, &strings);
 
             c.compile();
-
-            //for (program.?.nodes.items) |node| {
-            //   debug.printNodes(node);
-            //}
 
             var vm: *VM = VM.repl_init(allocator, &c.constantsPool, &c.instructions, &c.instructions_positions, @constCast(&globals), &l.source, c.strings, c.objects);
 

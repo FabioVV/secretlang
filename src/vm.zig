@@ -34,7 +34,7 @@ pub const VM = struct {
     instructions_positions: *std.AutoHashMap(u32, Position),
 
     constantsPool: *std.ArrayList(Value),
-    globals: *std.BoundedArray(Value, MAX_GLOBALS),
+    globals: std.BoundedArray(Value, MAX_GLOBALS),
 
     objects: ?*Object,
     strings: *std.StringHashMap(Value),
@@ -55,7 +55,7 @@ pub const VM = struct {
         vm.instructions = instructions;
         vm.constantsPool = constantsPool;
         vm.instructions_positions = instructions_positions;
-        vm.globals = std.BoundedArray(Value, MAX_GLOBALS).init(0) catch unreachable;
+        vm.globals = std.BoundedArray(Value, MAX_GLOBALS).init(MAX_GLOBALS) catch unreachable;
         vm.strings = strings;
         vm.objects = objects;
 
@@ -73,7 +73,7 @@ pub const VM = struct {
         vm.constantsPool = constantsPool;
         vm.instructions_positions = instructions_positions;
 
-        vm.globals = globals;
+        vm.globals = globals.*;
         vm.strings = strings;
         vm.objects = objects;
 
@@ -535,16 +535,18 @@ pub const VM = struct {
 
                     if (!RC.isTruthy()) {
                         const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
-                        self.*.pc += jumpOffset;
+                        self.pc += jumpOffset;
                     }
                 },
                 .OP_JUMP => {
                     const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
-                    self.*.pc += jumpOffset;
+                    self.pc += jumpOffset;
                 },
                 .OP_SET_GLOBAL => {
                     const RC = self.registers.get(_instruction.DECODE_RC(curInstruction));
                     const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
+
+                    std.debug.print("idx: {d}\n", .{globalIdx});
 
                     self.globals.slice()[globalIdx] = RC;
                 },
