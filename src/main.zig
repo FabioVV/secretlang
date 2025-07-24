@@ -36,11 +36,14 @@ fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8)
 
     defer program.?.deinit();
 
+    //     if (p.errors.items.len > 0) {
+    //         for (p.errors.items) |err| {
+    //             try stdout.print("{s}\n", .{err.message});
+    //         }
+    //         return;
+    //     }
 
-    if (p.errors.items.len > 0) {
-        for (p.errors.items) |err| {
-            try stdout.print("{s}\n", .{err.message});
-        }
+    if (p.had_error) {
         return;
     }
 
@@ -104,7 +107,6 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
 
-
     if (args.len < 2) {
         const binary_name = std.fs.path.basename(args[0]);
         print("usage: {s} <filepath> [options] \n", .{binary_name});
@@ -121,8 +123,6 @@ pub fn main() !void {
     const filename = std.fs.path.basename(args[1]);
     try runFromFile(allocator, filepath, filename);
 }
-
-
 
 //
 // fn parseArgs(allocator: Allocator, args: [][]const u8) !struct {

@@ -62,7 +62,6 @@ pub const Compiler = struct {
         compiler.source = source;
         compiler.filename = filename;
 
-
         compiler.instructions = std.ArrayList(Instruction).init(compiler.allocator);
         compiler.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.allocator);
 
@@ -211,6 +210,7 @@ pub const Compiler = struct {
 
     /// free`s the given register
     inline fn freeRegister(self: *Compiler, reg: u8) void {
+        std.debug.assert(self.registers.get(reg)); // Detects double-free
         self.registers.set(reg, false);
     }
 
@@ -480,6 +480,9 @@ pub const Compiler = struct {
 
     inline fn compileExpressionStatement(self: *Compiler, stmt: AST.ExpressionStatement) void {
         self.compileExpression(stmt.expression);
+        if (self.current_scope_registers.pop()) |r| {
+            self.freeRegister(r);
+        }
     }
 
     pub inline fn compile_stmts(self: *Compiler, stmt: AST.Statement) void {
@@ -505,9 +508,8 @@ pub const Compiler = struct {
         for (self.ast_program.nodes.items) |node| {
             self.compile_stmts(node);
         }
-        //          for (0.._vm.MAX_REGISTERS) |i| {
-        //              std.debug.assert(!self.registers.get(i)); // All registers should be freed
-        //          }
-
+        for (0.._vm.MAX_REGISTERS) |i| {
+            std.debug.assert(!self.registers.get(i)); // All registers should be freed
+        }
     }
 };

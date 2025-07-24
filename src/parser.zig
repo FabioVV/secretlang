@@ -41,13 +41,16 @@ pub const Parser = struct {
 
     lexer: *Lexer,
 
-    cur_token: Token = undefined,
-    peek_token: Token = undefined,
+    previous_token: Token,
+    cur_token: Token,
+    peek_token: Token,
 
-    nud_handlers: std.AutoHashMap(Tokens, NudParseFn) = undefined,
-    led_handlers: std.AutoHashMap(Tokens, LedParseFn) = undefined,
-    binding_powers: std.AutoHashMap(Tokens, Precedence) = undefined,
+    nud_handlers: std.AutoHashMap(Tokens, NudParseFn),
+    led_handlers: std.AutoHashMap(Tokens, LedParseFn),
+    binding_powers: std.AutoHashMap(Tokens, Precedence),
 
+    had_error: bool = false,
+    in_panic: bool = false,
     errors: std.ArrayList(ParserError),
 
     pub fn init(lexer: *Lexer, allocator: std.mem.Allocator) *Parser {
@@ -98,7 +101,6 @@ pub const Parser = struct {
         parser.nud(Tokens.IF, parseIfExpression);
         parser.nud(Tokens.FN, parseFnExpression);
         parser.nud(Tokens.LBRACKET, parseArrayExpression);
-
 
         parser.led(Tokens.PLUS, parseLed);
         parser.led(Tokens.MINUS, parseLed);
@@ -182,14 +184,19 @@ pub const Parser = struct {
     }
 
     pub fn peekError(self: *Parser, token_literal: []const u8) void {
+        if (self.in_panic) return;
+
+        self.had_error = true;
+        self.in_panic = true;
+
         const token = self.peek_token;
         const source = dbg.getSourceLine(self.lexer.source, token);
 
-        const msgLocation = std.fmt.allocPrint(self.allocator, "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RESET }) catch |err| {
+        const msgLocation = std.fmt.allocPrint(self.allocator, "In [{s}] {d}:{d}", .{ token.position.filename, token.position.line, token.position.column }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        const msgErrorInfo = std.fmt.allocPrint(self.allocator, "{s}syntax error{s}: expected {s} but got {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, token_literal, token.literal }) catch |err| {
+        const msgErrorInfo = std.fmt.allocPrint(self.allocator, "syntax error: expected {s} but got {s}", .{ token_literal, token.literal }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
@@ -226,55 +233,41 @@ pub const Parser = struct {
 
     /// Emits a parser error with a custom message for the current token being processed
     pub fn pError(self: *Parser, errorMessage: []const u8) void {
+        if (self.in_panic) return;
+
+        self.had_error = true;
+        self.in_panic = true;
+
         const token = self.cur_token;
         const source = dbg.getSourceLine(self.lexer.source, token);
 
-        const msgLocation = std.fmt.allocPrint(self.allocator, "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RESET }) catch |err| {
-            panic.exitWithError("unrecoverable error trying to write parse error message", err);
-        };
-
-        const msgErrorInfo = std.fmt.allocPrint(self.allocator, "{s}syntax error{s}: {s} but got {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, errorMessage, token.literal }) catch |err| {
-            panic.exitWithError("unrecoverable error trying to write parse error message", err);
-        };
-
-        const msgSource = std.fmt.allocPrint(self.allocator, "{s}", .{source}) catch |err| {
-            panic.exitWithError("unrecoverable error trying to write parse error message", err);
-        };
-
-
-        var caret_line = self.allocator.alloc(u8, source.len+2) catch {
+        var caret_line = self.allocator.alloc(u8, source.len + 1) catch {
             panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
             return;
         };
+
         defer self.allocator.free(caret_line);
 
         @memset(caret_line, ' ');
         if (token.position.column > 0 and token.position.column <= caret_line.len) {
-            caret_line[token.position.column] = '^';
+            caret_line[token.position.column - 1] = '^';
         }
-        std.debug.print("{d} : {d}\n", .{ caret_line.len, token.position.column });
 
-//         var msgt: []u8 = &[_]u8{};
-//         for (1..source.len + 1) |idx| {
-//             std.debug.print("{d} : {d}\n", .{ idx, token.position.column });
-//             if (idx == token.position.column) {
-//                 msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, "^" }) catch |err| {
-//                     panic.exitWithError("unrecoverable error", err);
-//                     return;
-//                 };
-//             } else {
-//                 msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, "_" }) catch |err| {
-//                     panic.exitWithError("unrecoverable error", err);
-//                     return;
-//                 };
-//             }
-//         }
-
-        const fullMsg = std.fmt.allocPrint(self.allocator, "\n\n-> {s}\n {d} | {s}\n    | {s}\n    | {s}", .{ msgLocation, token.position.line, msgSource, caret_line, msgErrorInfo }) catch |err| {
+        const errMsg = std.fmt.allocPrint(self.allocator,
+            \\
+            \\-> In [{s}] {d}:{d}
+            \\ {d} | {s}
+            \\   | {s}
+            \\   | syntax error: {s} but got {s}
+            \\
+            \\
+        , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, caret_line, errorMessage, token.literal }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        self.errors.append(ParserError{ .message = std.heap.page_allocator.dupe(u8, fullMsg) catch |_err| {
+        _ = std.io.getStdErr().write(errMsg) catch unreachable;
+
+        self.errors.append(ParserError{ .message = std.heap.page_allocator.dupe(u8, errMsg) catch |_err| {
             panic.exitWithError("unrecoverable error trying to dupe parse error message", _err);
         } }) catch |err| {
             panic.exitWithError("unrecoverable error trying to append parse error message", err);
@@ -282,6 +275,8 @@ pub const Parser = struct {
     }
 
     pub fn sync(self: *Parser) void {
+        self.in_panic = false;
+
         while (self.cur_token.token_type != Tokens.EOF) {
             for (SyncTokens) |st| {
                 if (st == self.cur_token.token_type) {
@@ -489,7 +484,7 @@ pub const Parser = struct {
         const cur_token = self.cur_token;
 
         self.advance();
-        expr.* = AST.Expression{ .index_expr = AST.IndexExpression{ .token = cur_token, .left = left_expr, .index = self.parseExpression(Precedence.DEFAULT) }};
+        expr.* = AST.Expression{ .index_expr = AST.IndexExpression{ .token = cur_token, .left = left_expr, .index = self.parseExpression(Precedence.DEFAULT) } };
 
         if (!self.expect(Tokens.RBRACKET, "]")) {
             return null;
@@ -637,7 +632,7 @@ pub const Parser = struct {
         return expr;
     }
 
-    pub fn parseExpressionItems(self: *Parser) ?[]?*AST.Expression{
+    pub fn parseExpressionItems(self: *Parser) ?[]?*AST.Expression {
         var items = std.ArrayList(?*AST.Expression).init(self.allocator);
 
         if (self.peekIs(Tokens.RBRACKET)) {
@@ -667,7 +662,7 @@ pub const Parser = struct {
     pub fn parseArrayExpression(self: *Parser) ?*AST.Expression {
         var arrayLiteral = AST.ArrayExpression.init(self.allocator, self.cur_token);
 
-        if(self.parseExpressionItems()) |list|{
+        if (self.parseExpressionItems()) |list| {
             arrayLiteral.items.appendSlice(list) catch unreachable;
         }
 
@@ -719,6 +714,7 @@ pub const Parser = struct {
     }
 
     pub inline fn advance(self: *Parser) void {
+        self.previous_token = self.cur_token;
         self.cur_token = self.peek_token;
         self.peek_token = self.lexer.nextToken();
     }
@@ -745,7 +741,6 @@ pub const Parser = struct {
             return true;
         } else {
             self.peekError(token_literal);
-            self.sync();
             return false;
         }
     }
@@ -830,7 +825,9 @@ pub const Parser = struct {
     }
 
     pub fn parseNode(self: *Parser) ?AST.Statement {
-        return switch (self.cur_token.token_type) {
+        //if (self.in_panic) self.sync();
+
+        switch (self.cur_token.token_type) {
             Tokens.VAR => {
                 const var_stmt = self.parseVarToken();
                 if (var_stmt == null) {
@@ -852,7 +849,9 @@ pub const Parser = struct {
                 }
                 return AST.Statement{ .expression_stmt = e_stmt.? };
             },
-        };
+        }
+
+        return null;
     }
 };
 
