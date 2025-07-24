@@ -8,173 +8,233 @@ const unicode = std.unicode;
 const _token = @import("token.zig");
 const Token = _token.Token;
 const Tokens = _token.Tokens;
+const Keywords = _token.Keywords;
+const KeywordMap = _token.KeywordMap;
 const Position = _token.Position;
-const debug = @import("debug.zig");
+const dbg = @import("debug.zig");
 
-inline fn isSpace(char: u8) bool {
-    return mem.indexOfScalar(u8, &ascii.whitespace, char) != null;
-}
 
 pub const Lexer = struct {
-    content: []const u8,
+    source: []const u8,
+    filename: []const u8,
     iterator: unicode.Utf8Iterator,
-    currentChar: ?u8 = null,
-    column: usize = 0,
+    currentChar: ?[]const u8 = null,
+    column: usize = 1,
     line: usize = 1,
+    current: u32 = 0,
 
-    pub fn init(content: []const u8) !Lexer {
-        var iterator = (try unicode.Utf8View.init(content));
-        const lexer = Lexer{ .content = content, .iterator = iterator.iterator() };
+    pub fn init(source: []const u8, filename: []const u8) !Lexer {
+        var iterator = (try unicode.Utf8View.init(source));
+        const lexer = Lexer{ .source = source, .iterator = iterator.iterator(), .filename = filename };
         return lexer;
     }
 
-    pub fn deinit() void {}
-
-    pub fn advance(self: *Lexer) ?u8 {
+    pub fn advance(self: *Lexer) ?[]const u8 {
         if (self.iterator.nextCodepointSlice()) |char| {
-            self.currentChar = char[0];
-            self.column = self.column + 1;
-            return char[0];
+            self.currentChar = char;
+
+
+            self.current += @intCast(char.len);
+
+            if (char.len == 1 and char[0] == '\n') {
+                self.line += 1;
+                self.column = 1;
+            } else {
+                self.column += 1;
+            }
+
+            return char;
         } else {
             self.currentChar = null;
             return null;
         }
     }
 
-    pub fn peekNBytes(self: *Lexer, bytes: usize) u8 {
-        const peeked = self.iterator.peek(bytes);
-        if (peeked.len == 0) {
-            return 0;
-        }
-        return peeked[0];
+    pub fn peek(self: *Lexer, n: usize) []const u8 {
+        return self.iterator.peek(n);
     }
 
-    pub fn peek(self: *Lexer) u8 {
-        const peeked = self.iterator.peek(1);
-        if (peeked.len == 0) {
-            return 0;
-        }
-        return peeked[0];
+    pub fn peekByte(self: *Lexer, n: usize) u8 {
+        const slice = self.iterator.peek(n);
+        return if (slice.len == 1) slice[0] else 0;
     }
 
     pub fn eatWhitespace(self: *Lexer) void {
-        while (isSpace(self.peek())) {
-            _ = self.advance();
+        while (true) {
+            const codep = self.peekByte(1);
 
-            switch (self.currentChar.?) {
-                ' ', '\t', '\r' => {},
-
-                '\n' => {
-                    self.line = self.line + 1;
+            switch (codep) {
+                ' ', '\n', '\t', '\r',ascii.control_code.vt, ascii.control_code.ff => {
+                    _= self.advance();
+                    continue;
                 },
-                else => {},
+                '/' =>{
+                    if(self.peekByte(2) == '/'){
+                        while(self.peekByte(1) != '\n' and self.peekByte(1) != 0){
+                            _ = self.advance();
+                        }
+                    } else {
+                        return;
+                    }
+                },
+                else => return,
             }
+
         }
     }
 
-    // trie
-    pub fn identifyTypeOfAlphanumeric(self: *Lexer, identifier: []u8) Token {
-        const pos = Position{ .column = self.column, .line = self.line };
-
-        switch (identifier[0]) {
-            'p' => {
-                if (mem.eql(u8, identifier, "print")) {
-                    return Token.makeToken(Tokens.PRINT, "PRINT", pos);
-                }
-            },
-            'v' => {
-                if (mem.eql(u8, identifier, "var")) {
-                    return Token.makeToken(Tokens.VAR, "VAR", pos);
-                }
-            },
-            'n' => {
-                if (mem.eql(u8, identifier, "nil")) {
-                    return Token.makeToken(Tokens.NIL, "NIL", pos);
-                }
-            },
-            'r' => {
-                if (mem.eql(u8, identifier, "return")) {
-                    return Token.makeToken(Tokens.RETURN, "RETURN", pos);
-                }
-            },
-            else => {
-                return Token.makeToken(Tokens.IDENT, identifier, pos);
-            },
-        }
-
-        return Token.makeToken(Tokens.IDENT, identifier, pos);
+    fn isAsciiAlpha(self: *Lexer, ch: []const u8) bool {
+        _ = self;
+        if (ch.len != 1) return false;
+        const c = ch[0];
+        return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z');
     }
 
-    pub fn lexNumber(self: *Lexer) !Token {
+    fn isAsciiDigit(self: *Lexer, ch: []const u8) bool {
+        _ = self;
+        if (ch.len != 1) return false;
+        const c = ch[0];
+        return c >= '0' and c <= '9';
+    }
+
+    fn isIdentifier(self: *Lexer, char: []const u8) bool {
+        _ = self;
+        if (char.len == 0) return false;
+        if (char.len == 1) {
+            const c = char[0];
+            return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_';
+        }
+
+        // For non-ASCII, allow any UTF-8
+        return true;
+    }
+
+    pub fn identifyTypeOfAlphanumeric(self: *Lexer, identifier: []u8, startColumn: usize, startLine: usize) Token {
+        const pos = Position{ .column = startColumn, .line = startLine, .filename = self.filename };
+
+        if (KeywordMap.get(identifier)) |kw| {
+            return switch (kw) {
+                .FN => Token.makeToken(Tokens.FN, "FN", pos),
+                .VAR => Token.makeToken(Tokens.VAR, "VAR", pos),
+                .IF => Token.makeToken(Tokens.IF, "IF", pos),
+                .ELSE => Token.makeToken(Tokens.ELSE, "ELSE", pos),
+                .FOR => Token.makeToken(Tokens.FOR, "FOR", pos),
+                .THEN => Token.makeToken(Tokens.THEN, "THEN", pos),
+                .END => Token.makeToken(Tokens.END, "END", pos),
+                .NIL => Token.makeToken(Tokens.NIL, "NIL", pos),
+                .TRUE => Token.makeToken(Tokens.TRUE, "TRUE", pos),
+                .FALSE => Token.makeToken(Tokens.FALSE, "FALSE", pos),
+                else => unreachable,
+            };
+        } else {
+            return Token.makeToken(Tokens.IDENT, identifier, pos);
+        }
+    }
+
+    pub fn lexNumber(self: *Lexer, startColumn: usize, startLine: usize) Token {
         var numbers = std.ArrayList(u8).init(std.heap.page_allocator);
         defer numbers.deinit();
 
-        try numbers.append(self.currentChar.?);
+        numbers.appendSlice(self.currentChar.?) catch unreachable;
 
-        while (ascii.isDigit(self.peek())) {
-            try numbers.append(self.advance().?);
+        while (self.isAsciiDigit(self.peek(1))) {
+            numbers.appendSlice(self.advance().?) catch unreachable;
         }
 
-        if (self.peek() == '.') {
-            try numbers.append(self.advance().?); // Consume the .
+        if (self.peekByte(1) == '.') {
+            numbers.appendSlice(self.advance().?) catch unreachable; // Consume the .
 
-            if (!ascii.isDigit(self.peek())) {}
+            if (!self.isAsciiDigit(self.peek(1))) {
+                const pos = Position{ .column = self.column, .line = startLine, .filename = self.filename };
+                return Token.makeIllegalToken("malformed number", pos);
+            }
 
-            while (ascii.isDigit(self.peek())) {
-                try numbers.append(self.advance().?);
+            while (self.isAsciiDigit(self.peek(1))) {
+                numbers.appendSlice(self.advance().?) catch unreachable;
             }
         }
 
-        const pos = Position{ .column = self.column, .line = self.line };
-        const fullNumber = try numbers.toOwnedSlice();
+        const pos = Position{ .column = startColumn, .line = startLine, .filename = self.filename };
+        const fullNumber = numbers.toOwnedSlice() catch unreachable;
+
         return Token.makeToken(Tokens.NUMBER, fullNumber, pos);
     }
 
-    pub fn lexString(self: *Lexer) !Token {
+    pub fn lexString(self: *Lexer, startColumn: usize) Token {
         var chars = std.ArrayList(u8).init(std.heap.page_allocator);
         defer chars.deinit();
 
-        while (self.peek() != '"') {
-            if (self.peek() == '\n' or self.currentChar.? == '\n') {
+        while (self.peekByte(1) != '"') {
+            if (self.peekByte(1) == '\n' or self.currentChar.?[0] == '\n') {
                 self.line = self.line + 1;
             }
-            try chars.append(self.advance().?);
-        }
-
-        const pos = Position{ .column = self.column, .line = self.line };
-        if (self.currentChar == null) {
-            return Token.makeIllegalToken("Unterminated string", pos);
+            if (self.advance()) |c| {
+                chars.appendSlice(c) catch unreachable;
+            } else {
+                const pos = Position{ .column = startColumn + 1, .line = self.line, .filename = self.filename };
+                return Token.makeIllegalToken("unterminated string", pos);
+            }
         }
 
         _ = self.advance(); // ending "
-        const str = try chars.toOwnedSlice();
+
+        const str = chars.toOwnedSlice() catch unreachable;
+        const pos = Position{ .column = startColumn, .line = self.line, .filename = self.filename };
+
         return Token.makeToken(Tokens.STRING, str, pos);
     }
 
-    pub fn lexAlphanumeric(self: *Lexer) !Token {
-        var alphaNum = std.ArrayList(u8).init(std.heap.page_allocator);
-        defer alphaNum.deinit();
-        try alphaNum.append(self.currentChar.?);
+    pub fn lexIdentifier(self: *Lexer, startColumn: usize, startLine: usize) Token {
+        var iden = std.ArrayList(u8).init(std.heap.page_allocator);
+        defer iden.deinit();
 
-        while (ascii.isAlphanumeric(self.peek()) or self.peek() == '_') {
-            try alphaNum.append(self.advance().?);
+        iden.appendSlice(self.currentChar.?) catch unreachable;
+
+        while (self.isIdentifier(self.peek(1))) {
+            iden.appendSlice(self.advance().?) catch unreachable;
         }
 
-        const identifier = try alphaNum.toOwnedSlice();
-        return self.identifyTypeOfAlphanumeric(identifier);
+        const identifier = iden.toOwnedSlice() catch unreachable;
+        return self.identifyTypeOfAlphanumeric(identifier, startColumn, startLine);
     }
 
-    pub fn nextToken(self: *Lexer) !Token {
+    pub fn nextToken(self: *Lexer) Token {
         self.eatWhitespace();
+        const startColumn = self.column;
+        const startLine = self.line;
 
-        const ch: ?u8 = self.advance();
-        const pos = Position{ .column = self.column, .line = self.line };
+        const ch: ?[]const u8 = self.advance();
+
+
+        const pos = Position{ .column = startColumn, .line = startLine, .filename = self.filename };
+
 
         if (ch == null) {
             return Token.makeToken(Tokens.EOF, "EOF", pos);
         }
 
-        switch (ch.?) {
+        if (self.isIdentifier(ch.?)) {
+            return self.lexIdentifier(startColumn, startLine);
+        }
+
+        if (self.isAsciiDigit(ch.?)) {
+            return self.lexNumber(startColumn, startLine);
+        }
+
+        const firstChar: u8 = ch.?[0];
+        switch (firstChar) {
+            '|' => {
+                return Token.makeToken(Tokens.PIPE, "|", pos);
+            },
+            '%' => {
+                return Token.makeToken(Tokens.MODULO, "%", pos);
+            },
+            '&' => {
+                return Token.makeToken(Tokens.BIT_AND, "&", pos);
+            },
+            ',' => {
+                return Token.makeToken(Tokens.COMMA, ",", pos);
+            },
             '.' => {
                 return Token.makeToken(Tokens.DOT, ".", pos);
             },
@@ -190,6 +250,12 @@ pub const Lexer = struct {
             '*' => {
                 return Token.makeToken(Tokens.ASTERISK, "*", pos);
             },
+            '[' => {
+                return Token.makeToken(Tokens.LBRACKET, "[", pos);
+            },
+            ']' => {
+                return Token.makeToken(Tokens.RBRACKET, "]", pos);
+            },
             '(' => {
                 return Token.makeToken(Tokens.LPAREN, "(", pos);
             },
@@ -203,32 +269,48 @@ pub const Lexer = struct {
                 return Token.makeToken(Tokens.RBRACE, "}", pos);
             },
             '!' => {
-                if (self.peek() == '=') {
+                if (self.peekByte(1) == '=') {
                     _ = self.advance();
                     return Token.makeToken(Tokens.NOT_EQUAL, "!=", pos);
                 }
                 return Token.makeToken(Tokens.NOT, "!", pos);
             },
             '=' => {
+                if (self.peekByte(1) == '=') {
+                    _ = self.advance();
+                    return Token.makeToken(Tokens.EQUAL_EQUAL, "==", pos);
+                }
                 return Token.makeToken(Tokens.EQUAL, "=", pos);
             },
             '<' => {
+                if (self.peekByte(1) == '=') {
+                    _ = self.advance();
+                    return Token.makeToken(Tokens.LESS_EQUAL, "<=", pos);
+                }
+
+                if (self.peekByte(1) == '<') {
+                    _ = self.advance();
+                    return Token.makeToken(Tokens.LEFT_SHIFT, "<<", pos);
+                }
                 return Token.makeToken(Tokens.LESST, "<", pos);
             },
             '>' => {
+                if (self.peekByte(1) == '=') {
+                    _ = self.advance();
+                    return Token.makeToken(Tokens.GREATER_EQUAL, ">=", pos);
+                }
+
+                if (self.peekByte(1) == '>') {
+                    _ = self.advance();
+                    return Token.makeToken(Tokens.RIGHT_SHIFT, ">>", pos);
+                }
                 return Token.makeToken(Tokens.GREATERT, ">", pos);
             },
             '"' => {
-                return try self.lexString();
+                return self.lexString(startColumn);
             },
             else => {
-                if (ascii.isDigit(ch.?)) {
-                    return try self.lexNumber();
-                } else if (ascii.isAlphanumeric(ch.?)) {
-                    return try self.lexAlphanumeric();
-                } else {
-                    return Token.makeIllegalToken("ILLEGAL", pos);
-                }
+                return Token.makeIllegalToken("unexpected character", pos);
             },
         }
     }
@@ -238,7 +320,7 @@ test "Lexer initialization" {
     const input: []const u8 = "test input";
     const l: Lexer = try Lexer.init(input);
 
-    try expect(mem.eql(u8, input, l.content));
+    try expect(mem.eql(u8, input, l.source));
 }
 
 test "Input tokenization" {
@@ -248,13 +330,12 @@ test "Input tokenization" {
         \\11.50
         \\1
         \\2
-        \\print 10
-        \\ "a string"
+        \\"a string"
         \\
     ;
 
     var l: Lexer = try Lexer.init(source);
-    const testArr: [11]Token = .{
+    const testArr: [9]Token = .{
         Token{ .token_type = Tokens.FSLASH, .literal = "/" },
         Token{ .token_type = Tokens.PLUS, .literal = "+" },
         Token{ .token_type = Tokens.MINUS, .literal = "-" },
@@ -263,19 +344,17 @@ test "Input tokenization" {
         Token{ .token_type = Tokens.NUMBER, .literal = "11.50" },
         Token{ .token_type = Tokens.NUMBER, .literal = "1" },
         Token{ .token_type = Tokens.NUMBER, .literal = "2" },
-        Token{ .token_type = Tokens.PRINT, .literal = "PRINT" },
-        Token{ .token_type = Tokens.NUMBER, .literal = "10" },
         Token{ .token_type = Tokens.STRING, .literal = "a string" },
     };
 
     var idx: usize = 0;
     while (true) : (idx += 1) {
-        const actual = try l.nextToken();
+        const actual = l.nextToken();
 
         if (actual.token_type == Tokens.EOF) {
             break; // Exit the loop on EOF
         }
-        debug.printToken(actual);
+        dbg.printToken(actual);
         const expected = testArr[idx];
         if (expected.token_type != actual.token_type) {
             std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
@@ -341,12 +420,96 @@ test "Variable declaration tokenization" {
 
     var idx: usize = 0;
     while (true) : (idx += 1) {
-        const actual = try l.nextToken();
+        const actual = l.nextToken();
 
         if (actual.token_type == Tokens.EOF) {
-            break; // Exit the loop on EOF
+            break;
         }
-        debug.printToken(actual);
+
+        //dbg.printToken(actual);
+        const expected = testArr[idx];
+        if (expected.token_type != actual.token_type) {
+            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+        if (!std.mem.eql(u8, expected.literal, actual.literal)) {
+            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+    }
+}
+
+test "Simple utf8 lexing" {
+    const source =
+        \\var ço = 5
+        \\var á = "até"
+        \\var _name = "Fábio Gabriel Rodrigues Varela"
+    ;
+
+    var l: Lexer = try Lexer.init(source);
+    const testArr: [16]Token = .{
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "ço" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "5" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "á" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.STRING, .literal = "até" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "_name" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.STRING, .literal = "Fábio Gabriel Rodrigues Varela" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "d" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "20.20" },
+    };
+
+    var idx: usize = 0;
+    while (true) : (idx += 1) {
+        const actual = l.nextToken();
+
+        if (actual.token_type == Tokens.EOF) {
+            break;
+        }
+
+        const expected = testArr[idx];
+        if (expected.token_type != actual.token_type) {
+            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+        if (!std.mem.eql(u8, expected.literal, actual.literal)) {
+            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+    }
+}
+
+test "Another Simple utf8 lexing" {
+    const source =
+        \\var 名前 = "私の名前はファビオ・バレラです。"
+    ;
+
+    var l: Lexer = try Lexer.init(source);
+    const testArr: [4]Token = .{
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "名前" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.STRING, .literal = "私の名前はファビオ・バレラです。" },
+    };
+
+    var idx: usize = 0;
+    while (true) : (idx += 1) {
+        const actual = l.nextToken();
+
+        if (actual.token_type == Tokens.EOF) {
+            break;
+        }
+
         const expected = testArr[idx];
         if (expected.token_type != actual.token_type) {
             std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
