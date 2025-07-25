@@ -120,12 +120,16 @@ pub const Value = union(ValueType) {
         return val;
     }
 
-    pub inline fn allocString(allocator: std.mem.Allocator, str: []const u8, string_table: *std.StringHashMap(Value), objects: *?*Object) Value {
+    pub fn allocString(allocator: std.mem.Allocator, str: []const u8, string_table: *std.StringHashMap(Value), objects: *?*Object) Value {
+        if (string_table.get(str)) |our_str| {
+            return our_str;
+        }
+
         const string_obj = String.init(allocator, str);
         const obj = Object.initString(allocator, string_obj, objects);
         const val = Value{ .OBJECT = obj };
 
-        string_table.put(string_obj.chars, val) catch unreachable;
+        string_table.put(allocator.dupe(u8, str) catch unreachable, val) catch unreachable;
 
         return val;
     }
@@ -140,10 +144,6 @@ pub const Value = union(ValueType) {
     }
 
     pub fn copyString(allocator: std.mem.Allocator, str: []const u8, string_table: *std.StringHashMap(Value), objects: *?*Object) Value {
-        if (string_table.get(str)) |our_str| {
-            return our_str;
-        }
-
         return allocString(allocator, str, string_table, objects);
     }
 

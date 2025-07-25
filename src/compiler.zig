@@ -68,7 +68,8 @@ pub const Compiler = struct {
         compiler.constantsPool = std.ArrayList(Value).init(compiler.allocator);
         compiler.constantsPoolHashes = std.AutoHashMap(u64, u16).init(compiler.allocator);
 
-        compiler.strings = @constCast(&std.StringHashMap(Value).init(compiler.allocator));
+        compiler.strings = compiler.allocator.create(std.StringHashMap(Value)) catch unreachable;
+        compiler.strings.* = std.StringHashMap(Value).init(compiler.allocator);
 
         compiler.registers = std.BoundedArray(bool, _vm.MAX_REGISTERS).init(_vm.MAX_REGISTERS) catch unreachable;
         @memset(compiler.registers.slice(), false);
@@ -343,7 +344,7 @@ pub const Compiler = struct {
                 _ = self.emitConstant(Value.createNumber(numExpr.value));
             },
             AST.Expression.string_expr => |strExpr| {
-                const str = Value.copyString(std.heap.page_allocator, strExpr.value, self.strings, &self.objects);
+                const str = Value.copyString(self.allocator, strExpr.value, self.strings, &self.objects);
                 _ = self.emitConstant(str);
             },
             AST.Expression.boolean_expr => |boolExpr| {

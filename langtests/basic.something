@@ -1,10 +1,12 @@
-var str = "unterminated string"
+var abs = "unterminated string
 
-if(){
-1 + 1
+if(1){
+    1 + 1
 } else {
-2 + 4
+    2 + 4
 }
 
 
-var a =
+
+var y = 10
+
