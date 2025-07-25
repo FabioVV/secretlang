@@ -95,7 +95,7 @@ pub fn printExpression(expr: ?*AST.Expression, message: []const u8) void {
 pub fn printTokenDebug(token: Token) void {
     const stdoutwriter = io.getStdOut().writer();
 
-    stdoutwriter.print("Token: {s} - Literal: {s}\n", .{ @tagName(token.token_type), token.literal }) catch |err| {
+    stdoutwriter.print("Token: {s} - Literal: {s} L{d}:D{d}\n", .{ @tagName(token.token_type), token.literal, token.position.line, token.position.column }) catch |err| {
         std.debug.print("Error debug printing token: {any}", .{err});
     };
 }
