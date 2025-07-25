@@ -13,7 +13,6 @@ const KeywordMap = _token.KeywordMap;
 const Position = _token.Position;
 const dbg = @import("debug.zig");
 
-
 pub const Lexer = struct {
     source: []const u8,
     filename: []const u8,
@@ -32,7 +31,6 @@ pub const Lexer = struct {
     pub fn advance(self: *Lexer) ?[]const u8 {
         if (self.iterator.nextCodepointSlice()) |char| {
             self.currentChar = char;
-
 
             self.current += @intCast(char.len);
 
@@ -64,13 +62,13 @@ pub const Lexer = struct {
             const codep = self.peekByte(1);
 
             switch (codep) {
-                ' ', '\n', '\t', '\r',ascii.control_code.vt, ascii.control_code.ff => {
-                    _= self.advance();
+                ' ', '\n', '\t', '\r', ascii.control_code.vt, ascii.control_code.ff => {
+                    _ = self.advance();
                     continue;
                 },
-                '/' =>{
-                    if(self.peekByte(2) == '/'){
-                        while(self.peekByte(1) != '\n' and self.peekByte(1) != 0){
+                '/' => {
+                    if (self.peekByte(2) == '/') {
+                        while (self.peekByte(1) != '\n' and self.peekByte(1) != 0) {
                             _ = self.advance();
                         }
                     } else {
@@ -79,7 +77,6 @@ pub const Lexer = struct {
                 },
                 else => return,
             }
-
         }
     }
 
@@ -160,7 +157,7 @@ pub const Lexer = struct {
         return Token.makeToken(Tokens.NUMBER, fullNumber, pos);
     }
 
-    pub fn lexString(self: *Lexer, startColumn: usize) Token {
+    pub fn lexString(self: *Lexer, startColumn: usize, startLine: usize) Token {
         var chars = std.ArrayList(u8).init(std.heap.page_allocator);
         defer chars.deinit();
 
@@ -171,7 +168,7 @@ pub const Lexer = struct {
             if (self.advance()) |c| {
                 chars.appendSlice(c) catch unreachable;
             } else {
-                const pos = Position{ .column = startColumn + 1, .line = self.line, .filename = self.filename };
+                const pos = Position{ .column = startColumn + 1, .line = startLine, .filename = self.filename };
                 return Token.makeIllegalToken("unterminated string", pos);
             }
         }
@@ -205,9 +202,7 @@ pub const Lexer = struct {
 
         const ch: ?[]const u8 = self.advance();
 
-
         const pos = Position{ .column = startColumn, .line = startLine, .filename = self.filename };
-
 
         if (ch == null) {
             return Token.makeToken(Tokens.EOF, "EOF", pos);
@@ -307,7 +302,7 @@ pub const Lexer = struct {
                 return Token.makeToken(Tokens.GREATERT, ">", pos);
             },
             '"' => {
-                return self.lexString(startColumn);
+                return self.lexString(startColumn, startLine);
             },
             else => {
                 return Token.makeIllegalToken("unexpected character", pos);

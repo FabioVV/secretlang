@@ -209,6 +209,7 @@ pub fn getSourceLine(source: []const u8, pos: Position) []const u8 {
     var current_line: u32 = 1;
 
     for (source, 0..) |c, i| {
+        //std.debug.print("char: {any} idx: {d}\n", .{ c, i });
         if (current_line == lineError) {
             if (line_start == 0) line_start = i;
             if (c == '\n') {
@@ -220,5 +221,6 @@ pub fn getSourceLine(source: []const u8, pos: Position) []const u8 {
     }
 
     if (line_end == 0) line_end = source.len;
+
     return source[line_start..line_end];
 }

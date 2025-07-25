@@ -36,13 +36,6 @@ fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8)
 
     defer program.?.deinit();
 
-    //     if (p.errors.items.len > 0) {
-    //         for (p.errors.items) |err| {
-    //             try stdout.print("{s}\n", .{err.message});
-    //         }
-    //         return;
-    //     }
-
     if (p.had_error) {
         return;
     }
