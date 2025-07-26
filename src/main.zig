@@ -82,11 +82,11 @@ pub fn runFromFile(allocator: std.mem.Allocator, filepath: []const u8, filename:
             return;
         },
     };
-    const trimmedFileContent = std.mem.trim(u8, fileContent, &std.ascii.whitespace);
+//     const trimmedFileContent = std.mem.trim(u8, fileContent, &std.ascii.whitespace);
 
     defer allocator.free(fileContent);
 
-    execute(allocator, trimmedFileContent, filename) catch |err| {
+    execute(allocator, fileContent, filename) catch |err| {
         print("Execution error: {}\n", .{err});
         return;
     };

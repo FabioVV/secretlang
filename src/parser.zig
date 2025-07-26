@@ -874,9 +874,14 @@ pub const Parser = struct {
 
         while (self.cur_token.token_type != Tokens.EOF) {
             if (self.parseNode()) |node| {
-                try program.*.addNode(node);
-                if (self.in_panic) self.sync();
+                try program.addNode(node);
             }
+
+            if (self.in_panic){
+                self.sync();
+                continue;
+            }
+
             self.advance();
         }
 
