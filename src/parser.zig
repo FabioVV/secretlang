@@ -59,6 +59,11 @@ pub const Parser = struct {
         parser.arena = arena;
         parser.allocator = parser.arena.?.allocator();
         parser.lexer = lexer;
+        parser.in_panic = false;
+        parser.had_error = false;
+        parser.previous_token = undefined;
+        parser.cur_token = undefined;
+        parser.peek_token = undefined;
 
         parser.errors = std.ArrayList(ParserError).init(parser.allocator);
 

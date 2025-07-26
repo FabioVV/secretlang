@@ -30,6 +30,7 @@ fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8)
     const stdout = io.getStdOut().writer();
 
     var l: *Lexer = Lexer.init(allocator, file, filename);
+    defer l.deinit();
 
     var p: *Parser = Parser.init(allocator, l);
     defer p.deinit();

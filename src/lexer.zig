@@ -19,11 +19,11 @@ pub const Lexer = struct {
     source: []const u8,
     filename: []const u8,
     iterator: unicode.Utf8Iterator,
-    currentChar: ?[]const u8 = null,
+    currentChar: ?[]const u8,
 
-    column: usize = 1,
-    line: usize = 1,
-    current: u32 = 0,
+    column: usize,
+    line: usize,
+    current: u32,
 
     pub fn init(allocator: std.mem.Allocator, source: []const u8, filename: []const u8) *Lexer {
         var arena = std.heap.ArenaAllocator.init(allocator);
@@ -35,8 +35,16 @@ pub const Lexer = struct {
         lexer.filename = filename;
         lexer.source = source;
         lexer.iterator = iterator.iterator();
+        lexer.column = 1;
+        lexer.line = 1;
+        lexer.current = 0;
+        lexer.currentChar = null;
 
         return lexer;
+    }
+
+    pub fn deinit(self: *Lexer) void {
+        self.arena.deinit();
     }
 
     pub fn advance(self: *Lexer) ?[]const u8 {
@@ -140,7 +148,7 @@ pub const Lexer = struct {
     }
 
     pub fn lexNumber(self: *Lexer, startColumn: usize, startLine: usize) Token {
-        var numbers = std.ArrayList(u8).init(std.heap.page_allocator);
+        var numbers = std.ArrayList(u8).init(self.arena.allocator());
         defer numbers.deinit();
 
         numbers.appendSlice(self.currentChar.?) catch unreachable;
@@ -169,7 +177,7 @@ pub const Lexer = struct {
     }
 
     pub fn lexString(self: *Lexer, startColumn: usize, startLine: usize) Token {
-        var chars = std.ArrayList(u8).init(std.heap.page_allocator);
+        var chars = std.ArrayList(u8).init(self.arena.allocator());
         defer chars.deinit();
 
         while (self.peekByte(1) != '"') {
@@ -193,7 +201,7 @@ pub const Lexer = struct {
     }
 
     pub fn lexIdentifier(self: *Lexer, startColumn: usize, startLine: usize) Token {
-        var iden = std.ArrayList(u8).init(std.heap.page_allocator);
+        var iden = std.ArrayList(u8).init(self.arena.allocator());
         defer iden.deinit();
 
         iden.appendSlice(self.currentChar.?) catch unreachable;
