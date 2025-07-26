@@ -16,7 +16,7 @@ const _value = @import("value.zig");
 const Value = _value.Value;
 const Instruction = _instruction.Instruction;
 
-pub fn launchRepl() !void {
+pub fn launch() !void {
     const stdin = std.io.getStdIn().reader();
     const stdout = std.io.getStdOut().writer();
 
@@ -48,9 +48,9 @@ pub fn launchRepl() !void {
         try stdout.print("{d}:>  ", .{lineCount});
 
         if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |input_text| {
-            var l: Lexer = try Lexer.init(input_text, "stdin");
+            var l: *Lexer = Lexer.init(allocator, input_text, "stdin");
 
-            var p: *Parser = Parser.init(&l, allocator);
+            var p: *Parser = Parser.init(allocator, l);
 
             const program = try p.parseProgram(allocator);
             defer program.?.deinit();

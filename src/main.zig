@@ -20,12 +20,18 @@ const _value = @import("value.zig");
 const Value = _value.Value;
 const Instruction = _instruction.Instruction;
 
+
+const ArgsConfig = struct {
+    repl_mode: bool = false,
+};
+
+
 fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8) !void {
     const stdout = io.getStdOut().writer();
 
-    var l: Lexer = try Lexer.init(file, filename);
+    var l: *Lexer = Lexer.init(allocator, file, filename);
 
-    var p: *Parser = Parser.init(&l, allocator);
+    var p: *Parser = Parser.init(allocator, l);
     defer p.deinit();
 
     const program = try p.parseProgram(allocator);
@@ -63,7 +69,7 @@ fn readFileContents(allocator: std.mem.Allocator, filepath: []const u8) ![]u8 {
 pub fn runFromFile(allocator: std.mem.Allocator, filepath: []const u8, filename: []const u8) !void {
     const fileContent = readFileContents(allocator, filepath) catch |err| switch (err) {
         error.FileNotFound => {
-            print("Error: File '{s}' not found\n", .{filepath});
+            print("Error: Could not open file. File '{s}' not found\n", .{filepath});
             return;
         },
         error.AccessDenied => {
@@ -83,6 +89,26 @@ pub fn runFromFile(allocator: std.mem.Allocator, filepath: []const u8, filename:
         print("Execution error: {}\n", .{err});
         return;
     };
+}
+
+
+
+fn parseArgsConfig(args: [][:0] u8) !ArgsConfig {
+    var result = ArgsConfig{};
+
+    var i: usize = 1;
+    while (i < args.len) : (i += 1) {
+        const arg = args[i];
+
+        if (std.mem.eql(u8, arg, "--repl") or std.mem.eql(u8, arg, "-r")) {
+            result.repl_mode = true;
+        } else {
+            print("Unknown option: {s}\n", .{arg});
+            return error.InvalidArgument;
+        }
+    }
+
+    return result;
 }
 
 pub fn main() !void {
@@ -107,49 +133,22 @@ pub fn main() !void {
         return;
     }
 
+
     if (std.mem.eql(u8, args[1], "--repl") or std.mem.eql(u8, args[1], "-r")) {
-        try REPL.launchRepl();
+        try REPL.launch();
         return;
+
     }
+
+    //     _ = parseArgsConfig(args) catch |err| switch (err) {
+    //         error.InvalidArgument => {
+    //             return;
+    //         }
+    //     };
 
     const filepath = args[1];
     const filename = std.fs.path.basename(args[1]);
     try runFromFile(allocator, filepath, filename);
 }
 
-//
-// fn parseArgs(allocator: Allocator, args: [][]const u8) !struct {
-//     filename: ?[]const u8 = null,
-//     repl_mode: bool = false,
-//     debug_mode: bool = false,
-//     show_tokens: bool = false,
-//     show_ast: bool = false,
-//     show_bytecode: bool = false,
-// } {
-//     var result = .{};
-//
-//     var i: usize = 1;
-//     while (i < args.len) : (i += 1) {
-//         const arg = args[i];
-//
-//         if (std.mem.eql(u8, arg, "--repl") or std.mem.eql(u8, arg, "-r")) {
-//             result.repl_mode = true;
-//         } else if (std.mem.eql(u8, arg, "--debug") or std.mem.eql(u8, arg, "-d")) {
-//             result.debug_mode = true;
-//         } else if (std.mem.eql(u8, arg, "--tokens")) {
-//             result.show_tokens = true;
-//         } else if (std.mem.eql(u8, arg, "--ast")) {
-//             result.show_ast = true;
-//         } else if (std.mem.eql(u8, arg, "--bytecode")) {
-//             result.show_bytecode = true;
-//         } else if (!std.mem.startsWith(u8, arg, "-")) {
-//             // This is the filename
-//             result.filename = arg;
-//         } else {
-//             print("Unknown option: {s}\n", .{arg});
-//             return error.InvalidArgument;
-//         }
-//     }
-//
-//     return result;
-// }
+

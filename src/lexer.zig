@@ -14,17 +14,28 @@ const Position = _token.Position;
 const dbg = @import("debug.zig");
 
 pub const Lexer = struct {
+    arena: std.heap.ArenaAllocator,
+
     source: []const u8,
     filename: []const u8,
     iterator: unicode.Utf8Iterator,
     currentChar: ?[]const u8 = null,
+
     column: usize = 1,
     line: usize = 1,
     current: u32 = 0,
 
-    pub fn init(source: []const u8, filename: []const u8) !Lexer {
-        var iterator = (try unicode.Utf8View.init(source));
-        const lexer = Lexer{ .source = source, .iterator = iterator.iterator(), .filename = filename };
+    pub fn init(allocator: std.mem.Allocator, source: []const u8, filename: []const u8) *Lexer {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        const lexer = arena.allocator().create(Lexer) catch unreachable;
+
+        var iterator = unicode.Utf8View.init(source) catch unreachable;
+
+        lexer.arena = arena;
+        lexer.filename = filename;
+        lexer.source = source;
+        lexer.iterator = iterator.iterator();
+
         return lexer;
     }
 

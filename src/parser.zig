@@ -26,9 +26,6 @@ const Precedence = enum(u32) {
     INDEX = 10,
 };
 
-const SyncTokens = &[_]Tokens{ .EOF, .VAR, .RBRACE, .IF, .FN }; // Tokens that can be used as a stop point to syncronize the parser if it encounters an error
-
-const NudTokens = &[_]Tokens{ .TRUE, .FALSE, .NUMBER, .NIL, .FN, .IF, .STRING, .LBRACKET, .MINUS, .IDENT, .NOT };
 
 const NudParseFn = *const fn (*Parser) ?*AST.Expression;
 const LedParseFn = *const fn (*Parser, ?*AST.Expression) ?*AST.Expression;
@@ -55,7 +52,7 @@ pub const Parser = struct {
     in_panic: bool = false,
     errors: std.ArrayList(ParserError),
 
-    pub fn init(lexer: *Lexer, allocator: std.mem.Allocator) *Parser {
+    pub fn init(allocator: std.mem.Allocator, lexer: *Lexer) *Parser {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const parser = arena.allocator().create(Parser) catch unreachable;
 
