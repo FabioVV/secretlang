@@ -206,21 +206,22 @@ pub fn getSourceLine(source: []const u8, pos: Position) []const u8 {
     const lineError = pos.line;
     var line_start: usize = 0;
     var line_end: usize = 0;
-    var current_line: u32 = 1;
+    var current_line: usize = 1;
 
     for (source, 0..) |c, i| {
-        //std.debug.print("char: {any} idx: {d}\n", .{ c, i });
         if (current_line == lineError) {
-            if (line_start == 0) line_start = i;
-            if (c == '\n') {
-                line_end = i;
-                break;
-            }
+            line_start = i;
+            break;
         }
-        if (c == '\n') current_line += 1;
+        if (c == '\n'){
+             current_line += 1;
+        }
     }
 
-    if (line_end == 0) line_end = source.len;
+    line_end = line_start;
+    while(line_end < source.len and source[line_end] != '\n'){
+        line_end += 1;
+    }
 
     return source[line_start..line_end];
 }

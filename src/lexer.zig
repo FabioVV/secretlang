@@ -76,17 +76,21 @@ pub const Lexer = struct {
         return if (slice.len == 1) slice[0] else 0;
     }
 
+
     pub fn eatWhitespace(self: *Lexer) void {
         while (true) {
             const codep = self.peekByte(1);
 
             switch (codep) {
-                ' ', '\n', '\t', '\r', ascii.control_code.vt, ascii.control_code.ff => {
+                ' ', '\t', '\r', ascii.control_code.vt, ascii.control_code.ff => {
                     _ = self.advance();
-                    continue;
+                },
+                '\n' => {
+                    _ = self.advance().?;
                 },
                 '/' => {
                     if (self.peekByte(2) == '/') {
+                        // Skip single-line comments
                         while (self.peekByte(1) != '\n' and self.peekByte(1) != 0) {
                             _ = self.advance();
                         }
@@ -216,6 +220,7 @@ pub const Lexer = struct {
 
     pub fn nextToken(self: *Lexer) Token {
         self.eatWhitespace();
+
         const startColumn = self.column;
         const startLine = self.line;
 
