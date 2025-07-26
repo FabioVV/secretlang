@@ -5,8 +5,9 @@ const _token = @import("token.zig");
 const Token = _token.Token;
 const Tokens = _token.Tokens;
 const Position = _token.Position;
-
 const AST = @import("ast.zig");
+const dbg = @import("debug.zig");
+const panic = @import("error.zig");
 
 pub const DEBUG_PRINT_TOKENS: bool = false;
 pub const DEBUG_PRINT_VAR_STATEMENT: bool = false;
@@ -23,6 +24,10 @@ pub const ANSI_BLUE = "\x1b[34m";
 pub const ANSI_MAGENTA = "\x1b[35m";
 pub const ANSI_CYAN = "\x1b[36m";
 pub const ANSI_WHITE = "\x1b[37m";
+pub const ANSI_BOLD = "\x1b[1m";
+pub const ANSI_UNDERLINE = "\x1b[4m";
+
+
 
 // UTILITIES ->
 pub fn printNodes(stmt: AST.Statement) void {
@@ -224,4 +229,39 @@ pub fn getSourceLine(source: []const u8, pos: Position) []const u8 {
     }
 
     return source[line_start..line_end];
+}
+
+pub fn formatSourceLineWithCaret(allocator: std.mem.Allocator, token: Token, source: []const u8) struct{spacing: []const u8, caret: []const u8} {
+
+    const sourceLine = dbg.getSourceLine(source, token.position);
+
+    var caret_line = allocator.alloc(u8, sourceLine.len) catch {
+         panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
+        return;
+    };
+
+    @memset(caret_line, ' ');
+    if (token.position.column <= caret_line.len) {
+        caret_line[token.position.column - 1] = '^';
+    }
+
+    var spaces: u32 = 0;
+    if (token.position.line > 9) {
+        spaces += 1;
+    } else if (token.position.line > 99) {
+        spaces += 2;
+    } else if (token.position.line > 999) {
+        spaces += 3;
+    } else if (token.position.line > 9999) {
+        spaces += 4;
+    }
+
+    const line_number_spacing = allocator.alloc(u8, spaces) catch {
+         panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
+        return;
+    };
+    @memset(line_number_spacing, ' ');
+
+
+   return .{ .spacing = line_number_spacing,  .caret = caret_line};
 }

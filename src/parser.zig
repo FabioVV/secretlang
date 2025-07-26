@@ -196,35 +196,9 @@ pub const Parser = struct {
 
         const token = self.peek_token;
         const source = dbg.getSourceLine(self.lexer.source, token.position);
-
-        var caret_line = self.allocator.alloc(u8, source.len) catch {
-            panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
-            return;
-        };
-
-        defer self.allocator.free(caret_line);
-
-        @memset(caret_line, ' ');
-        if (token.position.column <= caret_line.len) {
-            caret_line[token.position.column - 1] = '^';
-        }
-
-        var spaces: u32 = 0;
-        if (token.position.line > 9) {
-            spaces += 1;
-        } else if (token.position.line > 99) {
-            spaces += 2;
-        } else if (token.position.line > 999) {
-            spaces += 3;
-        } else if (token.position.line > 9999) {
-            spaces += 4;
-        }
-
-        const line_number_spacing = self.allocator.alloc(u8, spaces) catch {
-            panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
-            return;
-        };
-        @memset(line_number_spacing, ' ');
+        const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, token, source);
+        defer self.allocator.free(fmtCaret.caret);
+        defer self.allocator.free(fmtCaret.spacing);
 
         const fullerrMsg = std.fmt.allocPrint(self.allocator,
             \\
@@ -234,7 +208,7 @@ pub const Parser = struct {
             \\   {s}| syntax error: expected {s} but got {s}
             \\
             \\
-        , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, line_number_spacing, caret_line, line_number_spacing, token_literal, token.literal }) catch |err| {
+        , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, token_literal, token.literal }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
@@ -257,35 +231,9 @@ pub const Parser = struct {
 
         const token = self.cur_token;
         const source = dbg.getSourceLine(self.lexer.source, token.position);
-
-        var caret_line = self.allocator.alloc(u8, source.len) catch {
-            panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
-            return;
-        };
-
-        defer self.allocator.free(caret_line);
-
-        @memset(caret_line, ' ');
-        if (token.position.column <= caret_line.len) {
-            caret_line[token.position.column - 1] = '^';
-        }
-
-        var spaces: u32 = 0;
-        if (token.position.line > 9) {
-            spaces += 1;
-        } else if (token.position.line > 99) {
-            spaces += 2;
-        } else if (token.position.line > 999) {
-            spaces += 3;
-        } else if (token.position.line > 9999) {
-            spaces += 4;
-        }
-
-        const line_number_spacing = self.allocator.alloc(u8, spaces) catch {
-            panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
-            return;
-        };
-        @memset(line_number_spacing, ' ');
+        const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, token, source);
+        defer self.allocator.free(fmtCaret.caret);
+        defer self.allocator.free(fmtCaret.spacing);
 
         const errMsg = std.fmt.allocPrint(self.allocator, errorMessage, varargs) catch unreachable;
 
@@ -297,13 +245,13 @@ pub const Parser = struct {
             \\   {s}| syntax error: {s}
             \\
             \\
-        , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, line_number_spacing, caret_line, line_number_spacing, errMsg }) catch |err| {
+        , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, errMsg }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
         _ = std.io.getStdErr().write(fullerrMsg) catch unreachable;
 
-        self.errors.append(ParserError{ .message = std.heap.page_allocator.dupe(u8, fullerrMsg) catch |_err| {
+        self.errors.append(ParserError{ .message = self.allocator.dupe(u8, fullerrMsg) catch |_err| {
             panic.exitWithError("unrecoverable error trying to dupe parse error message", _err);
         } }) catch |err| {
             panic.exitWithError("unrecoverable error trying to append parse error message", err);
@@ -321,38 +269,10 @@ pub const Parser = struct {
 
         const token = self.cur_token;
 
-        dbg.printTokenDebug(token);
-
         const source = dbg.getSourceLine(self.lexer.source, token.position);
-
-        var caret_line = self.allocator.alloc(u8, source.len) catch {
-            panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
-            return;
-        };
-
-        defer self.allocator.free(caret_line);
-
-        @memset(caret_line, ' ');
-        if (token.position.column <= caret_line.len) {
-            caret_line[token.position.column - 1] = '^';
-        }
-
-        var spaces: u32 = 0;
-        if (token.position.line > 9) {
-            spaces += 1;
-        } else if (token.position.line > 99) {
-            spaces += 2;
-        } else if (token.position.line > 999) {
-            spaces += 3;
-        } else if (token.position.line > 9999) {
-            spaces += 4;
-        }
-
-        const line_number_spacing = self.allocator.alloc(u8, spaces) catch {
-            panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
-            return;
-        };
-        @memset(line_number_spacing, ' ');
+        const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, token, source);
+        defer self.allocator.free(fmtCaret.caret);
+        defer self.allocator.free(fmtCaret.spacing);
 
         const errMsg = std.fmt.allocPrint(self.allocator,
             \\
@@ -362,7 +282,7 @@ pub const Parser = struct {
             \\   {s}| syntax error: {s} but got {s}
             \\
             \\
-        , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, line_number_spacing, caret_line, line_number_spacing, errorMessage, token.literal }) catch |err| {
+        , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, errorMessage, token.literal }) catch |err| {
             panic.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
