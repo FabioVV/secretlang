@@ -1,12 +1,5 @@
+var a = 5
 
-var abs = "terminated string"
+var b = 10
 
-if (1){
-    1 + 1
-} else {
-    2 + 4
-}
-
-
-
-var y = 5
+a + b

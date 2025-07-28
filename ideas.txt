@@ -3,6 +3,9 @@
 context aware suggestions
 spelling checking with Levenshtein Distance
 
+ - Add more specialized instructions like addi (i know both are integers, dispacth a instructions that does not type checking during runtime and just adds them)
+
+ - add simple type checking before runtime so that the specialized instructions from above can work
 
  - Change error text from the current expected both to be, got ? to this: expect expectec both to be ?, but got ? and ?
 
