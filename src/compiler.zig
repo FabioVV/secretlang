@@ -52,6 +52,8 @@ pub const Compiler = struct {
     registers: std.BoundedArray(bool, _vm.MAX_REGISTERS),
     current_scope_registers: std.ArrayList(u8),
 
+    had_error: bool,
+
     pub fn init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8, filename: *[]const u8) *Compiler {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const compiler = arena.allocator().create(Compiler) catch unreachable;
@@ -78,6 +80,7 @@ pub const Compiler = struct {
         compiler.symbol_table = SymbolTable.init(compiler.allocator);
         compiler.objects = null;
         compiler.cur_node = undefined;
+        compiler.had_error = false;
 
         return compiler;
     }
@@ -107,6 +110,7 @@ pub const Compiler = struct {
         compiler.symbol_table = symbol_table;
         compiler.objects = null;
         compiler.cur_node = undefined;
+        compiler.had_error = false;
 
         return compiler;
     }
@@ -119,8 +123,10 @@ pub const Compiler = struct {
         }
     }
 
-    /// Emits a compiler error with a custom message and kills the process
+    /// Emits a compiler error with a custom message
     pub fn cError(self: *Compiler, errorMessage: []const u8) void {
+        self.had_error = true;
+
         const token: Token = switch (self.cur_node) {
             .statement => |stmt| switch (stmt.*) {
                 inline else => |v| v.token,
@@ -131,36 +137,24 @@ pub const Compiler = struct {
         };
 
         const source = dbg.getSourceLine(self.source.*, token.position);
+        const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, token, source);
+        defer self.allocator.free(fmtCaret.caret);
+        defer self.allocator.free(fmtCaret.spacing);
 
-        const msgLocation = std.fmt.allocPrint(self.allocator, "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, token.position.filename, token.position.line, token.position.column, dbg.ANSI_RESET }) catch |err| {
-            panic.exitWithError("unrecoverable error trying to write parse error message", err);
-        };
+        const errMsg = std.fmt.allocPrint(self.allocator,
+                                          \\
+                                          \\-> In [{s}] {d}:{d}
+                                          \\ {d} | {s}
+                                          \\   {s}| {s}
+                                          \\   {s}| compilation failed: {s}
+                                          \\
+                                          \\
+                                          , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, errorMessage }) catch |err| {
+                                              panic.exitWithError("unrecoverable error trying to write parse error message", err);
+                                          };
 
-        const msgErrorInfo = std.fmt.allocPrint(self.allocator, "{s}compilation failed{s}: {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, errorMessage }) catch |err| {
-            panic.exitWithError("unrecoverable error trying to write parse error message", err);
-        };
 
-        const msgSource = std.fmt.allocPrint(self.allocator, "{s}", .{source}) catch |err| {
-            panic.exitWithError("unrecoverable error trying to write parse error message", err);
-        };
-
-        var msgt: []u8 = &[_]u8{};
-        for (1..source.len + 1) |idx| {
-            //print("{d} : {d}\n", .{ idx, token.position.column });
-            if (idx == token.position.column + 1) {
-                msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, "^" }) catch |err| {
-                    panic.exitWithError("unrecoverable error", err);
-                    return;
-                };
-            } else {
-                msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, " " }) catch |err| {
-                    panic.exitWithError("unrecoverable error", err);
-                    return;
-                };
-            }
-        }
-
-        print("\n\n-> {s}\n {d} | {s}\n   | {s}\n   | {s}\n", .{ msgLocation, token.position.line, msgSource, msgt, msgErrorInfo });
+        _ = std.io.getStdErr().write(errMsg) catch unreachable;
         //std.process.exit(1);
     }
 
@@ -337,7 +331,7 @@ pub const Compiler = struct {
         self.cur_node = AST.CurrentNode{ .expression = @constCast(&expr.?.*) };
 
         //self.registersState("before expr");
-        defer self.registersState("after expr");
+        //defer self.registersState("after expr");
 
         switch (expr.?.*) {
             AST.Expression.number_expr => |numExpr| {
@@ -503,14 +497,22 @@ pub const Compiler = struct {
                 self.compileBlockStatement(b_stmt);
             },
         }
+
     }
 
-    pub fn compile(self: *Compiler) void {
+    pub fn compile(self: *Compiler) bool {
         for (self.ast_program.nodes.items) |node| {
             self.compile_stmts(node);
+
+            if(self.had_error){
+                return false;
+            }
         }
+
         for (0.._vm.MAX_REGISTERS) |i| {
             std.debug.assert(!self.registers.get(i)); // All registers should be freed
         }
+
+        return true;
     }
 };

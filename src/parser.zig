@@ -48,8 +48,8 @@ pub const Parser = struct {
     led_handlers: std.AutoHashMap(Tokens, LedParseFn),
     binding_powers: std.AutoHashMap(Tokens, Precedence),
 
-    had_error: bool = false,
-    in_panic: bool = false,
+    had_error: bool,
+    in_panic: bool,
     errors: std.ArrayList(ParserError),
 
     pub fn init(allocator: std.mem.Allocator, lexer: *Lexer) *Parser {
@@ -188,6 +188,7 @@ pub const Parser = struct {
         }
     }
 
+    /// Emits a parser error for the peek token
     pub fn peekError(self: *Parser, token_literal: []const u8) void {
         if (self.in_panic) return;
 
@@ -221,6 +222,7 @@ pub const Parser = struct {
         };
     }
 
+    /// Emits a parser error for the current token being processed, but differently from pError that takes in a single message, this one takes in a formatted message
     pub fn eError(self: *Parser, comptime errorMessage: []const u8, varargs: anytype) void {
         if (self.in_panic) {
             return;

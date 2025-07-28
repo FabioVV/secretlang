@@ -59,16 +59,15 @@ pub fn launch() !void {
                 try stdout.print("Error parsing program\n", .{});
             }
 
-            if (p.errors.items.len > 0) {
-                for (p.errors.items) |err| {
-                    try stdout.print("{s}\n", .{err.message});
-                }
+            if (p.had_error) {
                 continue;
             }
 
             var c: *Compiler = Compiler.repl_init(allocator, program.?, &l.source, &l.filename, symbol_table, &strings);
 
-            c.compile();
+            if(!c.compile()){
+                return;
+            }
 
             var vm: *VM = VM.repl_init(allocator, &c.constantsPool, &c.instructions, &c.instructions_positions, @constCast(&globals), &l.source, c.strings, c.objects);
 

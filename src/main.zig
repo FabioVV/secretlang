@@ -48,8 +48,11 @@ fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8)
     }
 
     var c: *Compiler = Compiler.init(allocator, program.?, &l.source, &l.filename);
-    c.compile();
     defer c.deinit();
+
+    if(!c.compile()){
+        return;
+    }
 
     var vm: *VM = VM.init(allocator, &c.constantsPool, &c.instructions, &c.instructions_positions, &l.source, c.strings, c.objects);
     vm.run();
@@ -82,7 +85,7 @@ pub fn runFromFile(allocator: std.mem.Allocator, filepath: []const u8, filename:
             return;
         },
     };
-//     const trimmedFileContent = std.mem.trim(u8, fileContent, &std.ascii.whitespace);
+    //const trimmedFileContent = std.mem.trim(u8, fileContent, &std.ascii.whitespace);
 
     defer allocator.free(fileContent);
 
