@@ -3,7 +3,7 @@ const expect = std.testing.expect;
 const mem = std.mem;
 
 const dbg = @import("debug.zig");
-const panic = @import("error.zig");
+const errh = @import("error.zig");
 const _token = @import("token.zig");
 const Token = _token.Token;
 const Tokens = _token.Tokens;
@@ -105,45 +105,29 @@ pub const VM = struct {
     /// Emits a runtime error
     fn rError(self: *VM, comptime message: []const u8, varargs: anytype) void {
         const pos = self.instructions_positions.get(@intCast(self.pc)).?;
-
         const source = dbg.getSourceLine(self.source.*, pos);
 
+        const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, pos, source);
+        defer self.allocator.free(fmtCaret.caret);
+        defer self.allocator.free(fmtCaret.spacing);
+
         const runtimeErrMsg = std.fmt.allocPrint(self.allocator, message, varargs) catch |err| {
-            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+            errh.exitWithError("unrecoverable error trying to runtime error message", err);
         };
 
-        const msgLocation = std.fmt.allocPrint(self.allocator, "{s}In [{s}] {d}:{d}{s}", .{ dbg.ANSI_CYAN, pos.filename, pos.line, pos.column, dbg.ANSI_RESET }) catch |err| {
-            panic.exitWithError("unrecoverable error trying to write parse error message", err);
-        };
+        const errMsg = std.fmt.allocPrint(self.allocator,
+                                          \\
+                                          \\-> In [{s}] {d}:{d}
+                                          \\ {d} | {s}
+                                          \\   {s}| {s}
+                                          \\   {s}| runtime error: {s}
+                                          \\
+                                          \\
+                                          , .{ pos.filename, pos.line, pos.column, pos.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, runtimeErrMsg }) catch |err| {
+                                              errh.exitWithError("unrecoverable error trying to write runtime error full message", err);
+                                          };
 
-        const msgErrorInfo = std.fmt.allocPrint(self.allocator, "{s}runtime error{s}: {s}", .{ dbg.ANSI_RED, dbg.ANSI_RESET, runtimeErrMsg }) catch |err| {
-            panic.exitWithError("unrecoverable error trying to write parse error message", err);
-        };
-
-        const msgSource = std.fmt.allocPrint(self.allocator, "{s}", .{source}) catch |err| {
-            panic.exitWithError("unrecoverable error trying to write parse error message", err);
-        };
-
-        var msgt: []u8 = &[_]u8{};
-        for (1..source.len + 1) |idx| {
-            //std.debug.print("{d} : {d}\n", .{ idx, pos.column });
-            if (idx == pos.column + 1) {
-                msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, "^" }) catch |err| {
-                    panic.exitWithError("unrecoverable error", err);
-                    return;
-                };
-            } else {
-                msgt = std.mem.concat(self.allocator, u8, &[_][]const u8{ msgt, " " }) catch |err| {
-                    panic.exitWithError("unrecoverable error", err);
-                    return;
-                };
-            }
-        }
-
-        std.debug.print("\n\n-> {s}\n {d} | {s}\n   | {s}\n   | {s}", .{ msgLocation, pos.line, msgSource, msgt, msgErrorInfo });
-
-        //std.debug.print(message, varargs);
-        std.debug.print("\n", .{});
+        errh.printError(errMsg, .{});
     }
 
     inline fn GET_CONSTANT(self: *VM, idx: u16) ?Value {

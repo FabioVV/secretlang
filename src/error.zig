@@ -5,3 +5,10 @@ pub fn exitWithError(message: []const u8, err: anyerror) noreturn {
     std.process.exit(1);
 }
 
+pub fn printError(message: []const u8, varargs: anytype) void {
+    std.log.err(message, varargs);
+}
+
+pub fn printWarn(message: []const u8, varargs: anytype) void {
+    std.log.warn(message, varargs);
+}

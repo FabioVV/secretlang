@@ -3,7 +3,7 @@ const mem = std.mem;
 const proc = std.process;
 const expect = std.testing.expect;
 
-const panic = @import("error.zig");
+const errh = @import("error.zig");
 const dbg = @import("debug.zig");
 const _token = @import("token.zig");
 const Position = _token.Position;
@@ -197,7 +197,7 @@ pub const Parser = struct {
 
         const token = self.peek_token;
         const source = dbg.getSourceLine(self.lexer.source, token.position);
-        const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, token, source);
+        const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, token.position, source);
         defer self.allocator.free(fmtCaret.caret);
         defer self.allocator.free(fmtCaret.spacing);
 
@@ -210,15 +210,15 @@ pub const Parser = struct {
             \\
             \\
         , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, token_literal, token.literal }) catch |err| {
-            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+            errh.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        _ = std.io.getStdErr().write(fullerrMsg) catch unreachable;
+        errh.printError(fullerrMsg, .{});
 
         self.errors.append(ParserError{ .message = self.allocator.dupe(u8, fullerrMsg) catch |_err| {
-            panic.exitWithError("unrecoverable error trying to dupe parse error message", _err);
+            errh.exitWithError("unrecoverable error trying to dupe parse error message", _err);
         } }) catch |err| {
-            panic.exitWithError("unrecoverable error trying to append parse error message", err);
+            errh.exitWithError("unrecoverable error trying to append parse error message", err);
         };
     }
 
@@ -233,7 +233,7 @@ pub const Parser = struct {
 
         const token = self.cur_token;
         const source = dbg.getSourceLine(self.lexer.source, token.position);
-        const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, token, source);
+        const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, token.position, source);
         defer self.allocator.free(fmtCaret.caret);
         defer self.allocator.free(fmtCaret.spacing);
 
@@ -248,15 +248,15 @@ pub const Parser = struct {
             \\
             \\
         , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, errMsg }) catch |err| {
-            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+            errh.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        _ = std.io.getStdErr().write(fullerrMsg) catch unreachable;
+        errh.printError(fullerrMsg, .{});
 
         self.errors.append(ParserError{ .message = self.allocator.dupe(u8, fullerrMsg) catch |_err| {
-            panic.exitWithError("unrecoverable error trying to dupe parse error message", _err);
+            errh.exitWithError("unrecoverable error trying to dupe parse error message", _err);
         } }) catch |err| {
-            panic.exitWithError("unrecoverable error trying to append parse error message", err);
+            errh.exitWithError("unrecoverable error trying to append parse error message", err);
         };
     }
 
@@ -272,7 +272,7 @@ pub const Parser = struct {
         const token = self.cur_token;
 
         const source = dbg.getSourceLine(self.lexer.source, token.position);
-        const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, token, source);
+        const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, token.position, source);
         defer self.allocator.free(fmtCaret.caret);
         defer self.allocator.free(fmtCaret.spacing);
 
@@ -285,19 +285,19 @@ pub const Parser = struct {
             \\
             \\
         , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, errorMessage, token.literal }) catch |err| {
-            panic.exitWithError("unrecoverable error trying to write parse error message", err);
+            errh.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        _ = std.io.getStdErr().write(errMsg) catch unreachable;
+        errh.printError(errMsg, .{});
 
         self.errors.append(ParserError{ .message = std.heap.page_allocator.dupe(u8, errMsg) catch |_err| {
-            panic.exitWithError("unrecoverable error trying to dupe parse error message", _err);
+            errh.exitWithError("unrecoverable error trying to dupe parse error message", _err);
         } }) catch |err| {
-            panic.exitWithError("unrecoverable error trying to append parse error message", err);
+            errh.exitWithError("unrecoverable error trying to append parse error message", err);
         };
     }
 
-    pub fn sync(self: *Parser) void {
+    pub fn sync(self: *Parser) noreturn {
         self.in_panic = false;
 
         while (self.cur_token.token_type != .EOF) {
@@ -310,19 +310,19 @@ pub const Parser = struct {
 
     pub inline fn bindingPower(self: *Parser, token_type: Tokens, prec: Precedence) void {
         self.binding_powers.put(token_type, prec) catch |err| {
-            panic.exitWithError("Error registering binding power", err);
+            errh.exitWithError("Error registering binding power", err);
         };
     }
 
     pub inline fn nud(self: *Parser, token_type: Tokens, func: NudParseFn) void {
         self.nud_handlers.put(token_type, func) catch |err| {
-            panic.exitWithError("Error registering nud(prefix) parse function", err);
+            errh.exitWithError("Error registering nud(prefix) parse function", err);
         };
     }
 
     pub inline fn led(self: *Parser, token_type: Tokens, func: LedParseFn) void {
         self.led_handlers.put(token_type, func) catch |err| {
-            panic.exitWithError("Error registering led(infix) parse function", err);
+            errh.exitWithError("Error registering led(infix) parse function", err);
         };
     }
 
@@ -466,7 +466,7 @@ pub const Parser = struct {
         const arg = self.parseExpression(Precedence.DEFAULT) orelse null;
 
         args.append(arg) catch |err| {
-            panic.exitWithError("Unrecoverable error when trying to append function argument.", err);
+            errh.exitWithError("Unrecoverable error when trying to append function argument.", err);
         };
 
         while (self.peekIs(Tokens.COMMA)) {
@@ -475,7 +475,7 @@ pub const Parser = struct {
 
             const _arg = self.parseExpression(Precedence.DEFAULT) orelse null;
             args.append(_arg) catch |err| {
-                panic.exitWithError("Unrecoverable error when trying to append function argument.", err);
+                errh.exitWithError("Unrecoverable error when trying to append function argument.", err);
             };
         }
 
@@ -606,7 +606,7 @@ pub const Parser = struct {
 
         const ident = AST.Identifier{ .token = self.cur_token, .literal = self.cur_token.literal };
         params.append(ident) catch |err| {
-            panic.exitWithError("Unrecoverable error when trying to append function parameter.", err);
+            errh.exitWithError("Unrecoverable error when trying to append function parameter.", err);
         };
 
         while (self.peekIs(Tokens.COMMA)) {
@@ -615,7 +615,7 @@ pub const Parser = struct {
 
             const _ident = AST.Identifier{ .token = self.cur_token, .literal = self.cur_token.literal };
             params.append(_ident) catch |err| {
-                panic.exitWithError("Unrecoverable error when trying to append function parameter.", err);
+                errh.exitWithError("Unrecoverable error when trying to append function parameter.", err);
             };
         }
 
@@ -637,7 +637,7 @@ pub const Parser = struct {
 
         if (params != null) {
             fnLiteral.parameters.appendSlice(params.?) catch |err| {
-                panic.exitWithError("Unrecoverable error when trying to append slice of function parameters.", err);
+                errh.exitWithError("Unrecoverable error when trying to append slice of function parameters.", err);
             };
         }
 
@@ -669,7 +669,7 @@ pub const Parser = struct {
             self.advance(); // advance again, this time cur_token becomes the next item
 
             items.append(self.parseExpression(Precedence.DEFAULT)) catch |err| {
-                panic.exitWithError("Unrecoverable error when trying to append function parameter.", err);
+                errh.exitWithError("Unrecoverable error when trying to append function parameter.", err);
             };
         }
 
@@ -734,7 +734,7 @@ pub const Parser = struct {
 
     pub fn createExpressionNode(self: *Parser) *AST.Expression {
         const expr = self.allocator.create(AST.Expression) catch |err| {
-            panic.exitWithError("Unrecoverable error when trying to create expression node.", err);
+            errh.exitWithError("Unrecoverable error when trying to create expression node.", err);
         };
 
         return expr;

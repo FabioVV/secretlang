@@ -3,7 +3,7 @@ const print = @import("std").debug.print;
 const expect = std.testing.expect;
 
 const dbg = @import("debug.zig");
-const panic = @import("error.zig");
+const errh = @import("error.zig");
 const _token = @import("token.zig");
 const Token = _token.Token;
 const Tokens = _token.Tokens;
@@ -137,7 +137,7 @@ pub const Compiler = struct {
         };
 
         const source = dbg.getSourceLine(self.source.*, token.position);
-        const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, token, source);
+        const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, token.position, source);
         defer self.allocator.free(fmtCaret.caret);
         defer self.allocator.free(fmtCaret.spacing);
 
@@ -150,12 +150,11 @@ pub const Compiler = struct {
                                           \\
                                           \\
                                           , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, errorMessage }) catch |err| {
-                                              panic.exitWithError("unrecoverable error trying to write parse error message", err);
+                                              errh.exitWithError("unrecoverable error trying to write parse error message", err);
                                           };
 
 
-        _ = std.io.getStdErr().write(errMsg) catch unreachable;
-        //std.process.exit(1);
+        errh.printError(errMsg, .{});
     }
 
     pub fn canOpError(self: *Compiler, opcode: Opcode) bool {
@@ -235,7 +234,7 @@ pub const Compiler = struct {
         const index = self.constantsPool.items.len;
 
         self.constantsPool.append(val) catch |err| {
-            panic.exitWithError("failed to store constant", err);
+            errh.exitWithError("failed to store constant", err);
         };
 
         if (self.constantsPool.items.len > std.math.maxInt(u16)) { // we cant hold more than 65535 constants, because of the bytecode layout
@@ -259,14 +258,14 @@ pub const Compiler = struct {
 
     fn emitInstruction(self: *Compiler, instruction: Instruction) void {
         self.instructions.append(instruction) catch |err| {
-            panic.exitWithError("unrecoverable error trying to emit instruction", err);
+            errh.exitWithError("unrecoverable error trying to emit instruction", err);
         };
 
         const opcode = _instruction.GET_OPCODE(instruction);
         if (self.canOpError(opcode)) {
             const token = self.getCurrentToken();
             self.instructions_positions.put(@as(u32, @intCast(self.instructions.items.len - 1)), Position{ .line = token.position.line, .column = token.position.column, .filename = self.filename.* }) catch |err| {
-                panic.exitWithError("failed to store debug for instruction", err);
+                errh.exitWithError("failed to store debug for instruction", err);
             };
         }
     }
@@ -280,7 +279,7 @@ pub const Compiler = struct {
         };
 
         self.instructions.append(_instruction.ENCODE_LOADK(reg, contantIndex)) catch |err| {
-            panic.exitWithError("unrecoverable error trying to emit constant", err);
+            errh.exitWithError("unrecoverable error trying to emit constant", err);
         };
 
         return contantIndex;
