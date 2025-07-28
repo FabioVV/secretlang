@@ -116,18 +116,18 @@ pub const VM = struct {
         };
 
         const errMsg = std.fmt.allocPrint(self.allocator,
-                                          \\
-                                          \\-> In [{s}] {d}:{d}
-                                          \\ {d} | {s}
-                                          \\   {s}| {s}
-                                          \\   {s}| runtime error: {s}
-                                          \\
-                                          \\
-                                          , .{ pos.filename, pos.line, pos.column, pos.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, runtimeErrMsg }) catch |err| {
-                                              errh.exitWithError("unrecoverable error trying to write runtime error full message", err);
-                                          };
+            \\
+            \\-> In [{s}] {d}:{d}
+            \\ {d} | {s}
+            \\   {s}| {s}
+            \\   {s}| runtime error: {s}
+            \\
+            \\
+        , .{ pos.filename, pos.line, pos.column, pos.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, runtimeErrMsg }) catch |err| {
+            errh.exitWithError("unrecoverable error trying to write runtime error full message", err);
+        };
 
-        errh.printError(errMsg, .{});
+        errh.printError(errMsg);
     }
 
     inline fn GET_CONSTANT(self: *VM, idx: u16) ?Value {

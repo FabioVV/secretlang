@@ -142,19 +142,18 @@ pub const Compiler = struct {
         defer self.allocator.free(fmtCaret.spacing);
 
         const errMsg = std.fmt.allocPrint(self.allocator,
-                                          \\
-                                          \\-> In [{s}] {d}:{d}
-                                          \\ {d} | {s}
-                                          \\   {s}| {s}
-                                          \\   {s}| compilation failed: {s}
-                                          \\
-                                          \\
-                                          , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, errorMessage }) catch |err| {
-                                              errh.exitWithError("unrecoverable error trying to write parse error message", err);
-                                          };
+            \\
+            \\-> In [{s}] {d}:{d}
+            \\ {d} | {s}
+            \\   {s}| {s}
+            \\   {s}| compilation failed: {s}
+            \\
+            \\
+        , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, errorMessage }) catch |err| {
+            errh.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
 
-
-        errh.printError(errMsg, .{});
+        errh.printError(errMsg);
     }
 
     pub fn canOpError(self: *Compiler, opcode: Opcode) bool {
@@ -496,14 +495,13 @@ pub const Compiler = struct {
                 self.compileBlockStatement(b_stmt);
             },
         }
-
     }
 
     pub fn compile(self: *Compiler) bool {
         for (self.ast_program.nodes.items) |node| {
             self.compile_stmts(node);
 
-            if(self.had_error){
+            if (self.had_error) {
                 return false;
             }
         }

@@ -26,7 +26,6 @@ const Precedence = enum(u32) {
     INDEX = 10,
 };
 
-
 const NudParseFn = *const fn (*Parser) ?*AST.Expression;
 const LedParseFn = *const fn (*Parser, ?*AST.Expression) ?*AST.Expression;
 
@@ -213,7 +212,7 @@ pub const Parser = struct {
             errh.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        errh.printError(fullerrMsg, .{});
+        errh.printError(fullerrMsg);
 
         self.errors.append(ParserError{ .message = self.allocator.dupe(u8, fullerrMsg) catch |_err| {
             errh.exitWithError("unrecoverable error trying to dupe parse error message", _err);
@@ -251,7 +250,7 @@ pub const Parser = struct {
             errh.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        errh.printError(fullerrMsg, .{});
+        errh.printError(fullerrMsg);
 
         self.errors.append(ParserError{ .message = self.allocator.dupe(u8, fullerrMsg) catch |_err| {
             errh.exitWithError("unrecoverable error trying to dupe parse error message", _err);
@@ -288,7 +287,7 @@ pub const Parser = struct {
             errh.exitWithError("unrecoverable error trying to write parse error message", err);
         };
 
-        errh.printError(errMsg, .{});
+        errh.printError(errMsg);
 
         self.errors.append(ParserError{ .message = std.heap.page_allocator.dupe(u8, errMsg) catch |_err| {
             errh.exitWithError("unrecoverable error trying to dupe parse error message", _err);
@@ -799,11 +798,6 @@ pub const Parser = struct {
                 try program.addNode(node);
             }
 
-            if (self.in_panic){
-                self.sync();
-                continue;
-            }
-
             self.advance();
         }
 
@@ -873,6 +867,10 @@ pub const Parser = struct {
     }
 
     pub fn parseNode(self: *Parser) ?AST.Statement {
+        if (self.in_panic) {
+            self.sync();
+        }
+
         switch (self.cur_token.token_type) {
             Tokens.VAR => {
                 if (self.parseVarToken()) |stmt| {

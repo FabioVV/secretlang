@@ -19,11 +19,9 @@ const _value = @import("value.zig");
 const Value = _value.Value;
 const Instruction = _instruction.Instruction;
 
-
 const ArgsConfig = struct {
     repl_mode: bool = false,
 };
-
 
 fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8) !void {
     var l: *Lexer = Lexer.init(allocator, file, filename);
@@ -34,7 +32,7 @@ fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8)
 
     const program = try p.parseProgram(allocator);
     if (program == null) {
-        errh.printError("error parsing program\n", .{});
+        errh.printError("error parsing program\n");
         return;
     }
 
@@ -47,7 +45,7 @@ fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8)
     var c: *Compiler = Compiler.init(allocator, program.?, &l.source, &l.filename);
     defer c.deinit();
 
-    if(!c.compile()){
+    if (!c.compile()) {
         return;
     }
 
@@ -70,15 +68,15 @@ fn readFileContents(allocator: std.mem.Allocator, filepath: []const u8) ![]u8 {
 pub fn runFromFile(allocator: std.mem.Allocator, filepath: []const u8, filename: []const u8) !void {
     const fileContent = readFileContents(allocator, filepath) catch |err| switch (err) {
         error.FileNotFound => {
-            errh.printError("Error: Could not open file. File '{s}' not found\n", .{filepath});
+            errh.printErrorComptime(allocator, "Error: Could not open file. File '{s}' not found\n", .{filepath});
             return;
         },
         error.AccessDenied => {
-            errh.printError("Error: Permission denied reading '{s}'\n", .{filepath});
+            errh.printErrorComptime(allocator, "Error: Permission denied reading '{s}'\n", .{filepath});
             return;
         },
         else => {
-            errh.printError("Error reading file '{s}': {}\n", .{ filepath, err });
+            errh.printErrorComptime(allocator, "Error reading file '{s}': {}\n", .{ filepath, err });
             return;
         },
     };
@@ -87,14 +85,12 @@ pub fn runFromFile(allocator: std.mem.Allocator, filepath: []const u8, filename:
     defer allocator.free(fileContent);
 
     execute(allocator, fileContent, filename) catch |err| {
-        errh.printError("Execution error: {}\n", .{err});
+        errh.printErrorComptime(allocator, "Execution error: {}\n", .{err});
         return;
     };
 }
 
-
-
-fn parseArgsConfig(args: [][:0] u8) !ArgsConfig {
+fn parseArgsConfig(allocator: std.mem.Allocator, args: [][:0]u8) !ArgsConfig {
     var result = ArgsConfig{};
 
     var i: usize = 1;
@@ -104,7 +100,7 @@ fn parseArgsConfig(args: [][:0] u8) !ArgsConfig {
         if (std.mem.eql(u8, arg, "--repl") or std.mem.eql(u8, arg, "-r")) {
             result.repl_mode = true;
         } else {
-            errh.printError("Unknown option: {s}\n", .{arg});
+            errh.printErrorComptime(allocator, "Unknown option: {s}\n", .{arg});
             return error.InvalidArgument;
         }
     }
@@ -129,16 +125,14 @@ pub fn main() !void {
 
     if (args.len < 2) {
         const binary_name = std.fs.path.basename(args[0]);
-        errh.printError("usage: {s} <filepath> [options] \n", .{binary_name});
-        errh.printError("     or: {s} --repl\n", .{binary_name});
+        errh.printErrorComptime(allocator, "usage: {s} <filepath> [options] \n", .{binary_name});
+        errh.printErrorComptime(allocator, "     or: {s} --repl\n", .{binary_name});
         return;
     }
-
 
     if (std.mem.eql(u8, args[1], "--repl") or std.mem.eql(u8, args[1], "-r")) {
         try REPL.launch();
         return;
-
     }
 
     //     _ = parseArgsConfig(args) catch |err| switch (err) {
@@ -151,5 +145,3 @@ pub fn main() !void {
     const filename = std.fs.path.basename(args[1]);
     try runFromFile(allocator, filepath, filename);
 }
-
-
