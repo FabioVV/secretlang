@@ -297,7 +297,7 @@ pub const Parser = struct {
         };
     }
 
-    pub fn sync(self: *Parser) noreturn {
+    pub fn sync(self: *Parser) void {
         self.in_panic = false;
 
         while (self.cur_token.token_type != .EOF) {
