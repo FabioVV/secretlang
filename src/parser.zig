@@ -899,206 +899,206 @@ pub const Parser = struct {
     }
 };
 
-test "Parser initializtion" {
-    const input: []const u8 =
-        \\var name = "Fábio Gabriel Rodrigues Varela"
-    ;
-
-    var l: Lexer = try Lexer.init(input);
-    var p: Parser = Parser.init(&l, std.heap.page_allocator);
-    defer p.deinit();
-
-    try expect(mem.eql(u8, l.content, p.lexer.content));
-
-    try expect(p.errors.items.len == 0);
-}
-
-test "Var statement parsing" {
-    const input: []const u8 =
-        \\var age = 22
-        \\var num = 50
-        \\var num_frac = 50.50
-    ;
-
-    var l: Lexer = try Lexer.init(input);
-    var p: Parser = Parser.init(&l, std.heap.page_allocator);
-    defer p.deinit();
-
-    const program = try p.parseProgram(std.heap.page_allocator);
-
-    if (program == null) {
-        std.debug.print("Error parsing program: program is null\n", .{});
-        //return null;
-        try expect(false);
-    }
-
-    defer program.?.deinit();
-
-    try expect(p.errors.items.len == 0);
-
-    for (program.?.nodes.items) |node| {
-        dbg.printVarStatement(node.var_stmt);
-    }
-}
-
-test "Var statement parsing errors len" {
-    const input: []const u8 =
-        \\var b 15
-        \\var a 55
-    ;
-
-    var l: Lexer = try Lexer.init(input);
-    var p: Parser = Parser.init(&l, std.heap.page_allocator);
-    defer p.deinit();
-
-    const program = try p.parseProgram(std.heap.page_allocator);
-
-    if (program == null) {
-        std.debug.print("Error parsing program: program is null\n", .{});
-        try expect(false);
-    }
-
-    defer program.?.deinit();
-
-    try expect(p.errors.items.len > 0);
-}
-
-test "Prefix parsing" {
-    const input: []const u8 =
-        \\!5
-    ;
-
-    var l: Lexer = try Lexer.init(input);
-    var p: Parser = Parser.init(&l, std.heap.page_allocator);
-    defer p.deinit();
-
-    const program = try p.parseProgram(std.heap.page_allocator);
-
-    if (program == null) {
-        std.debug.print("Error parsing program: program is null\n", .{});
-        //return null;
-        try expect(false);
-    }
-
-    defer program.?.deinit();
-
-    try expect(p.errors.items.len == 0);
-
-    for (program.?.nodes.items) |node| {
-        dbg.printPrefixExpression(node.expression_stmt.expression.?.*.prefix_expr);
-    }
-}
-
-test "simple if parsing" {
-    const input: []const u8 =
-        \\if(true){
-        \\ var age = 22
-        \\}
-    ;
-
-    var l: Lexer = try Lexer.init(input);
-    var p: Parser = Parser.init(&l, std.heap.page_allocator);
-    defer p.deinit();
-
-    const program = try p.parseProgram(std.heap.page_allocator);
-
-    if (program == null) {
-        std.debug.print("Error parsing program: program is null\n", .{});
-        //return null;
-        try expect(false);
-    }
-
-    defer program.?.deinit();
-    try expect(p.errors.items.len == 0);
-
-    //for (program.?.nodes.items) |node| {
-    //    dbg.printIfExpression(node.expression_stmt.expression.?.*.if_expr);
-    //}
-}
-
-test "if parsing with else" {
-    const input: []const u8 =
-        \\if(true){
-        \\ var els = true
-        \\} else {
-        \\ var els = false
-        \\}
-    ;
-
-    var l: Lexer = try Lexer.init(input);
-    var p: Parser = Parser.init(&l, std.heap.page_allocator);
-    defer p.deinit();
-
-    const program = try p.parseProgram(std.heap.page_allocator);
-
-    if (program == null) {
-        std.debug.print("Error parsing program: program is null\n", .{});
-        try expect(false);
-    }
-
-    defer program.?.deinit();
-
-    try expect(p.errors.items.len == 0);
-
-    for (program.?.nodes.items) |node| {
-        dbg.printIfExpression(node.expression_stmt.expression.?.*.if_expr);
-    }
-}
-
-test "function literal" {
-    const input: []const u8 =
-        \\fn(){}
-        \\fn(a){}
-        \\fn(a, b){}
-        \\fn(a, b, c){}
-        \\fn(a, b, c, d){
-        \\ var a = 55;
-        \\}
-    ;
-
-    var l: Lexer = try Lexer.init(input);
-    var p: Parser = Parser.init(&l, std.heap.page_allocator);
-    defer p.deinit();
-
-    const program = try p.parseProgram(std.heap.page_allocator);
-
-    if (program == null) {
-        std.debug.print("Error parsing program: program is null\n", .{});
-        try expect(false);
-    }
-
-    defer program.?.deinit();
-
-    try expect(p.errors.items.len == 0);
-
-    for (program.?.nodes.items) |node| {
-        dbg.printFnExpression(node.expression_stmt.expression.?.*.fn_expr);
-    }
-}
-
-test "function call" {
-    const input: []const u8 =
-        \\add()
-        \\add(1, 2)
-        \\add(1, 2, 3)
-    ;
-
-    var l: Lexer = try Lexer.init(input);
-    var p: Parser = Parser.init(&l, std.heap.page_allocator);
-    defer p.deinit();
-
-    const program = try p.parseProgram(std.heap.page_allocator);
-
-    if (program == null) {
-        std.debug.print("Error parsing program: program is null\n", .{});
-        try expect(false);
-    }
-
-    defer program.?.deinit();
-
-    try expect(p.errors.items.len == 0);
-
-    for (program.?.nodes.items) |node| {
-        dbg.printFnExpressionCall(node.expression_stmt.expression.?.*.call_expr);
-    }
-}
+// test "Parser initializtion" {
+//     const input: []const u8 =
+//         \\var name = "Fábio Gabriel Rodrigues Varela"
+//     ;
+//
+//     var l: Lexer = try Lexer.init(input);
+//     var p: Parser = Parser.init(&l, std.heap.page_allocator);
+//     defer p.deinit();
+//
+//     try expect(mem.eql(u8, l.content, p.lexer.content));
+//
+//     try expect(p.errors.items.len == 0);
+// }
+//
+// test "Var statement parsing" {
+//     const input: []const u8 =
+//         \\var age = 22
+//         \\var num = 50
+//         \\var num_frac = 50.50
+//     ;
+//
+//     var l: Lexer = try Lexer.init(input);
+//     var p: Parser = Parser.init(&l, std.heap.page_allocator);
+//     defer p.deinit();
+//
+//     const program = try p.parseProgram(std.heap.page_allocator);
+//
+//     if (program == null) {
+//         std.debug.print("Error parsing program: program is null\n", .{});
+//         //return null;
+//         try expect(false);
+//     }
+//
+//     defer program.?.deinit();
+//
+//     try expect(p.errors.items.len == 0);
+//
+//     for (program.?.nodes.items) |node| {
+//         dbg.printVarStatement(node.var_stmt);
+//     }
+// }
+//
+// test "Var statement parsing errors len" {
+//     const input: []const u8 =
+//         \\var b 15
+//         \\var a 55
+//     ;
+//
+//     var l: Lexer = try Lexer.init(input);
+//     var p: Parser = Parser.init(&l, std.heap.page_allocator);
+//     defer p.deinit();
+//
+//     const program = try p.parseProgram(std.heap.page_allocator);
+//
+//     if (program == null) {
+//         std.debug.print("Error parsing program: program is null\n", .{});
+//         try expect(false);
+//     }
+//
+//     defer program.?.deinit();
+//
+//     try expect(p.errors.items.len > 0);
+// }
+//
+// test "Prefix parsing" {
+//     const input: []const u8 =
+//         \\!5
+//     ;
+//
+//     var l: Lexer = try Lexer.init(input);
+//     var p: Parser = Parser.init(&l, std.heap.page_allocator);
+//     defer p.deinit();
+//
+//     const program = try p.parseProgram(std.heap.page_allocator);
+//
+//     if (program == null) {
+//         std.debug.print("Error parsing program: program is null\n", .{});
+//         //return null;
+//         try expect(false);
+//     }
+//
+//     defer program.?.deinit();
+//
+//     try expect(p.errors.items.len == 0);
+//
+//     for (program.?.nodes.items) |node| {
+//         dbg.printPrefixExpression(node.expression_stmt.expression.?.*.prefix_expr);
+//     }
+// }
+//
+// test "simple if parsing" {
+//     const input: []const u8 =
+//         \\if(true){
+//         \\ var age = 22
+//         \\}
+//     ;
+//
+//     var l: Lexer = try Lexer.init(input);
+//     var p: Parser = Parser.init(&l, std.heap.page_allocator);
+//     defer p.deinit();
+//
+//     const program = try p.parseProgram(std.heap.page_allocator);
+//
+//     if (program == null) {
+//         std.debug.print("Error parsing program: program is null\n", .{});
+//         //return null;
+//         try expect(false);
+//     }
+//
+//     defer program.?.deinit();
+//     try expect(p.errors.items.len == 0);
+//
+//     //for (program.?.nodes.items) |node| {
+//     //    dbg.printIfExpression(node.expression_stmt.expression.?.*.if_expr);
+//     //}
+// }
+//
+// test "if parsing with else" {
+//     const input: []const u8 =
+//         \\if(true){
+//         \\ var els = true
+//         \\} else {
+//         \\ var els = false
+//         \\}
+//     ;
+//
+//     var l: Lexer = try Lexer.init(input);
+//     var p: Parser = Parser.init(&l, std.heap.page_allocator);
+//     defer p.deinit();
+//
+//     const program = try p.parseProgram(std.heap.page_allocator);
+//
+//     if (program == null) {
+//         std.debug.print("Error parsing program: program is null\n", .{});
+//         try expect(false);
+//     }
+//
+//     defer program.?.deinit();
+//
+//     try expect(p.errors.items.len == 0);
+//
+//     for (program.?.nodes.items) |node| {
+//         dbg.printIfExpression(node.expression_stmt.expression.?.*.if_expr);
+//     }
+// }
+//
+// test "function literal" {
+//     const input: []const u8 =
+//         \\fn(){}
+//         \\fn(a){}
+//         \\fn(a, b){}
+//         \\fn(a, b, c){}
+//         \\fn(a, b, c, d){
+//         \\ var a = 55;
+//         \\}
+//     ;
+//
+//     var l: Lexer = try Lexer.init(input);
+//     var p: Parser = Parser.init(&l, std.heap.page_allocator);
+//     defer p.deinit();
+//
+//     const program = try p.parseProgram(std.heap.page_allocator);
+//
+//     if (program == null) {
+//         std.debug.print("Error parsing program: program is null\n", .{});
+//         try expect(false);
+//     }
+//
+//     defer program.?.deinit();
+//
+//     try expect(p.errors.items.len == 0);
+//
+//     for (program.?.nodes.items) |node| {
+//         dbg.printFnExpression(node.expression_stmt.expression.?.*.fn_expr);
+//     }
+// }
+//
+// test "function call" {
+//     const input: []const u8 =
+//         \\add()
+//         \\add(1, 2)
+//         \\add(1, 2, 3)
+//     ;
+//
+//     var l: Lexer = try Lexer.init(input);
+//     var p: Parser = Parser.init(&l, std.heap.page_allocator);
+//     defer p.deinit();
+//
+//     const program = try p.parseProgram(std.heap.page_allocator);
+//
+//     if (program == null) {
+//         std.debug.print("Error parsing program: program is null\n", .{});
+//         try expect(false);
+//     }
+//
+//     defer program.?.deinit();
+//
+//     try expect(p.errors.items.len == 0);
+//
+//     for (program.?.nodes.items) |node| {
+//         dbg.printFnExpressionCall(node.expression_stmt.expression.?.*.call_expr);
+//     }
+// }

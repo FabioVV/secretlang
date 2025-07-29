@@ -10,7 +10,7 @@ pub const Symbol = struct {
     name: []const u8,
     scope: Scope,
     index: u16,
-    type: vType,
+    type: ?vType,
 };
 
 pub const SymbolTable = struct {
@@ -48,13 +48,13 @@ pub const SymbolTable = struct {
         }
     }
 
-    pub fn define(self: *SymbolTable, name: []const u8, vtype: vType) Symbol { // Maybe create a defineLocal so it can have register states etc
+    pub fn define(self: *SymbolTable, name: []const u8, vtype: ?vType) Symbol { // Maybe create a defineLocal so it can have register states etc
         var symbol: Symbol = undefined;
 
         if (self.parent_table != null) {
-            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .LOCAL, .type = vtype };
+            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .LOCAL, .type = vtype orelse null };
         } else {
-            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .GLOBAL, .type = vtype };
+            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .GLOBAL, .type = vtype orelse null };
         }
 
         self.table.put(name, symbol) catch unreachable;
