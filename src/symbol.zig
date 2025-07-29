@@ -1,4 +1,5 @@
-pub const std = @import("std");
+const std = @import("std");
+const vType = @import("value.zig").ValueType;
 
 pub const Scope = enum {
     GLOBAL,
@@ -9,6 +10,7 @@ pub const Symbol = struct {
     name: []const u8,
     scope: Scope,
     index: u16,
+    type: vType,
 };
 
 pub const SymbolTable = struct {
@@ -46,14 +48,13 @@ pub const SymbolTable = struct {
         }
     }
 
-    pub inline fn define(self: *SymbolTable, name: []const u8) Symbol { // Maybe create a defineLocal so it can have register states etc
+    pub fn define(self: *SymbolTable, name: []const u8, vtype: vType) Symbol { // Maybe create a defineLocal so it can have register states etc
         var symbol: Symbol = undefined;
 
-        if(self.parent_table != null){
-            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .LOCAL };
+        if (self.parent_table != null) {
+            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .LOCAL, .type = vtype };
         } else {
-            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .GLOBAL };
-
+            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .GLOBAL, .type = vtype };
         }
 
         self.table.put(name, symbol) catch unreachable;

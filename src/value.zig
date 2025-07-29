@@ -174,6 +174,15 @@ pub const Value = union(ValueType) {
         };
     }
 
+    pub inline fn getType(self: Value) ValueType {
+        return switch (self) {
+            .NUMBER => .NUMBER,
+            .BOOLEAN => .BOOLEAN,
+            .NIL => .NIL,
+            .OBJECT => .OBJECT,
+        };
+    }
+
     pub inline fn isNumber(self: Value) bool {
         return self == .NUMBER;
     }

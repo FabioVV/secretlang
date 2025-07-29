@@ -82,6 +82,10 @@ pub const Compiler = struct {
         compiler.cur_node = undefined;
         compiler.had_error = false;
 
+        _ = compiler.addConstant(Value.createNil());
+        _ = compiler.addConstant(Value.createBoolean(true));
+        _ = compiler.addConstant(Value.createBoolean(false));
+
         return compiler;
     }
 
@@ -111,6 +115,10 @@ pub const Compiler = struct {
         compiler.objects = null;
         compiler.cur_node = undefined;
         compiler.had_error = false;
+
+        _ = compiler.addConstant(Value.createNil());
+        _ = compiler.addConstant(Value.createBoolean(true));
+        _ = compiler.addConstant(Value.createBoolean(false));
 
         return compiler;
     }
@@ -315,8 +323,9 @@ pub const Compiler = struct {
         self.instructions.items[pos] = self.instructions.items[pos] | (@as(Instruction, @intCast(jump)) & 0x3FFFF);
     }
 
-    fn defineGlobal(self: *Compiler, result_register: u8, name: []const u8) void {
-        const sb = self.symbol_table.define(name);
+    inline fn defineGlobal(self: *Compiler, result_register: u8, name: []const u8, contantIndex: u16) void {
+        const val = self.constantsPool.items[contantIndex];
+        const sb = self.symbol_table.define(name, val.getType());
 
         if (sb.scope == Scopes.GLOBAL) {
             self.emitInstruction(_instruction.ENCODE_DEFINE_GLOBAL(result_register, sb.index));
@@ -325,7 +334,7 @@ pub const Compiler = struct {
         }
     }
 
-    fn compileExpression(self: *Compiler, expr: ?*AST.Expression) void {
+    fn compileExpression(self: *Compiler, expr: ?*AST.Expression) ?u16 {
         self.cur_node = AST.CurrentNode{ .expression = @constCast(&expr.?.*) };
 
         //self.registersState("before expr");
@@ -333,16 +342,16 @@ pub const Compiler = struct {
 
         switch (expr.?.*) {
             AST.Expression.number_expr => |numExpr| {
-                _ = self.emitConstant(Value.createNumber(numExpr.value));
+                return self.emitConstant(Value.createNumber(numExpr.value));
             },
             AST.Expression.string_expr => |strExpr| {
                 const str = Value.copyString(self.allocator, strExpr.value, self.strings, &self.objects);
-                _ = self.emitConstant(str);
+                return self.emitConstant(str);
             },
             AST.Expression.boolean_expr => |boolExpr| {
                 const reg = self.allocateRegister() catch {
                     self.cError("out of registers");
-                    return;
+                    return null;
                 };
 
                 if (boolExpr.value) {
@@ -354,15 +363,15 @@ pub const Compiler = struct {
             AST.Expression.infix_expr => |infixExpr| {
                 const operator = infixExpr.token.token_type;
 
-                self.compileExpression(infixExpr.left);
-                self.compileExpression(infixExpr.right);
+                _ = self.compileExpression(infixExpr.left);
+                _ = self.compileExpression(infixExpr.right);
 
                 const left_register = self.current_scope_registers.pop().?;
                 const right_register = self.current_scope_registers.pop().?;
 
                 const reg = self.allocateRegister() catch {
                     self.cError("out of registers");
-                    return;
+                    return null;
                 };
 
                 self.emitInstruction(_instruction.ENCODE_BINARY(operator, reg, left_register, right_register));
@@ -373,11 +382,11 @@ pub const Compiler = struct {
             AST.Expression.prefix_expr => |infixExpr| {
                 const operator = infixExpr.token.literal;
 
-                self.compileExpression(infixExpr.right);
+                _ = self.compileExpression(infixExpr.right);
 
                 const reg = self.allocateRegister() catch {
                     self.cError("out of registers");
-                    return;
+                    return null;
                 };
                 const right_register = self.current_scope_registers.pop().?;
 
@@ -386,7 +395,7 @@ pub const Compiler = struct {
                 self.freeRegister(right_register);
             },
             AST.Expression.if_expr => |ifExpr| {
-                self.compileExpression(ifExpr.condition);
+                _ = self.compileExpression(ifExpr.condition);
 
                 const cond_register = self.current_scope_registers.pop().?;
 
@@ -414,7 +423,7 @@ pub const Compiler = struct {
             AST.Expression.identifier_expr => |idenExpr| {
                 const reg = self.allocateRegister() catch {
                     self.cError("out of registers");
-                    return;
+                    return null;
                 };
 
                 // const identifierName = self.allocator.dupe(u8, idenExpr.literal) catch unreachable;
@@ -428,14 +437,16 @@ pub const Compiler = struct {
                     }
 
                     //self.freeRegister(reg);
-                    return;
+                    return null;
                 }
 
                 //self.freeRegister(reg);
                 self.cError("undefined variable");
             },
-            else => {},
+            else => unreachable,
         }
+
+        return null;
     }
 
     fn compileVarStatement(self: *Compiler, stmt: AST.VarStatement) void {
@@ -444,8 +455,9 @@ pub const Compiler = struct {
 
         const identifierName = stmt.identifier.literal;
 
+        var cIndex: u16 = 0; // Nil is the first constant in the pool, so if it stays zero here, it means a nil was emitted, so no need to change
         if (stmt.expression != null) {
-            self.compileExpression(stmt.expression);
+            cIndex = self.compileExpression(stmt.expression).?;
         } else {
             self.emitNil();
         }
@@ -453,7 +465,7 @@ pub const Compiler = struct {
         const reg = self.current_scope_registers.pop().?;
         self.freeRegister(reg);
 
-        self.defineGlobal(reg, identifierName);
+        self.defineGlobal(reg, identifierName, cIndex);
     }
 
     fn compileReturnStatement(self: *Compiler, stmt: AST.ReturnStatement) void {
@@ -472,7 +484,8 @@ pub const Compiler = struct {
     }
 
     inline fn compileExpressionStatement(self: *Compiler, stmt: AST.ExpressionStatement) void {
-        self.compileExpression(stmt.expression);
+        _ = self.compileExpression(stmt.expression);
+
         if (self.current_scope_registers.pop()) |r| {
             self.freeRegister(r);
         }

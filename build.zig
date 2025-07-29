@@ -16,7 +16,6 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-
     // We will also create a module for our other entry point, 'main.zig'.
     const exe_mod = b.createModule(.{
         // `root_source_file` is the Zig "entry point" of the module. If a module
@@ -28,11 +27,10 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-
     // This creates another `std.Build.Step.Compile`, but this one builds an executable
     // rather than a static library.
     const exe = b.addExecutable(.{
-        .name = "ziglang",
+        .name = "secret",
         .root_module = exe_mod,
     });
 
@@ -66,7 +64,6 @@ pub fn build(b: *std.Build) void {
 
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
-
 
     const exe_unit_tests = b.addTest(.{
         .root_module = exe_mod,

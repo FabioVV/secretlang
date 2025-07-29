@@ -530,8 +530,6 @@ pub const VM = struct {
                     const RC = self.registers.get(_instruction.DECODE_RC(curInstruction));
                     const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
 
-                    std.debug.print("idx: {d}\n", .{globalIdx});
-
                     self.globals.slice()[globalIdx] = RC;
                 },
                 .OP_GET_GLOBAL => {
