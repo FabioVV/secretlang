@@ -9,6 +9,7 @@ const Parser = @import("parser.zig").Parser;
 const AST = @import("ast.zig");
 const _symbol_table = @import("symbol.zig");
 const SymbolTable = _symbol_table.SymbolTable;
+const Symbol = _symbol_table.Symbol;
 const Scopes = _symbol_table.Scope;
 
 pub const SemanticAnalyzer = struct {
@@ -20,6 +21,8 @@ pub const SemanticAnalyzer = struct {
     arena: ?std.heap.ArenaAllocator,
 
     symbol_table: *SymbolTable,
+    resolved_names: *std.StringHashMap(Symbol),
+    scope_depth: usize,
 
     cur_node: AST.CurrentNode,
 
@@ -35,7 +38,13 @@ pub const SemanticAnalyzer = struct {
         sema.source = source;
         sema.filename = filename;
 
+        sema.scope_depth = 0;
+        sema.resolved_names = sema.allocator.create(std.StringHashMap(Symbol)) catch unreachable;
+        sema.resolved_names.* = std.StringHashMap(Symbol).init(sema.allocator);
+
+
         sema.symbol_table = SymbolTable.init(sema.allocator);
+
         sema.cur_node = undefined;
         sema.had_error = false;
 
@@ -52,7 +61,11 @@ pub const SemanticAnalyzer = struct {
         sema.source = source;
         sema.filename = filename;
 
+        sema.scope_depth = 0;
+        sema.resolved_names = sema.allocator.create(std.StringHashMap(Symbol)) catch unreachable;
+        sema.resolved_names.* = std.StringHashMap(Symbol).init(sema.allocator);
         sema.symbol_table = symbol_table;
+
         sema.cur_node = undefined;
         sema.had_error = false;
 
@@ -65,24 +78,40 @@ pub const SemanticAnalyzer = struct {
         }
     }
 
-    pub fn analyzeVar(self: *SemanticAnalyzer, stmt: AST.VarStatement) void {
-        const identifierName = stmt.identifier.literal;
+    fn enterScope(self: *SemanticAnalyzer) void {
+        self.scope_depth += 1;
+        self.symbol_table = SymbolTable.initEnclosed(self.allocator, self.symbol_table);
+    }
 
-        if (self.symbol_table.resolve(identifierName)) |sb| {
-            std.debug.print("error: variable already defined: {s}\n", .{sb.name});
-        } else {
-            _ = self.symbol_table.define(identifierName, null);
+    fn leaveScope(self: *SemanticAnalyzer) void {
+        self.scope_depth -= 1;
+        self.symbol_table = self.symbol_table.parent_table.?;
+    }
+
+    pub fn analyzeVar(self: *SemanticAnalyzer, stmt: AST.VarStatement) void {
+        if(self.symbol_table.resolveCurrent(stmt.identifier.literal) != null){
+            print("variable already defined: {s}\n", .{stmt.identifier.literal});
+            return;
         }
+
+        const unique_name = std.fmt.allocPrint(
+            self.allocator,
+            "{s}#{d}",
+            .{stmt.identifier.literal, self.scope_depth}
+        ) catch unreachable;
+
+        const symbol = self.symbol_table.define(stmt.identifier.literal, stmt.token.position.line, null);
+        self.resolved_names.put(unique_name, symbol) catch unreachable;
+
+        self.analyzeExpression(stmt.expression);
     }
 
     pub fn analyzeBlock(self: *SemanticAnalyzer, stmt: AST.BlockStatement) void {
-        _ = self;
-        _ = stmt;
-    }
+        self.enterScope();
 
-    pub fn analyzeExpressionStmt(self: *SemanticAnalyzer, stmt: AST.ExpressionStatement) void {
-        _ = self;
-        _ = stmt;
+        _  = self.analyzeStmts(stmt.statements);
+
+        self.leaveScope();
     }
 
     pub fn analyzeReturn(self: *SemanticAnalyzer, stmt: AST.ReturnStatement) void {
@@ -90,12 +119,65 @@ pub const SemanticAnalyzer = struct {
         _ = stmt;
     }
 
-    pub fn analyzeExpression(self: *SemanticAnalyzer, expr: AST.Expression) void {
-        _ = self;
-        _ = expr;
+    pub fn analyzeExpression(self: *SemanticAnalyzer, expr: ?*AST.Expression) void {
+        if(expr == null) return;
+
+        switch (expr.?.*) {
+            AST.Expression.number_expr =>  {
+
+            },
+            AST.Expression.string_expr =>  {
+
+            },
+            AST.Expression.boolean_expr =>  {
+
+            },
+            AST.Expression.infix_expr => |infixExpr| {
+                self.analyzeExpression(infixExpr.left);
+                self.analyzeExpression(infixExpr.right);
+            },
+            AST.Expression.prefix_expr => |infixExpr| {
+                self.analyzeExpression(infixExpr.right);
+            },
+            AST.Expression.if_expr => |ifExpr| {
+                self.analyzeExpression(ifExpr.condition);
+                self.analyzeBlock(ifExpr.ifBlock.?);
+                if(ifExpr.elseBlock != null) {
+                    self.analyzeBlock(ifExpr.elseBlock.?);
+                }
+            },
+            //AST.ArrayExpression => |arr_expr|{
+
+            // },
+            AST.Expression.identifier_expr => |idenExpr| {
+                if(self.symbol_table.resolve(idenExpr.literal)) |sb|{
+
+                    const unique_name = std.fmt.allocPrint(
+                        self.allocator,
+                        "{s}#{d}",
+                        .{sb.name, self.scope_depth}
+                    ) catch unreachable;
+
+
+                    if (self.resolved_names.getPtr(unique_name)) |symbol_ptr| {
+                        symbol_ptr.line_last_use = idenExpr.token.position.line;
+                    }
+
+                    return;
+                }
+
+                print("undefined variable: {s}\n", .{idenExpr.literal});
+            },
+            else => unreachable,
+        }
+
     }
 
-    pub inline fn analyze_stmt(self: *SemanticAnalyzer, stmt: AST.Statement) void {
+    pub fn analyzeExpressionStmt(self: *SemanticAnalyzer, stmt: AST.ExpressionStatement) void {
+        self.analyzeExpression(stmt.expression);
+    }
+
+    pub inline fn analyzeStmt(self: *SemanticAnalyzer, stmt: AST.Statement) void {
         self.cur_node = AST.CurrentNode{ .statement = @constCast(&stmt) };
 
         switch (stmt) {
@@ -114,9 +196,9 @@ pub const SemanticAnalyzer = struct {
         }
     }
 
-    pub fn analyze(self: *SemanticAnalyzer) bool {
-        for (self.ast_program.nodes.items) |node| {
-            self.analyze_stmt(node);
+    fn analyzeStmts(self: *SemanticAnalyzer, nodes: std.ArrayList(AST.Statement)) bool {
+        for (nodes.items) |node| {
+            self.analyzeStmt(node);
 
             if (self.had_error) {
                 return false;
@@ -125,6 +207,11 @@ pub const SemanticAnalyzer = struct {
 
         return true;
     }
+
+    pub fn analyze(self: *SemanticAnalyzer) bool {
+        return self.analyzeStmts(self.ast_program.nodes);
+    }
+
 };
 
 test "semantic analyze test" {
@@ -144,6 +231,7 @@ test "semantic analyze test" {
         \\var b = 10
         \\var c = a + b
         \\c
+        \\if(b) {var b = 11}
         \\var c = 1
     ;
 
@@ -161,5 +249,7 @@ test "semantic analyze test" {
 
     var sema: *SemanticAnalyzer = SemanticAnalyzer.init(allocator, program.?, &l.source, &l.filename);
     defer sema.deinit();
+
     try expect(sema.analyze());
+
 }

@@ -15,6 +15,7 @@ const _vm = @import("vm.zig");
 const _symbol_table = @import("symbol.zig");
 const SymbolTable = _symbol_table.SymbolTable;
 const Scopes = _symbol_table.Scope;
+const Symbol = _symbol_table.Symbol;
 const _instruction = @import("instruction.zig");
 const _value = @import("value.zig");
 const Value = _value.Value;
@@ -46,7 +47,7 @@ pub const Compiler = struct {
 
     strings: *std.StringHashMap(Value),
 
-    symbol_table: *SymbolTable,
+    resolved_symbol_table: *std.StringHashMap(Symbol),
     objects: ?*Object,
 
     registers: std.BoundedArray(bool, _vm.MAX_REGISTERS),
@@ -54,7 +55,7 @@ pub const Compiler = struct {
 
     had_error: bool,
 
-    pub fn init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8, filename: *[]const u8) *Compiler {
+    pub fn init(allocator: std.mem.Allocator, ast: *AST.Program, resolved_symbol_table: *std.StringHashMap(Symbol), source: *[]const u8, filename: *[]const u8) *Compiler {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const compiler = arena.allocator().create(Compiler) catch unreachable;
 
@@ -77,7 +78,7 @@ pub const Compiler = struct {
         @memset(compiler.registers.slice(), false);
         compiler.current_scope_registers = std.ArrayList(u8).init(compiler.allocator);
 
-        compiler.symbol_table = SymbolTable.init(compiler.allocator);
+        compiler.symbol_table = resolved_symbol_table;
         compiler.objects = null;
         compiler.cur_node = undefined;
         compiler.had_error = false;
@@ -89,7 +90,7 @@ pub const Compiler = struct {
         return compiler;
     }
 
-    pub fn repl_init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8, filename: *[]const u8, symbol_table: *SymbolTable, strings_table: *std.StringHashMap(Value)) *Compiler {
+    pub fn repl_init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8, filename: *[]const u8, resolved_symbol_table: *std.StringHashMap(Symbol), strings_table: *std.StringHashMap(Value)) *Compiler {
         const compiler = allocator.create(Compiler) catch unreachable;
 
         compiler.arena = null;
@@ -111,7 +112,7 @@ pub const Compiler = struct {
         @memset(compiler.registers.slice(), false);
         compiler.current_scope_registers = std.ArrayList(u8).init(compiler.allocator);
 
-        compiler.symbol_table = symbol_table;
+        compiler.resolved_symbol_table = resolved_symbol_table;
         compiler.objects = null;
         compiler.cur_node = undefined;
         compiler.had_error = false;
@@ -125,8 +126,7 @@ pub const Compiler = struct {
 
     pub fn deinit(self: *Compiler) void {
         if (self.arena) |arena| {
-            self.symbol_table.deinit();
-            self.allocator.destroy(self.symbol_table);
+            self.allocator.destroy(self.resolved_symbol_table);
             arena.deinit();
         }
     }

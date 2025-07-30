@@ -10,12 +10,15 @@ pub const Symbol = struct {
     name: []const u8,
     scope: Scope,
     index: u16,
+
+    line_defined: usize,
+    line_last_use: ?usize,
+
     type: ?vType,
 };
 
 pub const SymbolTable = struct {
     parent_table: ?*SymbolTable,
-
     table: std.StringHashMap(Symbol),
     total_definitions: u16,
 
@@ -48,13 +51,13 @@ pub const SymbolTable = struct {
         }
     }
 
-    pub fn define(self: *SymbolTable, name: []const u8, vtype: ?vType) Symbol { // Maybe create a defineLocal so it can have register states etc
+    pub fn define(self: *SymbolTable, name: []const u8, line_defined: usize, vtype: ?vType) Symbol { // Maybe create a defineLocal so it can have register states etc
         var symbol: Symbol = undefined;
 
         if (self.parent_table != null) {
-            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .LOCAL, .type = vtype orelse null };
+            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .LOCAL, .line_defined = line_defined, .line_last_use = null, .type = vtype orelse null };
         } else {
-            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .GLOBAL, .type = vtype orelse null };
+            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .GLOBAL, .line_defined = line_defined, .line_last_use = null, .type = vtype orelse null };
         }
 
         self.table.put(name, symbol) catch unreachable;
@@ -73,5 +76,21 @@ pub const SymbolTable = struct {
         }
 
         return null;
+    }
+
+    pub fn resolveCurrent(self: *SymbolTable, name: []const u8) ?Symbol {
+        if (self.table.get(name)) |s| {
+            return s;
+        }
+
+        return null;
+    }
+
+    pub fn updateLastUse(self: *SymbolTable, name: []const u8, line: usize) void {
+        if (self.table.getPtr(name)) |symbol| {
+            symbol.line_last_use = line;
+        } else if (self.parent_table) |parent| {
+            parent.updateLastUse(name, line);
+        }
     }
 };

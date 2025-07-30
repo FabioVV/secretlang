@@ -9,6 +9,7 @@ const Parser = @import("parser.zig").Parser;
 const Compiler = @import("compiler.zig").Compiler;
 const AST = @import("ast.zig");
 const SymbolTable = @import("symbol.zig").SymbolTable;
+const SemanticAnalyzer = @import("semantic.zig").SemanticAnalyzer;
 const _vm = @import("vm.zig");
 const VM = _vm.VM;
 const _instruction = @import("instruction.zig");
@@ -63,10 +64,18 @@ pub fn launch() !void {
                 continue;
             }
 
-            var c: *Compiler = Compiler.repl_init(allocator, program.?, &l.source, &l.filename, symbol_table, &strings);
+
+            var sema: *SemanticAnalyzer = SemanticAnalyzer.init(allocator, program.?, &l.source, &l.filename);
+            defer sema.deinit();
+
+            if(!sema.analyze()){
+                continue;
+            }
+
+            var c: *Compiler = Compiler.repl_init(allocator, program.?, &l.source, &l.filename, sema.resolved_names, &strings);
 
             if(!c.compile()){
-                return;
+                continue;
             }
 
             var vm: *VM = VM.repl_init(allocator, &c.constantsPool, &c.instructions, &c.instructions_positions, @constCast(&globals), &l.source, c.strings, c.objects);

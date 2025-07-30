@@ -12,6 +12,7 @@ const Parser = @import("parser.zig").Parser;
 const Compiler = @import("compiler.zig").Compiler;
 const AST = @import("ast.zig");
 const SymbolTable = @import("symbol.zig").SymbolTable;
+const SemanticAnalyzer = @import("semantic.zig").SemanticAnalyzer;
 const _vm = @import("vm.zig");
 const VM = _vm.VM;
 const _instruction = @import("instruction.zig");
@@ -39,6 +40,13 @@ fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8)
     defer program.?.deinit();
 
     if (p.had_error) {
+        return;
+    }
+
+    var sema: *SemanticAnalyzer = SemanticAnalyzer.init(allocator, program.?, &l.source, &l.filename);
+    defer sema.deinit();
+
+    if(!sema.analyze()){
         return;
     }
 
