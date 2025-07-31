@@ -31,10 +31,11 @@ const CompilerError = struct {
 };
 
 pub const Compiler = struct {
-    ast_program: *AST.Program,
-    cur_node: AST.CurrentNode,
     source: *[]const u8,
     filename: *[]const u8,
+
+    ast_program: *AST.Program,
+    cur_node: AST.CurrentNode,
 
     allocator: std.mem.Allocator,
     arena: ?std.heap.ArenaAllocator,
@@ -46,7 +47,6 @@ pub const Compiler = struct {
     constantsPoolHashes: std.AutoHashMap(u64, u16), // For deduplication of constants
 
     strings: *std.StringHashMap(Value),
-
     objects: ?*Object,
 
     registers: std.BoundedArray(bool, _vm.MAX_REGISTERS),
@@ -503,6 +503,9 @@ pub const Compiler = struct {
             },
             .block_stmt => |b_stmt| {
                 self.compileBlockStatement(b_stmt);
+            },
+            .fn_stmt => |f_stmt| {
+                _ = f_stmt;
             },
         }
     }

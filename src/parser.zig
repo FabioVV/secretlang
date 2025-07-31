@@ -528,8 +528,9 @@ pub const Parser = struct {
         return expr;
     }
 
-    pub fn parseBlockStatement(self: *Parser) ?AST.BlockStatement {
-        var block = AST.BlockStatement.init(self.allocator, self.cur_token);
+    pub fn parseBlockStatement(self: *Parser) ?*AST.BlockStatement {
+        const block = self.allocator.create(AST.BlockStatement) catch unreachable;
+        block.* = AST.BlockStatement.init(self.allocator, self.cur_token);
 
         self.advance();
 
@@ -574,8 +575,7 @@ pub const Parser = struct {
             return null;
         }
 
-        const blockif = self.allocator.create(AST.BlockStatement) catch unreachable;
-        blockif.* = self.parseBlockStatement() orelse AST.BlockStatement.init(self.allocator, self.cur_token);
+        const blockif = self.parseBlockStatement();
 
         if_exp.ifBlock = blockif;
         if_exp.elseBlock = null;
@@ -587,11 +587,9 @@ pub const Parser = struct {
                 return null;
             }
 
-            const blockelse = self.allocator.create(AST.BlockStatement) catch unreachable;
-            blockelse.* = self.parseBlockStatement() orelse AST.BlockStatement.init(self.allocator, self.cur_token);
+            const blockelse = self.parseBlockStatement();
 
             if_exp.elseBlock = blockelse;
-
         }
 
         const expr = self.createExpressionNode();
@@ -652,7 +650,7 @@ pub const Parser = struct {
             return null;
         }
 
-        fnLiteral.body = self.parseBlockStatement() orelse null;
+        fnLiteral.body = self.parseBlockStatement();
 
         const expr = self.createExpressionNode();
         expr.* = AST.Expression{ .fn_expr = fnLiteral };
@@ -812,6 +810,65 @@ pub const Parser = struct {
         return program;
     }
 
+    //     pub fn parseFnExpression(self: *Parser) ?*AST.Expression {
+    //         var fnLiteral = AST.fnExpression.init(self.cur_token);
+    //
+    //         if (!self.expect(Tokens.LPAREN, "(")) {
+    //             return null;
+    //         }
+    //
+    //         const params = self.parseFnParameters();
+    //
+    //         if (params != null) {
+    //             fnLiteral.parameters.appendSlice(params.?) catch |err| {
+    //                 errh.exitWithError("Unrecoverable error when trying to append slice of function parameters.", err);
+    //             };
+    //         }
+    //
+    //         if (!self.expect(Tokens.LBRACE, "{")) {
+    //             return null;
+    //         }
+    //
+    //         fnLiteral.body = self.parseBlockStatement();
+    //
+    //         const expr = self.createExpressionNode();
+    //         expr.* = AST.Expression{ .fn_expr = fnLiteral };
+    //
+    //         return expr;
+    //     }
+
+    pub fn parseFnToken(self: *Parser) ?*AST.FnStatement {
+        var fnStmt = AST.FnStatement.init(self.cur_token);
+
+        if (!self.expect(Tokens.IDENT, "identifier")) {
+            return null;
+        }
+
+        fnStmt.identifier = AST.Identifier{ .token = self.cur_token, .literal = self.cur_token.literal };
+
+        if (!self.expect(Tokens.LPAREN, "(")) {
+            return null;
+        }
+
+        const params = self.parseFnParameters();
+        if (params != null) {
+            fnStmt.parameters.appendSlice(params.?) catch |err| {
+                errh.exitWithError("Unrecoverable error when trying to append slice of function parameters.", err);
+            };
+        }
+
+        if (!self.expect(Tokens.LBRACE, "{")) {
+            return null;
+        }
+
+        fnStmt.body = self.parseBlockStatement();
+
+        const fnstmt = self.allocator.create(AST.FnStatement) catch unreachable;
+        fnstmt.* = fnStmt;
+
+        return fnstmt;
+    }
+
     pub fn parseVarToken(self: *Parser) ?*AST.VarStatement {
         const var_token = self.cur_token;
 
@@ -890,9 +947,23 @@ pub const Parser = struct {
                     return null;
                 }
             },
+            Tokens.FN => {
+                if (self.parseFnToken()) |stmt| {
+                    return AST.Statement{ .fn_stmt = stmt };
+                } else {
+                    return null;
+                }
+            },
             Tokens.RETURN => {
                 if (self.parseReturnToken()) |stmt| {
                     return AST.Statement{ .return_stmt = stmt };
+                } else {
+                    return null;
+                }
+            },
+            Tokens.LBRACE => {
+                if (self.parseBlockStatement()) |stmt| {
+                    return AST.Statement{ .block_stmt = stmt };
                 } else {
                     return null;
                 }

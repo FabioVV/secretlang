@@ -133,10 +133,29 @@ pub const SemanticAnalyzer = struct {
             return;
         }
 
+        self.analyzeExpression(stmt.expression);
+
         const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, stmt.token.position.line, null);
         stmt.identifier.resolved_symbol = symbol;
+    }
 
-        self.analyzeExpression(stmt.expression);
+    pub fn analyzeFn(self: *SemanticAnalyzer, stmt: *AST.FnStatement) void { // Make this better, store on symbol if it is function or not, so that better error messages may be dispatched here
+        if (self.symbol_table.resolveCurrent(stmt.identifier.literal)) |s| {
+            self.sError("variable '{s}' already defined on line {d}", .{ stmt.identifier.literal, s.token.position.line });
+            return;
+        }
+        self.enterScope();
+
+        self.analyzeFnBlock(stmt.body.?);
+
+        self.leaveScope();
+
+        const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, stmt.token.position.line, null);
+        stmt.identifier.resolved_symbol = symbol;
+    }
+
+    pub fn analyzeFnBlock(self: *SemanticAnalyzer, stmt: *AST.BlockStatement) void {
+        _ = self.analyzeStmts(stmt.statements);
     }
 
     pub fn analyzeBlock(self: *SemanticAnalyzer, stmt: *AST.BlockStatement) void {
@@ -154,6 +173,7 @@ pub const SemanticAnalyzer = struct {
 
     pub fn analyzeExpression(self: *SemanticAnalyzer, expr: ?*AST.Expression) void {
         if (expr == null) return;
+        self.cur_node = AST.CurrentNode{ .expression = expr.? };
 
         switch (expr.?.*) {
             AST.Expression.number_expr => {},
@@ -180,6 +200,7 @@ pub const SemanticAnalyzer = struct {
             AST.Expression.identifier_expr => |*idenExpr| {
                 if (self.symbol_table.resolve(idenExpr.literal)) |sb| {
                     idenExpr.resolved_symbol = sb;
+                    self.symbol_table.updateLastUse(idenExpr.literal, self.instruction_count);
                     return;
                 }
 
@@ -210,6 +231,9 @@ pub const SemanticAnalyzer = struct {
             .block_stmt => |b_stmt| {
                 self.analyzeBlock(b_stmt);
             },
+            .fn_stmt => |f_stmt| {
+                self.analyzeFn(f_stmt);
+            },
         }
     }
 
@@ -231,7 +255,7 @@ pub const SemanticAnalyzer = struct {
 };
 
 test "semantic analyze test" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
     defer {
         const deinit_status = gpa.deinit();
 

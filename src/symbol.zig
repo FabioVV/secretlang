@@ -11,6 +11,7 @@ pub const Scope = enum {
 
 pub const Symbol = struct {
     token: Token,
+
     name: []const u8,
     scope: Scope,
     index: u16,
@@ -19,6 +20,8 @@ pub const Symbol = struct {
     last_use: ?usize,
 
     type: ?vType,
+
+    is_mutable: bool,
 };
 
 pub const SymbolTable = struct {
@@ -59,9 +62,9 @@ pub const SymbolTable = struct {
         var symbol: Symbol = undefined;
 
         if (self.parent_table != null) {
-            symbol = Symbol{ .token = token, .name = name, .index = self.total_definitions, .scope = .LOCAL, .defined = defined, .last_use = null, .type = vtype orelse null };
+            symbol = Symbol{ .token = token, .name = name, .index = self.total_definitions, .scope = .LOCAL, .defined = defined, .last_use = null, .type = vtype orelse null, .is_mutable = true };
         } else {
-            symbol = Symbol{ .token = token, .name = name, .index = self.total_definitions, .scope = .GLOBAL, .defined = defined, .last_use = null, .type = vtype orelse null };
+            symbol = Symbol{ .token = token, .name = name, .index = self.total_definitions, .scope = .GLOBAL, .defined = defined, .last_use = null, .type = vtype orelse null, .is_mutable = true };
         }
 
         self.table.put(name, symbol) catch unreachable;
@@ -92,7 +95,7 @@ pub const SymbolTable = struct {
 
     pub fn updateLastUse(self: *SymbolTable, name: []const u8, line: usize) void {
         if (self.table.getPtr(name)) |symbol| {
-            symbol.line_last_use = line;
+            symbol.last_use = line;
         } else if (self.parent_table) |parent| {
             parent.updateLastUse(name, line);
         }

@@ -61,6 +61,22 @@ pub const VarStatement = struct {
     expression: ?*Expression, // the value being assigned to the var variable
 };
 
+pub const FnStatement = struct {
+    token: Token, // fn token.
+    identifier: Identifier, // name
+    parameters: std.BoundedArray(Identifier, 32), // Max 32 params,
+    body: ?*BlockStatement = null,
+
+    pub fn init(token: Token) FnStatement {
+        const fnStatement = FnStatement{
+            .token = token,
+            .parameters = .{},
+            .identifier = undefined,
+        };
+        return fnStatement;
+    }
+};
+
 pub const Identifier = struct {
     token: Token, // IDENT token.
     literal: []const u8,
@@ -111,7 +127,7 @@ pub const IfExpression = struct {
 pub const fnExpression = struct {
     token: Token,
     parameters: std.BoundedArray(Identifier, 32), // Max 32 params,
-    body: ?BlockStatement = undefined,
+    body: ?*BlockStatement = undefined,
 
     pub fn init(token: Token) fnExpression {
         const fnLiteralExpression = fnExpression{
@@ -162,6 +178,7 @@ pub const StmtTypes = enum {
     return_stmt,
     expression_stmt,
     block_stmt,
+    fn_stmt,
 };
 
 pub const Statement = union(StmtTypes) {
@@ -169,6 +186,7 @@ pub const Statement = union(StmtTypes) {
     return_stmt: *ReturnStatement,
     expression_stmt: *ExpressionStatement,
     block_stmt: *BlockStatement,
+    fn_stmt: *FnStatement,
 };
 
 pub const ExprTypes = enum {
