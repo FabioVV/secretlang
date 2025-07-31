@@ -78,7 +78,7 @@ pub const Compiler = struct {
         @memset(compiler.registers.slice(), false);
         compiler.current_scope_registers = std.ArrayList(u8).init(compiler.allocator);
 
-        compiler.symbol_table = resolved_symbol_table;
+        compiler.resolved_symbol_table = resolved_symbol_table;
         compiler.objects = null;
         compiler.cur_node = undefined;
         compiler.had_error = false;
@@ -223,13 +223,13 @@ pub const Compiler = struct {
         self.current_scope_registers.clearRetainingCapacity();
     }
 
-    fn enterScope(self: *Compiler) void {
-        self.symbol_table = SymbolTable.initEnclosed(self.allocator, self.symbol_table);
-    }
-
-    fn leaveScope(self: *Compiler) void {
-        self.symbol_table = self.symbol_table.parent_table.?;
-    }
+//     fn enterScope(self: *Compiler) void {
+//         self.symbol_table = SymbolTable.initEnclosed(self.allocator, self.symbol_table);
+//     }
+//
+//     fn leaveScope(self: *Compiler) void {
+//         self.symbol_table = self.symbol_table.parent_table.?;
+//     }
 
     fn addConstant(self: *Compiler, val: Value) u16 {
         const value_hash = val.hash();
@@ -323,16 +323,15 @@ pub const Compiler = struct {
         self.instructions.items[pos] = self.instructions.items[pos] | (@as(Instruction, @intCast(jump)) & 0x3FFFF);
     }
 
-    inline fn defineGlobal(self: *Compiler, result_register: u8, name: []const u8, contantIndex: u16) void {
-        const val = self.constantsPool.items[contantIndex];
-        const sb = self.symbol_table.define(name, val.getType());
-
-        if (sb.scope == Scopes.GLOBAL) {
-            self.emitInstruction(_instruction.ENCODE_DEFINE_GLOBAL(result_register, sb.index));
-        } else {
-            // define local
-        }
-    }
+//     inline fn defineGlobal(self: *Compiler, result_register: u8, name: []const u8) void {
+//         //const val = self.constantsPool.items[contantIndex];
+//
+//         if (sb.scope == Scopes.GLOBAL) {
+//             self.emitInstruction(_instruction.ENCODE_DEFINE_GLOBAL(result_register, sb.index));
+//         } else {
+//             // define local
+//         }
+//     }
 
     fn compileExpression(self: *Compiler, expr: ?*AST.Expression) ?u16 {
         self.cur_node = AST.CurrentNode{ .expression = @constCast(&expr.?.*) };
@@ -429,7 +428,7 @@ pub const Compiler = struct {
                 // const identifierName = self.allocator.dupe(u8, idenExpr.literal) catch unreachable;
                 // _ = self.addConstant(Value.createString(self.allocator, identifierName)); // Is this necessary?
 
-                if (self.symbol_table.resolve(idenExpr.literal)) |sb| {
+                if (self.resolved_symbol_table.get(idenExpr.resolved_symbol.?)) |sb| {
                     if (sb.scope == Scopes.GLOBAL) {
                         self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(reg, sb.index));
                     } else {
@@ -449,41 +448,49 @@ pub const Compiler = struct {
         return null;
     }
 
-    fn compileVarStatement(self: *Compiler, stmt: AST.VarStatement) void {
+    fn compileVarStatement(self: *Compiler, stmt: *AST.VarStatement) void {
         //const identifierName = self.allocator.dupe(u8, stmt.identifier.literal) catch unreachable;
         //_ = self.addConstant(Value.createString(self.allocator, identifierName)); // Is this necessary?
 
-        const identifierName = stmt.identifier.literal;
+        if(self.resolved_symbol_table.get(stmt.identifier.resolved_symbol.?)) |sb|{
+            var cIndex: u16 = 0; // Nil is the first constant in the pool, so if it stays zero here, it means a nil was emitted, so no need to change
+            if (stmt.expression != null) {
+                cIndex = self.compileExpression(stmt.expression).?;
+            } else {
+                self.emitNil();
+            }
 
-        var cIndex: u16 = 0; // Nil is the first constant in the pool, so if it stays zero here, it means a nil was emitted, so no need to change
-        if (stmt.expression != null) {
-            cIndex = self.compileExpression(stmt.expression).?;
-        } else {
-            self.emitNil();
+            const reg = self.current_scope_registers.pop().?;
+            self.freeRegister(reg);
+
+            if (sb.scope == Scopes.GLOBAL) {
+                self.emitInstruction(_instruction.ENCODE_DEFINE_GLOBAL(reg, sb.index));
+            } else {
+                // define local
+            }
+
         }
 
-        const reg = self.current_scope_registers.pop().?;
-        self.freeRegister(reg);
 
-        self.defineGlobal(reg, identifierName, cIndex);
+        //self.defineGlobal(reg, identifierName, cIndex);
     }
 
-    fn compileReturnStatement(self: *Compiler, stmt: AST.ReturnStatement) void {
+    fn compileReturnStatement(self: *Compiler, stmt: *AST.ReturnStatement) void {
         _ = self;
         _ = stmt;
     }
 
-    fn compileBlockStatement(self: *Compiler, stmt: AST.BlockStatement) void {
-        self.enterScope();
+    fn compileBlockStatement(self: *Compiler, stmt: *AST.BlockStatement) void {
+        // self.enterScope();
 
         for (stmt.statements.items) |stmt_node| {
             self.compile_stmts(stmt_node);
         }
 
-        self.leaveScope();
+       // self.leaveScope();
     }
 
-    inline fn compileExpressionStatement(self: *Compiler, stmt: AST.ExpressionStatement) void {
+    inline fn compileExpressionStatement(self: *Compiler, stmt: *AST.ExpressionStatement) void {
         _ = self.compileExpression(stmt.expression);
 
         if (self.current_scope_registers.pop()) |r| {

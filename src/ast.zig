@@ -63,6 +63,7 @@ pub const VarStatement = struct {
 pub const Identifier = struct {
     token: Token, // IDENT token.
     literal: []const u8,
+    resolved_symbol: ?[]const u8 = null,
 };
 
 pub const BlockStatement = struct {
@@ -102,8 +103,8 @@ pub const PrefixExpression = struct {
 pub const IfExpression = struct {
     token: Token,
     condition: ?*Expression = undefined,
-    ifBlock: ?BlockStatement = undefined,
-    elseBlock: ?BlockStatement = undefined,
+    ifBlock: ?*BlockStatement = undefined,
+    elseBlock: ?*BlockStatement = undefined,
 };
 
 pub const fnExpression = struct {
@@ -163,10 +164,10 @@ pub const StmtTypes = enum {
 };
 
 pub const Statement = union(StmtTypes) {
-    var_stmt: VarStatement,
-    return_stmt: ReturnStatement,
-    expression_stmt: ExpressionStatement,
-    block_stmt: BlockStatement,
+    var_stmt: *VarStatement,
+    return_stmt: *ReturnStatement,
+    expression_stmt: *ExpressionStatement,
+    block_stmt: *BlockStatement,
 };
 
 pub const ExprTypes = enum {

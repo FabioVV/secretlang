@@ -529,7 +529,7 @@ pub const Parser = struct {
     }
 
     pub fn parseBlockStatement(self: *Parser) ?AST.BlockStatement {
-        var block = AST.BlockStatement.init(std.heap.page_allocator, self.cur_token);
+        var block = AST.BlockStatement.init(self.allocator, self.cur_token);
 
         self.advance();
 
@@ -574,7 +574,11 @@ pub const Parser = struct {
             return null;
         }
 
-        if_exp.ifBlock = self.parseBlockStatement() orelse null;
+        const blockif = self.allocator.create(AST.BlockStatement) catch unreachable;
+        blockif.* = self.parseBlockStatement() orelse AST.BlockStatement.init(self.allocator, self.cur_token);
+
+        if_exp.ifBlock = blockif;
+        if_exp.elseBlock = null;
 
         if (self.peekIs(Tokens.ELSE)) {
             self.advance();
@@ -583,7 +587,11 @@ pub const Parser = struct {
                 return null;
             }
 
-            if_exp.elseBlock = self.parseBlockStatement() orelse null;
+            const blockelse = self.allocator.create(AST.BlockStatement) catch unreachable;
+            blockelse.* = self.parseBlockStatement() orelse AST.BlockStatement.init(self.allocator, self.cur_token);
+
+            if_exp.elseBlock = blockelse;
+
         }
 
         const expr = self.createExpressionNode();
@@ -804,7 +812,7 @@ pub const Parser = struct {
         return program;
     }
 
-    pub fn parseVarToken(self: *Parser) ?AST.VarStatement {
+    pub fn parseVarToken(self: *Parser) ?*AST.VarStatement {
         const var_token = self.cur_token;
 
         if (!self.expect(Tokens.IDENT, "identifier")) {
@@ -823,25 +831,28 @@ pub const Parser = struct {
 
         const expression = self.parseExpression(Precedence.DEFAULT);
 
-        return AST.VarStatement{ .token = var_token, .identifier = identifier, .expression = expression };
+        const varstmt = self.allocator.create(AST.VarStatement) catch unreachable;
+        varstmt.* = AST.VarStatement{ .token = var_token, .identifier = identifier, .expression = expression };
+
+        return varstmt;
     }
 
-    pub fn parseReturnToken(self: *Parser) ?AST.ReturnStatement {
-        var rstmt = AST.ReturnStatement{ .token = self.cur_token };
+    pub fn parseReturnToken(self: *Parser) ?*AST.ReturnStatement {
         self.advance();
 
         const expression = self.parseExpression(Precedence.DEFAULT);
 
-        rstmt.expression = expression;
+        const returnstmt = self.allocator.create(AST.ReturnStatement) catch unreachable;
+        returnstmt.* = AST.ReturnStatement{ .token = self.cur_token, .expression = expression };
 
-        return rstmt;
+        return returnstmt;
     }
 
-    pub fn parseExpressionStatement(self: *Parser) ?AST.ExpressionStatement {
-        var estmt = AST.ExpressionStatement{ .token = self.cur_token };
-        estmt.expression = self.parseExpression(Precedence.DEFAULT);
+    pub fn parseExpressionStatement(self: *Parser) ?*AST.ExpressionStatement {
+        const exprstmt = self.allocator.create(AST.ExpressionStatement) catch unreachable;
+        exprstmt.* = AST.ExpressionStatement{ .token = self.cur_token, .expression = self.parseExpression(Precedence.DEFAULT) };
 
-        return estmt;
+        return exprstmt;
     }
 
     pub fn parseExpression(self: *Parser, prec: Precedence) ?*AST.Expression {

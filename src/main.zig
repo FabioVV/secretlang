@@ -31,7 +31,7 @@ fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8)
     var p: *Parser = Parser.init(allocator, l);
     defer p.deinit();
 
-    const program = try p.parseProgram(allocator);
+    var program = try p.parseProgram(allocator);
     if (program == null) {
         errh.printError("error parsing program\n");
         return;
@@ -50,7 +50,7 @@ fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8)
         return;
     }
 
-    var c: *Compiler = Compiler.init(allocator, program.?, &l.source, &l.filename);
+    var c: *Compiler = Compiler.init(allocator, program.?, sema.resolved_names, &l.source, &l.filename);
     defer c.deinit();
 
     if (!c.compile()) {
