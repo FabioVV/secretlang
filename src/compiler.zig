@@ -30,6 +30,15 @@ const CompilerError = struct {
     message: []const u8,
 };
 
+pub const compilationScope = struct {
+    instructions: std.ArrayList(Instruction),
+    instructions_positions: std.AutoHashMap(u32, Position),
+
+    pub fn init(allocator: std.mem.Allocator) compilationScope {
+        return compilationScope{ .instructions = std.ArrayList(Instruction).init(allocator), .instructions_positions = std.AutoHashMap(u32, Position).init(allocator) };
+    }
+};
+
 pub const Compiler = struct {
     source: *[]const u8,
     filename: *[]const u8,
@@ -40,8 +49,8 @@ pub const Compiler = struct {
     allocator: std.mem.Allocator,
     arena: ?std.heap.ArenaAllocator,
 
-    instructions: std.ArrayList(Instruction),
-    instructions_positions: std.AutoHashMap(u32, Position),
+    cur_scope: usize,
+    scopes: std.ArrayList(compilationScope),
 
     constantsPool: std.ArrayList(Value),
     constantsPoolHashes: std.AutoHashMap(u64, u16), // For deduplication of constants
@@ -64,8 +73,9 @@ pub const Compiler = struct {
         compiler.source = source;
         compiler.filename = filename;
 
-        compiler.instructions = std.ArrayList(Instruction).init(compiler.allocator);
-        compiler.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.allocator);
+        compiler.cur_scope = 0;
+        compiler.scopes = std.ArrayList(compilationScope).init(compiler.allocator);
+        compiler.scopes.append(compilationScope.init(compiler.allocator)) catch unreachable; // main scope
 
         compiler.constantsPool = std.ArrayList(Value).init(compiler.allocator);
         compiler.constantsPoolHashes = std.AutoHashMap(u64, u16).init(compiler.allocator);
@@ -98,8 +108,9 @@ pub const Compiler = struct {
         compiler.source = source;
         compiler.filename = filename;
 
-        compiler.instructions = std.ArrayList(Instruction).init(compiler.allocator);
-        compiler.instructions_positions = std.AutoHashMap(u32, Position).init(compiler.allocator);
+        compiler.cur_scope = 0;
+        compiler.scopes = std.ArrayList(compilationScope).init(compiler.allocator);
+        compiler.scopes.append(compilationScope.init(compiler.allocator)) catch unreachable; // main scope
 
         compiler.constantsPool = std.ArrayList(Value).init(compiler.allocator);
         compiler.constantsPoolHashes = std.AutoHashMap(u64, u16).init(compiler.allocator);
@@ -181,6 +192,10 @@ pub const Compiler = struct {
         };
     }
 
+    //     fn currentScopeInstructions(self: *Compiler) std.ArrayList(Instruction) {
+    //         return self.scopes[self.cur_scope].instructions;
+    //     }
+
     fn registersState(self: *Compiler, op: []const u8) void {
         std.debug.print("\n=== {s} ===\n", .{op});
         std.debug.print("Allocated registers: ", .{});
@@ -219,13 +234,18 @@ pub const Compiler = struct {
         self.current_scope_registers.clearRetainingCapacity();
     }
 
-    //     fn enterScope(self: *Compiler) void {
-    //         self.symbol_table = SymbolTable.initEnclosed(self.allocator, self.symbol_table);
-    //     }
-    //
-    //     fn leaveScope(self: *Compiler) void {
-    //         self.symbol_table = self.symbol_table.parent_table.?;
-    //     }
+    fn enterScope(self: *Compiler) void {
+        self.scopes.append(compilationScope.init(self.allocator)) catch unreachable;
+        self.cur_scope += 1;
+    }
+
+    fn leaveScope(self: *Compiler) ?compilationScope {
+        self.cur_scope -= 1;
+        if (self.scopes.pop()) |sc| {
+            return sc;
+        }
+        return null;
+    }
 
     fn addConstant(self: *Compiler, val: Value) u16 {
         const value_hash = val.hash();
@@ -260,14 +280,14 @@ pub const Compiler = struct {
     }
 
     fn emitInstruction(self: *Compiler, instruction: Instruction) void {
-        self.instructions.append(instruction) catch |err| {
+        self.scopes.items[self.cur_scope].instructions.append(instruction) catch |err| {
             errh.exitWithError("unrecoverable error trying to emit instruction", err);
         };
 
         const opcode = _instruction.GET_OPCODE(instruction);
         if (self.canOpError(opcode)) {
             const token = self.getCurrentToken();
-            self.instructions_positions.put(@as(u32, @intCast(self.instructions.items.len - 1)), Position{ .line = token.position.line, .column = token.position.column, .filename = self.filename.* }) catch |err| {
+            self.scopes.items[self.cur_scope].instructions_positions.put(@as(u32, @intCast(self.scopes.items[self.cur_scope].instructions.items.len - 1)), Position{ .line = token.position.line, .column = token.position.column, .filename = self.filename.* }) catch |err| {
                 errh.exitWithError("failed to store debug for instruction", err);
             };
         }
@@ -281,7 +301,7 @@ pub const Compiler = struct {
             return 0;
         };
 
-        self.instructions.append(_instruction.ENCODE_LOADK(reg, contantIndex)) catch |err| {
+        self.scopes.items[self.cur_scope].instructions.append(_instruction.ENCODE_LOADK(reg, contantIndex)) catch |err| {
             errh.exitWithError("unrecoverable error trying to emit constant", err);
         };
 
@@ -290,12 +310,12 @@ pub const Compiler = struct {
 
     fn emitJumpIfFalse(self: *Compiler, ra: u8) usize {
         self.emitInstruction(_instruction.ENCODE_JUMP_IF_FALSE(ra));
-        return self.instructions.items.len - 1;
+        return self.scopes.items[self.cur_scope].instructions.items.len - 1;
     }
 
     fn emitJump(self: *Compiler) usize {
         self.emitInstruction(_instruction.ENCODE_JUMP());
-        return self.instructions.items.len - 1;
+        return self.scopes.items[self.cur_scope].instructions.items.len - 1;
     }
 
     fn emitNil(self: *Compiler) void {
@@ -308,7 +328,7 @@ pub const Compiler = struct {
 
     fn patchJump(self: *Compiler, pos: usize) void {
         const one: usize = 1;
-        const jump = self.instructions.items.len - pos - one;
+        const jump = self.scopes.items[self.cur_scope].instructions.items.len - pos - one;
 
         // ensure the jump doesn't exceed the allowed 18-bit range
         if (jump > 0x3FFFF) { // jump > 18 bits
@@ -316,7 +336,7 @@ pub const Compiler = struct {
             return;
         }
 
-        self.instructions.items[pos] = self.instructions.items[pos] | (@as(Instruction, @intCast(jump)) & 0x3FFFF);
+        self.scopes.items[self.cur_scope].instructions.items[pos] = self.scopes.items[self.cur_scope].instructions.items[pos] | (@as(Instruction, @intCast(jump)) & 0x3FFFF);
     }
 
     //     inline fn defineGlobal(self: *Compiler, result_register: u8, name: []const u8) void {
@@ -412,9 +432,35 @@ pub const Compiler = struct {
 
                 self.patchJump(elseJump);
             },
-            //AST.ArrayExpression => |arr_expr|{
+            AST.Expression.fn_expr => |fn_expr| {
+                self.enterScope();
 
-            // },
+                self.compileBlockStatement(fn_expr.body.?);
+
+                const lenFnBody = self.scopes.items[self.cur_scope].instructions.items.len;
+
+                if (lenFnBody > 0) {
+                    const last_inst = self.scopes.items[self.cur_scope].instructions.items[self.scopes.items[self.cur_scope].instructions.items.len - 1];
+
+                    if (_instruction.GET_OPCODE(last_inst) != _instruction.Opcode.OP_RETURN) { // Change this to emit nil maybe?
+
+                        const result = self.allocateRegister() catch {
+                            self.cError("out of registers");
+                            return null;
+                        };
+
+                        self.emitInstruction(_instruction.ENCODE_RETURN_N(result));
+                    }
+                }
+
+                const compScope = self.leaveScope().?;
+
+                if (self.current_scope_registers.pop()) |r| {
+                    self.freeRegister(r);
+                }
+                return self.emitConstant(Value.createFunctionExpr(self.allocator, compScope, &self.objects));
+            },
+
             AST.Expression.identifier_expr => |idenExpr| {
                 const reg = self.allocateRegister() catch {
                     self.cError("out of registers");
@@ -466,8 +512,17 @@ pub const Compiler = struct {
     }
 
     fn compileReturnStatement(self: *Compiler, stmt: *AST.ReturnStatement) void {
-        _ = self;
-        _ = stmt;
+        _ = self.compileExpression(stmt.expression);
+
+        const reg = self.current_scope_registers.pop().?;
+        self.freeRegister(reg);
+
+        const result = self.allocateRegister() catch {
+            self.cError("out of registers");
+            return;
+        };
+
+        self.emitInstruction(_instruction.ENCODE_RETURN(result, reg));
     }
 
     fn compileBlockStatement(self: *Compiler, stmt: *AST.BlockStatement) void {

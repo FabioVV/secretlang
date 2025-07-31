@@ -11,17 +11,17 @@ const Position = _token.Position;
 const Lexer = @import("lexer.zig").Lexer;
 const Parser = @import("parser.zig").Parser;
 const AST = @import("ast.zig");
+const compilationScope = @import("compiler.zig").compilationScope;
 const _instruction = @import("instruction.zig");
 const _value = @import("value.zig");
 const Value = _value.Value;
 const Object = _value.Object;
 const String = _value.String;
-
-const NIL = Value{ .NIL = void{} };
 const Instruction = _instruction.Instruction;
 
 pub const MAX_REGISTERS = 255;
 pub const MAX_GLOBALS = 65535;
+const NIL = Value{ .NIL = void{} };
 
 pub const VM = struct {
     registers: std.BoundedArray(Value, MAX_REGISTERS),
@@ -30,8 +30,7 @@ pub const VM = struct {
     arena: ?std.heap.ArenaAllocator,
 
     source: *[]const u8,
-    instructions: *std.ArrayList(Instruction),
-    instructions_positions: *std.AutoHashMap(u32, Position),
+    compiledInstructions: *compilationScope,
 
     constantsPool: *std.ArrayList(Value),
     globals: std.BoundedArray(Value, MAX_GLOBALS),
@@ -41,7 +40,7 @@ pub const VM = struct {
 
     pc: usize,
 
-    pub fn init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
+    pub fn init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), compiledInst: *compilationScope, source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const vm = arena.allocator().create(VM) catch unreachable;
 
@@ -52,9 +51,9 @@ pub const VM = struct {
         vm.allocator = vm.arena.?.allocator();
 
         vm.registers = std.BoundedArray(Value, MAX_REGISTERS).init(MAX_REGISTERS) catch unreachable;
-        vm.instructions = instructions;
+        vm.compiledInstructions = compiledInst;
         vm.constantsPool = constantsPool;
-        vm.instructions_positions = instructions_positions;
+
         vm.globals = std.BoundedArray(Value, MAX_GLOBALS).init(MAX_GLOBALS) catch unreachable;
         vm.strings = strings;
         vm.objects = objects;
@@ -62,16 +61,15 @@ pub const VM = struct {
         return vm;
     }
 
-    pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), instructions: *std.ArrayList(Instruction), instructions_positions: *std.AutoHashMap(u32, Position), globals: *std.BoundedArray(Value, MAX_GLOBALS), source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
+    pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), compiledInst: *compilationScope, globals: *std.BoundedArray(Value, MAX_GLOBALS), source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
         const vm = allocator.create(VM) catch unreachable;
 
         vm.source = source;
         vm.arena = null;
         vm.allocator = allocator;
         vm.registers = std.BoundedArray(Value, MAX_REGISTERS).init(MAX_REGISTERS) catch unreachable;
-        vm.instructions = instructions;
+        vm.compiledInstructions = compiledInst;
         vm.constantsPool = constantsPool;
-        vm.instructions_positions = instructions_positions;
 
         vm.globals = globals.*;
         vm.strings = strings;
@@ -104,7 +102,7 @@ pub const VM = struct {
 
     /// Emits a runtime error
     fn rError(self: *VM, comptime message: []const u8, varargs: anytype) void {
-        const pos = self.instructions_positions.get(@intCast(self.pc)).?;
+        const pos = self.compiledInstructions.instructions_positions.get(@intCast(self.pc)).?;
         const source = dbg.getSourceLine(self.source.*, pos);
 
         const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, pos, source);
@@ -169,6 +167,7 @@ pub const VM = struct {
                 else
                     false,
                 .ARRAY => false,
+                .FUNCTION_EXPR => false,
             },
             .NIL => switch (RB) {
                 .NIL => true,
@@ -200,6 +199,7 @@ pub const VM = struct {
                 else
                     true,
                 .ARRAY => false,
+                .FUNCTION_EXPR => false,
             },
             .NIL => switch (RB) {
                 .NIL => false,
@@ -425,8 +425,8 @@ pub const VM = struct {
     }
 
     pub fn run(self: *VM) void {
-        while (self.pc < self.instructions.*.items.len) : (self.pc += 1) {
-            const curInstruction = self.instructions.*.items[self.pc];
+        while (self.pc < self.compiledInstructions.instructions.items.len) : (self.pc += 1) {
+            const curInstruction = self.compiledInstructions.instructions.items[self.pc];
             const opcode = _instruction.GET_OPCODE(curInstruction);
 
             switch (opcode) {
@@ -436,7 +436,7 @@ pub const VM = struct {
                     const contantValue = self.GET_CONSTANT(constantIdx).?;
 
                     self.registers.set(RC, contantValue);
-//                     self.registers.get(RC).print();
+                    //self.registers.get(RC).print();
                 },
                 .OP_ADD => {
                     self.*.mathAdd(curInstruction);

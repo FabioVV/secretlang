@@ -143,6 +143,7 @@ pub const Lexer = struct {
                 .NIL => Token.makeToken(Tokens.NIL, "NIL", pos),
                 .TRUE => Token.makeToken(Tokens.TRUE, "TRUE", pos),
                 .FALSE => Token.makeToken(Tokens.FALSE, "FALSE", pos),
+                .RETURN => Token.makeToken(Tokens.RETURN, "RETURN", pos),
                 else => unreachable,
             };
         } else {

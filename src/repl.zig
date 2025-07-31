@@ -77,7 +77,7 @@ pub fn launch() !void {
                 continue;
             }
 
-            var vm: *VM = VM.repl_init(allocator, &c.constantsPool, &c.instructions, &c.instructions_positions, @constCast(&globals), &l.source, c.strings, c.objects);
+            var vm: *VM = VM.repl_init(allocator, &c.constantsPool, &c.scopes.items[0], @constCast(&globals), &l.source, c.strings, c.objects);
 
             vm.run();
         }

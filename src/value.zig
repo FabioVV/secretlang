@@ -1,5 +1,8 @@
 const std = @import("std");
 const VM = @import("vm.zig").VM;
+const compilationScope = @import("compiler.zig").compilationScope;
+const Instruction = @import("instruction.zig").Instruction;
+const Position = @import("token.zig").Position;
 
 pub const ValueType = enum {
     NUMBER,
@@ -11,6 +14,7 @@ pub const ValueType = enum {
 pub const ObjectTypes = enum {
     STRING,
     ARRAY,
+    FUNCTION_EXPR,
 };
 
 pub const Array = struct {
@@ -37,13 +41,49 @@ pub const String = struct {
     }
 };
 
+pub const FunctionExpr = struct {
+    instructions: std.ArrayList(Instruction),
+    instructions_positions: std.AutoHashMap(u32, Position),
+
+    pub fn init(allocator: std.mem.Allocator, compiledFn: compilationScope) *FunctionExpr {
+        const fn_obj = allocator.create(FunctionExpr) catch unreachable;
+
+        var compiledFunction = compiledFn;
+        const compiledInstructions = compiledFunction.instructions.toOwnedSlice() catch unreachable;
+
+        var instructions = std.ArrayList(Instruction).init(allocator);
+        instructions.appendSlice(compiledInstructions) catch unreachable;
+
+        fn_obj.* = FunctionExpr{ .instructions = instructions, .instructions_positions = compiledFn.instructions_positions.cloneWithAllocator(allocator) catch unreachable };
+
+        compiledFunction.instructions.deinit();
+        compiledFunction.instructions_positions.deinit();
+
+        return fn_obj;
+    }
+};
+
 pub const Object = struct {
     next: ?*Object,
 
     data: union(ObjectTypes) {
         STRING: *String,
         ARRAY: *Array,
+        FUNCTION_EXPR: *FunctionExpr,
     },
+
+    pub fn initFnExpr(allocator: std.mem.Allocator, data: *FunctionExpr, objects: *?*Object) *Object {
+        const obj = allocator.create(Object) catch unreachable;
+
+        obj.* = Object{
+            .data = .{ .FUNCTION_EXPR = data },
+            .next = objects.*,
+        };
+
+        objects.* = obj;
+
+        return obj;
+    }
 
     pub fn initString(allocator: std.mem.Allocator, data: *String, objects: *?*Object) *Object {
         const obj = allocator.create(Object) catch unreachable;
@@ -93,6 +133,9 @@ pub const Value = union(ValueType) {
                 .ARRAY => |a| {
                     hasher.update(&std.mem.toBytes(a.*));
                 },
+                .FUNCTION_EXPR => |f| {
+                    hasher.update(&std.mem.toBytes(f.*));
+                },
             },
         }
 
@@ -109,6 +152,15 @@ pub const Value = union(ValueType) {
 
     pub inline fn createBoolean(boolean: bool) Value {
         return Value{ .BOOLEAN = boolean };
+    }
+
+    pub inline fn createFunctionExpr(allocator: std.mem.Allocator, compiledFn: compilationScope, objects: *?*Object) Value {
+        const fn_obj = FunctionExpr.init(allocator, compiledFn);
+        const obj = Object.initFnExpr(allocator, fn_obj, objects);
+
+        const val = Value{ .OBJECT = obj };
+
+        return val;
     }
 
     pub inline fn createArray(allocator: std.mem.Allocator, objects: *?*Object) Value {
@@ -217,6 +269,7 @@ pub const Value = union(ValueType) {
             .OBJECT => |obj| switch (obj.data) {
                 .STRING => |str| str.chars.len > 0,
                 .ARRAY => |arr| arr.items.items.len > 0,
+                .FUNCTION_EXPR => true,
             },
         };
     }
@@ -231,6 +284,7 @@ pub const Value = union(ValueType) {
                 .OBJECT => |inn_obj| switch (inn_obj.*.data) {
                     .STRING => std.debug.print("{s},", .{inn_obj.data.STRING.chars}),
                     .ARRAY => printArrItems(inn_obj.data.ARRAY),
+                    .FUNCTION_EXPR => std.debug.print("<anonymous function expression>\n", .{}),
                 },
             }
         }
@@ -245,6 +299,7 @@ pub const Value = union(ValueType) {
             .OBJECT => |obj| switch (obj.*.data) {
                 .STRING => std.debug.print("{s}\n", .{obj.data.STRING.chars}),
                 .ARRAY => printArrItems(obj.data.ARRAY),
+                .FUNCTION_EXPR => std.debug.print("<anonymous function expression>\n", .{}),
             },
         };
     }

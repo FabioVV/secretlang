@@ -206,6 +206,13 @@ pub const SemanticAnalyzer = struct {
 
                 self.sError("undefined variable: {s}", .{idenExpr.literal});
             },
+            AST.Expression.fn_expr => |fnExpr| {
+                self.enterScope();
+
+                self.analyzeFnBlock(fnExpr.body.?);
+
+                self.leaveScope();
+            },
             else => unreachable,
         }
     }
