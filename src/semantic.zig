@@ -11,6 +11,8 @@ const _symbol_table = @import("symbol.zig");
 const SymbolTable = _symbol_table.SymbolTable;
 const Symbol = _symbol_table.Symbol;
 const Scopes = _symbol_table.Scope;
+const _token = @import("token.zig");
+const Token = _token.Token;
 
 pub const SemanticAnalyzer = struct {
     ast_program: *AST.Program,
@@ -75,6 +77,46 @@ pub const SemanticAnalyzer = struct {
         }
     }
 
+    /// Emits a compiler error with a custom message
+    pub fn sError(self: *SemanticAnalyzer, comptime message: []const u8, varargs: anytype) void {
+        self.had_error = true;
+
+        const token: Token = switch (self.cur_node) {
+            .statement => |stmt| switch (stmt.*) {
+                .var_stmt => |varstmt| varstmt.identifier.token,
+                inline else => |v| v.token,
+            },
+            .expression => |expr| switch (expr.*) {
+                inline else => |v| v.token,
+            },
+        };
+
+        const semanticErrMsg = std.fmt.allocPrint(self.allocator, message, varargs) catch |err| {
+            errh.exitWithError("unrecoverable error trying to runtime error message", err);
+        };
+
+        const source = dbg.getSourceLine(self.source.*, token.position);
+        const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, token.position, source);
+
+        defer self.allocator.free(fmtCaret.caret);
+        defer self.allocator.free(fmtCaret.spacing);
+        defer self.allocator.free(semanticErrMsg);
+
+        const errMsg = std.fmt.allocPrint(self.allocator,
+            \\
+            \\-> In [{s}] {d}:{d}
+            \\ {d} | {s}
+            \\   {s}| {s}
+            \\   {s}| semantic error: {s}
+            \\
+            \\
+        , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, semanticErrMsg }) catch |err| {
+            errh.exitWithError("unrecoverable error trying to write semantic error message", err);
+        };
+
+        errh.printError(errMsg);
+    }
+
     fn enterScope(self: *SemanticAnalyzer) void {
         self.scope_depth += 1;
         self.symbol_table = SymbolTable.initEnclosed(self.allocator, self.symbol_table);
@@ -86,13 +128,12 @@ pub const SemanticAnalyzer = struct {
     }
 
     pub fn analyzeVar(self: *SemanticAnalyzer, stmt: *AST.VarStatement) void {
-        if (self.symbol_table.resolveCurrent(stmt.identifier.literal) != null) {
-            print("variable already defined: {s}\n", .{stmt.identifier.literal});
-            self.had_error = true;
+        if (self.symbol_table.resolveCurrent(stmt.identifier.literal)) |s| {
+            self.sError("variable '{s}' already defined on line {d}", .{ stmt.identifier.literal, s.token.position.line });
             return;
         }
 
-        const symbol = self.symbol_table.define(stmt.identifier.literal, stmt.token.position.line, null);
+        const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, stmt.token.position.line, null);
         stmt.identifier.resolved_symbol = symbol;
 
         self.analyzeExpression(stmt.expression);
@@ -142,8 +183,7 @@ pub const SemanticAnalyzer = struct {
                     return;
                 }
 
-                print("undefined variable: {s}\n", .{idenExpr.literal});
-                self.had_error = true;
+                self.sError("undefined variable: {s}", .{idenExpr.literal});
             },
             else => unreachable,
         }

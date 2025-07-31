@@ -1,4 +1,7 @@
 const std = @import("std");
+
+const _token = @import("token.zig");
+const Token = _token.Token;
 const vType = @import("value.zig").ValueType;
 
 pub const Scope = enum {
@@ -7,6 +10,7 @@ pub const Scope = enum {
 };
 
 pub const Symbol = struct {
+    token: Token,
     name: []const u8,
     scope: Scope,
     index: u16,
@@ -51,13 +55,13 @@ pub const SymbolTable = struct {
         }
     }
 
-    pub fn define(self: *SymbolTable, name: []const u8, defined: usize, vtype: ?vType) Symbol { // Maybe create a defineLocal so it can have register states etc
+    pub fn define(self: *SymbolTable, token: Token, name: []const u8, defined: usize, vtype: ?vType) Symbol { // Maybe create a defineLocal so it can have register states etc
         var symbol: Symbol = undefined;
 
         if (self.parent_table != null) {
-            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .LOCAL, .defined = defined, .last_use = null, .type = vtype orelse null };
+            symbol = Symbol{ .token = token, .name = name, .index = self.total_definitions, .scope = .LOCAL, .defined = defined, .last_use = null, .type = vtype orelse null };
         } else {
-            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .GLOBAL, .defined = defined, .last_use = null, .type = vtype orelse null };
+            symbol = Symbol{ .token = token, .name = name, .index = self.total_definitions, .scope = .GLOBAL, .defined = defined, .last_use = null, .type = vtype orelse null };
         }
 
         self.table.put(name, symbol) catch unreachable;
