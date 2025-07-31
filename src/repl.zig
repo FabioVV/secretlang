@@ -64,17 +64,16 @@ pub fn launch() !void {
                 continue;
             }
 
-
             var sema: *SemanticAnalyzer = SemanticAnalyzer.init(allocator, program.?, &l.source, &l.filename);
             defer sema.deinit();
 
-            if(!sema.analyze()){
+            if (!sema.analyze()) {
                 continue;
             }
 
-            var c: *Compiler = Compiler.repl_init(allocator, program.?, &l.source, &l.filename, sema.resolved_names, &strings);
+            var c: *Compiler = Compiler.repl_init(allocator, program.?, &l.source, &l.filename, &strings);
 
-            if(!c.compile()){
+            if (!c.compile()) {
                 continue;
             }
 

@@ -1,5 +1,6 @@
 const std = @import("std");
 const _token = @import("token.zig");
+const Symbol = @import("symbol.zig").Symbol;
 const Token = _token.Token;
 const Tokens = _token.Tokens;
 
@@ -63,7 +64,7 @@ pub const VarStatement = struct {
 pub const Identifier = struct {
     token: Token, // IDENT token.
     literal: []const u8,
-    resolved_symbol: ?[]const u8 = null,
+    resolved_symbol: ?Symbol = null,
 };
 
 pub const BlockStatement = struct {

@@ -46,11 +46,11 @@ fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8)
     var sema: *SemanticAnalyzer = SemanticAnalyzer.init(allocator, program.?, &l.source, &l.filename);
     defer sema.deinit();
 
-    if(!sema.analyze()){
+    if (!sema.analyze()) {
         return;
     }
 
-    var c: *Compiler = Compiler.init(allocator, program.?, sema.resolved_names, &l.source, &l.filename);
+    var c: *Compiler = Compiler.init(allocator, program.?, &l.source, &l.filename);
     defer c.deinit();
 
     if (!c.compile()) {

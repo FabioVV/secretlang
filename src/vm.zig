@@ -436,7 +436,7 @@ pub const VM = struct {
                     const contantValue = self.GET_CONSTANT(constantIdx).?;
 
                     self.registers.set(RC, contantValue);
-                    self.registers.get(RC).print();
+//                     self.registers.get(RC).print();
                 },
                 .OP_ADD => {
                     self.*.mathAdd(curInstruction);
@@ -537,7 +537,7 @@ pub const VM = struct {
                     const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
 
                     self.registers.set(RC, self.globals.slice()[globalIdx]);
-                    self.registers.get(RC).print();
+                    //self.registers.get(RC).print();
                 },
                 else => {
                     self.rError("Unhandled OPCODE: {any} \n", .{opcode});
