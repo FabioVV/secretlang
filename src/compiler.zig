@@ -187,6 +187,7 @@ pub const Compiler = struct {
             .OP_MINUS,
             .OP_BANG,
             .OP_GET_GLOBAL, // can runtime error
+            .OP_CALL,
             => true,
             else => false, // won't error (problably)
         };
@@ -442,8 +443,7 @@ pub const Compiler = struct {
                 if (lenFnBody > 0) {
                     const last_inst = self.scopes.items[self.cur_scope].instructions.items[self.scopes.items[self.cur_scope].instructions.items.len - 1];
 
-                    if (_instruction.GET_OPCODE(last_inst) != _instruction.Opcode.OP_RETURN) { // Change this to emit nil maybe?
-
+                    if (_instruction.GET_OPCODE(last_inst) != _instruction.Opcode.OP_RETURN) {
                         const result = self.allocateRegister() catch {
                             self.cError("out of registers");
                             return null;
@@ -458,9 +458,20 @@ pub const Compiler = struct {
                 if (self.current_scope_registers.pop()) |r| {
                     self.freeRegister(r);
                 }
+
                 return self.emitConstant(Value.createFunctionExpr(self.allocator, compScope, &self.objects));
             },
+            AST.Expression.call_expr => |call_expr| {
+                _ = self.compileExpression(call_expr.function.?);
 
+                const fn_register = self.current_scope_registers.pop().?;
+
+                self.emitInstruction(_instruction.ENCODE_CALL(fn_register));
+
+                self.freeRegister(fn_register);
+
+                return null;
+            },
             AST.Expression.identifier_expr => |idenExpr| {
                 const reg = self.allocateRegister() catch {
                     self.cError("out of registers");
@@ -492,9 +503,9 @@ pub const Compiler = struct {
         //_ = self.addConstant(Value.createString(self.allocator, identifierName)); // Is this necessary?
 
         const sb = stmt.identifier.resolved_symbol.?;
-        var cIndex: u16 = 0; // Nil is the first constant in the pool, so if it stays zero here, it means a nil was emitted, so no need to change
+        //var cIndex: u16 = 0; // Nil is the first constant in the pool, so if it stays zero here, it means a nil was emitted, so no need to change
         if (stmt.expression != null) {
-            cIndex = self.compileExpression(stmt.expression).?;
+            _ = self.compileExpression(stmt.expression);
         } else {
             self.emitNil();
         }

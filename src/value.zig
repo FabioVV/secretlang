@@ -209,6 +209,13 @@ pub const Value = union(ValueType) {
         };
     }
 
+    pub inline fn asObject(self: Value) ?*Object {
+        return switch (self) {
+            .OBJECT => |obj| obj,
+            else => null,
+        };
+    }
+
     pub inline fn asZigArray(self: Value) ?*Array {
         return switch (self) {
             .OBJECT => |obj| switch (obj.*.data) {
@@ -219,9 +226,12 @@ pub const Value = union(ValueType) {
         };
     }
 
-    pub inline fn asObject(self: Value) ?*Object {
+    pub inline fn asFunctionExpr(self: Value) ?*FunctionExpr {
         return switch (self) {
-            .OBJECT => |obj| obj,
+            .OBJECT => |obj| switch (obj.*.data) {
+                .FUNCTION_EXPR => |f| f,
+                else => null,
+            },
             else => null,
         };
     }

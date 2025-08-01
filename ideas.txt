@@ -1,5 +1,7 @@
 TODO: fix tests
 
+TODO: store the line of code of the instruction in the instruction_position hash, much easier
+
 1 - Add error correction suggestion:
 context aware suggestions
 spelling checking with Levenshtein Distance

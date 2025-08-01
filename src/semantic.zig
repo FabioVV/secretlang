@@ -167,8 +167,7 @@ pub const SemanticAnalyzer = struct {
     }
 
     pub fn analyzeReturn(self: *SemanticAnalyzer, stmt: *AST.ReturnStatement) void {
-        _ = self;
-        _ = stmt;
+        self.analyzeExpression(stmt.expression);
     }
 
     pub fn analyzeExpression(self: *SemanticAnalyzer, expr: ?*AST.Expression) void {
@@ -213,7 +212,12 @@ pub const SemanticAnalyzer = struct {
 
                 self.leaveScope();
             },
-            else => unreachable,
+            AST.Expression.call_expr => |callExpr| {
+                self.analyzeExpression(callExpr.function);
+            },
+            else => {
+                self.sError("unhandled expression during semantic analysis: {any}", .{self.cur_node.expression});
+            },
         }
     }
 

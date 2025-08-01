@@ -17,20 +17,48 @@ const _value = @import("value.zig");
 const Value = _value.Value;
 const Object = _value.Object;
 const String = _value.String;
+const FunctionExpr = _value.FunctionExpr;
 const Instruction = _instruction.Instruction;
 
 pub const MAX_REGISTERS = 255;
 pub const MAX_GLOBALS = 65535;
+pub const MAX_FRAMES = 1024;
+pub const STACK_SIZE = 4096;
+
 const NIL = Value{ .NIL = void{} };
+const TRUE = Value{ .BOOLEAN = true };
+const FALSE = Value{ .BOOLEAN = false };
+
+const CallFrame = struct {
+    function: *FunctionExpr,
+    pc: usize,
+
+    pub fn init(function: *FunctionExpr) CallFrame {
+        return CallFrame{
+            .pc = 0,
+            .function = function,
+        };
+    }
+
+    pub inline fn instructions(self: *CallFrame) []Instruction {
+        return self.function.instructions.items;
+    }
+
+    pub inline fn instructionsPositions(self: *CallFrame) std.AutoHashMap(u32, Position) {
+        return self.function.instructions_positions;
+    }
+};
 
 pub const VM = struct {
     registers: std.BoundedArray(Value, MAX_REGISTERS),
+    stack: std.BoundedArray(Value, STACK_SIZE),
+    frames: std.BoundedArray(CallFrame, MAX_FRAMES),
 
     allocator: std.mem.Allocator,
     arena: ?std.heap.ArenaAllocator,
 
     source: *[]const u8,
-    compiledInstructions: *compilationScope,
+    //     compiledInstructions: *compilationScope,
 
     constantsPool: *std.ArrayList(Value),
     globals: std.BoundedArray(Value, MAX_GLOBALS),
@@ -38,25 +66,32 @@ pub const VM = struct {
     objects: ?*Object,
     strings: *std.StringHashMap(Value),
 
-    pc: usize,
+    frameIndex: usize,
 
     pub fn init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), compiledInst: *compilationScope, source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const vm = arena.allocator().create(VM) catch unreachable;
 
-        vm.pc = 0;
+        vm.frameIndex = 1;
 
         vm.source = source;
         vm.arena = arena;
         vm.allocator = vm.arena.?.allocator();
 
         vm.registers = std.BoundedArray(Value, MAX_REGISTERS).init(MAX_REGISTERS) catch unreachable;
-        vm.compiledInstructions = compiledInst;
+        vm.stack = std.BoundedArray(Value, STACK_SIZE).init(STACK_SIZE) catch unreachable;
+        vm.frames = std.BoundedArray(CallFrame, MAX_FRAMES).init(MAX_FRAMES) catch unreachable;
+
+        //vm.compiledInstructions = compiledInst;
         vm.constantsPool = constantsPool;
 
         vm.globals = std.BoundedArray(Value, MAX_GLOBALS).init(MAX_GLOBALS) catch unreachable;
         vm.strings = strings;
         vm.objects = objects;
+
+        const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, &vm.objects);
+        const mainCallFrame = CallFrame.init(mainFunction.asFunctionExpr().?);
+        vm.frames.slice()[0] = mainCallFrame;
 
         return vm;
     }
@@ -64,18 +99,26 @@ pub const VM = struct {
     pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), compiledInst: *compilationScope, globals: *std.BoundedArray(Value, MAX_GLOBALS), source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
         const vm = allocator.create(VM) catch unreachable;
 
+        vm.frameIndex = 1;
+
         vm.source = source;
         vm.arena = null;
         vm.allocator = allocator;
+
         vm.registers = std.BoundedArray(Value, MAX_REGISTERS).init(MAX_REGISTERS) catch unreachable;
-        vm.compiledInstructions = compiledInst;
+        vm.stack = std.BoundedArray(Value, STACK_SIZE).init(STACK_SIZE) catch unreachable;
+        vm.frames = std.BoundedArray(CallFrame, MAX_FRAMES).init(MAX_FRAMES) catch unreachable;
+
+        //vm.compiledInstructions = compiledInst;
         vm.constantsPool = constantsPool;
 
         vm.globals = globals.*;
         vm.strings = strings;
         vm.objects = objects;
 
-        vm.pc = 0;
+        const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, &vm.objects);
+        const mainCallFrame = CallFrame.init(mainFunction.asFunctionExpr().?);
+        vm.frames.slice()[0] = mainCallFrame;
 
         return vm;
     }
@@ -102,7 +145,7 @@ pub const VM = struct {
 
     /// Emits a runtime error
     fn rError(self: *VM, comptime message: []const u8, varargs: anytype) void {
-        const pos = self.compiledInstructions.instructions_positions.get(@intCast(self.pc)).?;
+        const pos = self.currentCallFrame().instructionsPositions().get(@intCast(self.currentCallFrame().pc)).?;
         const source = dbg.getSourceLine(self.source.*, pos);
 
         const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, pos, source);
@@ -126,6 +169,20 @@ pub const VM = struct {
         };
 
         errh.printError(errMsg);
+    }
+
+    inline fn currentCallFrame(self: *VM) *CallFrame {
+        return &self.frames.slice()[self.frameIndex - 1];
+    }
+
+    inline fn pushCallFrame(self: *VM, frame: CallFrame) void {
+        self.frames.slice()[self.frameIndex] = frame;
+        self.frameIndex += 1;
+    }
+
+    inline fn popCallFrame(self: *VM) CallFrame {
+        self.frameIndex -= 1;
+        return self.frames.slice()[self.frameIndex];
     }
 
     inline fn GET_CONSTANT(self: *VM, idx: u16) ?Value {
@@ -425,9 +482,11 @@ pub const VM = struct {
     }
 
     pub fn run(self: *VM) void {
-        while (self.pc < self.compiledInstructions.instructions.items.len) : (self.pc += 1) {
-            const curInstruction = self.compiledInstructions.instructions.items[self.pc];
+        while (self.currentCallFrame().pc < self.currentCallFrame().instructions().len) : (self.currentCallFrame().pc += 1) {
+            const curInstruction = self.currentCallFrame().instructions()[self.currentCallFrame().pc];
             const opcode = _instruction.GET_OPCODE(curInstruction);
+
+            //std.debug.print("{s}\n", .{@tagName(opcode)});
 
             switch (opcode) {
                 .OP_LOADK => {
@@ -519,12 +578,12 @@ pub const VM = struct {
 
                     if (!RC.isTruthy()) {
                         const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
-                        self.pc += jumpOffset;
+                        self.currentCallFrame().pc += jumpOffset;
                     }
                 },
                 .OP_JUMP => {
                     const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
-                    self.pc += jumpOffset;
+                    self.currentCallFrame().pc += jumpOffset;
                 },
                 .OP_SET_GLOBAL => {
                     const RC = self.registers.get(_instruction.DECODE_RC(curInstruction));
@@ -537,7 +596,33 @@ pub const VM = struct {
                     const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
 
                     self.registers.set(RC, self.globals.slice()[globalIdx]);
-                    //self.registers.get(RC).print();
+                },
+                .OP_CALL => {
+                    const RC = self.registers.get(_instruction.DECODE_RC(curInstruction));
+                    //
+                    RC.print();
+
+                    if (RC.asFunctionExpr()) |f| {
+                        const newFrame = CallFrame.init(f);
+                        self.pushCallFrame(newFrame);
+                    } else {
+                        self.rError("type error: tried calling non-function", .{});
+                    }
+                },
+                .OP_RETURN => {
+                    const RC = _instruction.DECODE_RC(curInstruction);
+                    const RA = self.registers.get(_instruction.DECODE_RA(curInstruction));
+
+                    _ = self.popCallFrame();
+
+                    self.registers.set(RC, RA);
+                    self.registers.get(RC).print();
+                },
+                .OP_RETURN_N => {
+                    const RC = _instruction.DECODE_RC(curInstruction);
+                    _ = self.popCallFrame();
+
+                    self.registers.set(RC, NIL);
                 },
                 else => {
                     self.rError("Unhandled OPCODE: {any} \n", .{opcode});

@@ -42,8 +42,9 @@ pub const Opcode = enum(u8) {
     OP_SET_LOCAL = 21,
     OP_GET_LOCAL = 22,
 
-    OP_RETURN = 23,
-    OP_RETURN_N = 24,
+    OP_CALL = 23,
+    OP_RETURN = 24,
+    OP_RETURN_N = 25,
 };
 
 // Maybe make a struct InstructionHandler to encode/decode
@@ -103,12 +104,13 @@ pub inline fn ENCODE_BOOLEAN_FALSE(r_dest: u8) Instruction {
 pub inline fn ENCODE_NIL(r_dest: u8) Instruction {
     return I(@intFromEnum(Opcode.OP_NIL)) << 26 | (I(r_dest) << 18);
 }
-
-pub inline fn ENCODE_JUMP_IF_FALSE(r_dest: u8) Instruction { // The instrutions here is incomplete, there is 18 bits which are set during compile time
+/// Generates a incomplete jump instruction with 18 free bits, where during compilation it must be completed
+pub inline fn ENCODE_JUMP_IF_FALSE(r_dest: u8) Instruction {
     return I(@intFromEnum(Opcode.OP_JUMP_IF_FALSE)) << 26 | (I(r_dest) << 18);
 }
 
-pub inline fn ENCODE_JUMP() Instruction { // The instrutions here is incomplete, there is 18 bits which are set during compile time
+/// Generates a incomplete jump instruction with 18 free bits, where during compilation it must be completed
+pub inline fn ENCODE_JUMP() Instruction {
     return I(@intFromEnum(Opcode.OP_JUMP)) << 26;
 }
 
@@ -122,6 +124,10 @@ pub inline fn ENCODE_RETURN(r_dest: u8, ra: u8) Instruction {
 
 pub inline fn ENCODE_RETURN_N(r_dest: u8) Instruction {
     return I(@intFromEnum(Opcode.OP_RETURN_N)) << 26 | (I(r_dest) << 18);
+}
+
+pub inline fn ENCODE_CALL(r_dest: u8) Instruction {
+    return I(@intFromEnum(Opcode.OP_CALL)) << 26 | (I(r_dest) << 18);
 }
 
 pub inline fn DECODE_JUMP_OFFSET(instruction: Instruction) usize {
