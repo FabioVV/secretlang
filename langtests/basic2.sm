@@ -1,0 +1,9 @@
+var get_name = fn(){
+    return "Fábio"
+}
+
+var GET_CONSTANT = fn(){
+    return get_name
+}
+
+GET_CONSTANT()() + " Varela"

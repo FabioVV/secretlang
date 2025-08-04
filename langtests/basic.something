@@ -1,7 +1,0 @@
-var add = fn(){
-
-}
-
-var c = (add() * 4) / 2
-
-c + 6

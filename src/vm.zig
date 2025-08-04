@@ -89,8 +89,7 @@ pub const VM = struct {
         vm.objects = objects;
 
         const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, &vm.objects);
-        const mainCallFrame = CallFrame.init(mainFunction.asFunctionExpr().?);
-        vm.frames.slice()[0] = mainCallFrame;
+        vm.frames.set(0, CallFrame.init(mainFunction.asFunctionExpr().?));
 
         return vm;
     }
@@ -116,8 +115,7 @@ pub const VM = struct {
         vm.objects = objects;
 
         const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, &vm.objects);
-        const mainCallFrame = CallFrame.init(mainFunction.asFunctionExpr().?);
-        vm.frames.slice()[0] = mainCallFrame;
+        vm.frames.set(0, CallFrame.init(mainFunction.asFunctionExpr().?));
 
         return vm;
     }
@@ -144,7 +142,7 @@ pub const VM = struct {
 
     /// Emits a runtime error
     fn rError(self: *VM, comptime message: []const u8, varargs: anytype) void {
-        const pos = self.currentCallFrame().instructionsPositions().get(@intCast(self.currentCallFrame().pc)).?;
+        const pos = self.currentCallFrame().instructionsPositions().get(@intCast(self.currentCallFrame().pc - 1)).?;
         const source = dbg.getSourceLine(self.source.*, pos);
 
         const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, pos, source);
@@ -184,11 +182,22 @@ pub const VM = struct {
         return self.frames.get(self.frameIndex);
     }
 
-    inline fn GET_CONSTANT(self: *VM, idx: u16) ?Value {
-        if (idx >= self.constantsPool.*.items.len) {
-            return null;
+    inline fn push(self: *VM, v: Value) void {
+        self.stack.append(v) catch {
+            self.rError("stack overflow", .{});
+        };
+    }
+
+    inline fn pop(self: *VM) Value {
+        if (self.stack.len == 0) {
+            self.rError("stack underflow", .{});
+            return NIL;
         }
-        return self.constantsPool.*.items[idx];
+        return self.stack.pop();
+    }
+
+    inline fn GET_CONSTANT(self: *VM, idx: u16) ?Value {
+        return if (idx >= self.constantsPool.items.len) null else self.constantsPool.items[idx];
     }
 
     inline fn GET_CONSTANT_STRING(self: *VM, idx: u16) ?[]const u8 {
@@ -485,7 +494,6 @@ pub const VM = struct {
             const pc = self.currentCallFrame().pc;
             self.currentCallFrame().pc += 1;
 
-
             const curInstruction = self.currentCallFrame().instructions()[pc];
             const opcode = _instruction.GET_OPCODE(curInstruction);
 
@@ -579,12 +587,12 @@ pub const VM = struct {
 
                     if (!RC.isTruthy()) {
                         const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
-                         self.currentCallFrame().pc += jumpOffset;
+                        self.currentCallFrame().pc += jumpOffset;
                     }
                 },
                 .OP_JUMP => {
                     const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
-                     self.currentCallFrame().pc += jumpOffset;
+                    self.currentCallFrame().pc += jumpOffset;
                 },
                 .OP_SET_GLOBAL => {
                     const RC = self.registers.get(_instruction.DECODE_RC(curInstruction));
@@ -603,7 +611,6 @@ pub const VM = struct {
 
                     if (RC.asFunctionExpr()) |f| {
                         self.pushCallFrame(CallFrame.init(f));
-
                     } else {
                         self.rError("type error: tried calling non-function", .{});
                     }
@@ -615,7 +622,6 @@ pub const VM = struct {
                     _ = self.popCallFrame();
 
                     self.registers.set(RC, RA);
-
                 },
                 .OP_RETURN_N => {
                     const RC = _instruction.DECODE_RC(curInstruction);

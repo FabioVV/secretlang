@@ -215,7 +215,7 @@ pub const Compiler = struct {
                 self.registers.set(i, true);
                 self.current_scope_registers.append(@intCast(i)) catch unreachable;
 
-                if(dbg.DEBUG_REGISTER_ALLOCATION){
+                if (dbg.DEBUG_REGISTER_ALLOCATION) {
                     print("Allocated R{d}\n", .{i});
                 }
 
@@ -230,7 +230,7 @@ pub const Compiler = struct {
     inline fn freeRegister(self: *Compiler, reg: u8) void {
         std.debug.assert(self.registers.get(reg)); // Detects double-free
 
-        if(dbg.DEBUG_REGISTER_ALLOCATION){
+        if (dbg.DEBUG_REGISTER_ALLOCATION) {
             print("Freed R{d}\n", .{reg});
         }
 
@@ -464,14 +464,14 @@ pub const Compiler = struct {
 
                 const compScope = self.leaveScope().?;
 
-//                 if (self.current_scope_registers.pop()) |r| {
-//                     self.freeRegister(r);
-//                 }
+                if (self.current_scope_registers.pop()) |r| {
+                    self.freeRegister(r);
+                }
 
                 return self.emitConstant(Value.createFunctionExpr(self.allocator, compScope, &self.objects));
             },
             AST.Expression.call_expr => |call_expr| {
-                 _ = self.compileExpression(call_expr.function.?);
+                _ = self.compileExpression(call_expr.function.?);
 
                 const fn_register = self.current_scope_registers.pop().?;
 
@@ -545,11 +545,9 @@ pub const Compiler = struct {
     }
 
     fn compileBlockStatement(self: *Compiler, stmt: *AST.BlockStatement) void {
-
         for (stmt.statements.items) |stmt_node| {
             self.compile_stmts(stmt_node);
         }
-
     }
 
     inline fn compileExpressionStatement(self: *Compiler, stmt: *AST.ExpressionStatement) void {
@@ -589,6 +587,10 @@ pub const Compiler = struct {
             if (self.had_error) {
                 return false;
             }
+        }
+
+        for (0..self.scopes.items[self.cur_scope].instructions.items.len) |i| {
+            print("{s}\n", .{@tagName(_instruction.GET_OPCODE(self.scopes.items[self.cur_scope].instructions.items[i]))});
         }
 
         for (0.._vm.MAX_REGISTERS) |i| {

@@ -1,0 +1,8 @@
+var get_name = fn(){
+    return "Fábio"
+}
+
+
+var test = get_name() + " Varela"
+
+
