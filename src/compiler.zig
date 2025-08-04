@@ -453,6 +453,13 @@ pub const Compiler = struct {
 
                         self.emitInstruction(_instruction.ENCODE_RETURN_N(result));
                     }
+                } else {
+                    const result = self.allocateRegister() catch {
+                        self.cError("out of registers");
+                        return null;
+                    };
+
+                    self.emitInstruction(_instruction.ENCODE_RETURN_N(result));
                 }
 
                 const compScope = self.leaveScope().?;
