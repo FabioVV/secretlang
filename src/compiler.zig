@@ -214,6 +214,11 @@ pub const Compiler = struct {
             if (!self.registers.get(i)) {
                 self.registers.set(i, true);
                 self.current_scope_registers.append(@intCast(i)) catch unreachable;
+
+                if(dbg.DEBUG_REGISTER_ALLOCATION){
+                    print("Allocated R{d}\n", .{i});
+                }
+
                 return @intCast(i);
             }
         }
@@ -224,15 +229,12 @@ pub const Compiler = struct {
     /// free`s the given register
     inline fn freeRegister(self: *Compiler, reg: u8) void {
         std.debug.assert(self.registers.get(reg)); // Detects double-free
-        self.registers.set(reg, false);
-    }
 
-    inline fn freeScopeRegisters(self: *Compiler) void {
-        for (self.current_scope_registers.items) |reg| {
-            self.freeRegister(reg);
+        if(dbg.DEBUG_REGISTER_ALLOCATION){
+            print("Freed R{d}\n", .{reg});
         }
 
-        self.current_scope_registers.clearRetainingCapacity();
+        self.registers.set(reg, false);
     }
 
     fn enterScope(self: *Compiler) void {
@@ -455,14 +457,14 @@ pub const Compiler = struct {
 
                 const compScope = self.leaveScope().?;
 
-                if (self.current_scope_registers.pop()) |r| {
-                    self.freeRegister(r);
-                }
+//                 if (self.current_scope_registers.pop()) |r| {
+//                     self.freeRegister(r);
+//                 }
 
                 return self.emitConstant(Value.createFunctionExpr(self.allocator, compScope, &self.objects));
             },
             AST.Expression.call_expr => |call_expr| {
-                _ = self.compileExpression(call_expr.function.?);
+                 _ = self.compileExpression(call_expr.function.?);
 
                 const fn_register = self.current_scope_registers.pop().?;
 
@@ -489,7 +491,6 @@ pub const Compiler = struct {
                     // get local
                 }
 
-                //self.freeRegister(reg);
                 return null;
             },
             else => unreachable,
@@ -526,7 +527,6 @@ pub const Compiler = struct {
         _ = self.compileExpression(stmt.expression);
 
         const reg = self.current_scope_registers.pop().?;
-        self.freeRegister(reg);
 
         const result = self.allocateRegister() catch {
             self.cError("out of registers");
@@ -534,16 +534,15 @@ pub const Compiler = struct {
         };
 
         self.emitInstruction(_instruction.ENCODE_RETURN(result, reg));
+        self.freeRegister(reg);
     }
 
     fn compileBlockStatement(self: *Compiler, stmt: *AST.BlockStatement) void {
-        // self.enterScope();
 
         for (stmt.statements.items) |stmt_node| {
             self.compile_stmts(stmt_node);
         }
 
-        // self.leaveScope();
     }
 
     inline fn compileExpressionStatement(self: *Compiler, stmt: *AST.ExpressionStatement) void {

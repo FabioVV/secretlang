@@ -9,6 +9,10 @@ const AST = @import("ast.zig");
 const dbg = @import("debug.zig");
 const panic = @import("error.zig");
 
+
+pub const DEBUG_REGISTER_ALLOCATION: bool = true;
+
+
 pub const DEBUG_PRINT_TOKENS: bool = false;
 pub const DEBUG_PRINT_VAR_STATEMENT: bool = false;
 pub const DEBUG_PRINT_PREFIX_EXPRESSION: bool = false;

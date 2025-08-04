@@ -58,7 +58,6 @@ pub const VM = struct {
     arena: ?std.heap.ArenaAllocator,
 
     source: *[]const u8,
-    //     compiledInstructions: *compilationScope,
 
     constantsPool: *std.ArrayList(Value),
     globals: std.BoundedArray(Value, MAX_GLOBALS),
@@ -72,7 +71,7 @@ pub const VM = struct {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const vm = arena.allocator().create(VM) catch unreachable;
 
-        vm.frameIndex = 1;
+        vm.frameIndex = 0;
 
         vm.source = source;
         vm.arena = arena;
@@ -99,7 +98,7 @@ pub const VM = struct {
     pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), compiledInst: *compilationScope, globals: *std.BoundedArray(Value, MAX_GLOBALS), source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
         const vm = allocator.create(VM) catch unreachable;
 
-        vm.frameIndex = 1;
+        vm.frameIndex = 0;
 
         vm.source = source;
         vm.arena = null;
@@ -172,17 +171,17 @@ pub const VM = struct {
     }
 
     inline fn currentCallFrame(self: *VM) *CallFrame {
-        return &self.frames.slice()[self.frameIndex - 1];
+        return &self.frames.slice()[self.frameIndex];
     }
 
     inline fn pushCallFrame(self: *VM, frame: CallFrame) void {
-        self.frames.slice()[self.frameIndex] = frame;
         self.frameIndex += 1;
+        self.frames.set(self.frameIndex, frame);
     }
 
     inline fn popCallFrame(self: *VM) CallFrame {
         self.frameIndex -= 1;
-        return self.frames.slice()[self.frameIndex];
+        return self.frames.get(self.frameIndex);
     }
 
     inline fn GET_CONSTANT(self: *VM, idx: u16) ?Value {
@@ -482,12 +481,15 @@ pub const VM = struct {
     }
 
     pub fn run(self: *VM) void {
-        while (self.currentCallFrame().pc < self.currentCallFrame().instructions().len) : (self.currentCallFrame().pc += 1) {
-            const curInstruction = self.currentCallFrame().instructions()[self.currentCallFrame().pc];
+        while (self.currentCallFrame().pc < self.currentCallFrame().instructions().len) {
+            const pc = self.currentCallFrame().pc;
+            self.currentCallFrame().pc += 1;
+
+
+            const curInstruction = self.currentCallFrame().instructions()[pc];
             const opcode = _instruction.GET_OPCODE(curInstruction);
 
             //std.debug.print("{s}\n", .{@tagName(opcode)});
-
             switch (opcode) {
                 .OP_LOADK => {
                     const constantIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
@@ -495,37 +497,36 @@ pub const VM = struct {
                     const contantValue = self.GET_CONSTANT(constantIdx).?;
 
                     self.registers.set(RC, contantValue);
-                    //self.registers.get(RC).print();
                 },
                 .OP_ADD => {
-                    self.*.mathAdd(curInstruction);
+                    self.mathAdd(curInstruction);
                 },
                 .OP_SUB => {
-                    self.*.mathSub(curInstruction);
+                    self.mathSub(curInstruction);
                 },
                 .OP_MUL => {
-                    self.*.mathMul(curInstruction);
+                    self.mathMul(curInstruction);
                 },
                 .OP_DIV => {
-                    self.*.mathDiv(curInstruction);
+                    self.mathDiv(curInstruction);
                 },
                 .OP_EQUAL => {
-                    self.*.cmpEqual(curInstruction); // ==
+                    self.cmpEqual(curInstruction); // ==
                 },
                 .OP_NOTEQUAL => {
-                    self.*.cmpNotEqual(curInstruction); // !=
+                    self.cmpNotEqual(curInstruction); // !=
                 },
                 .OP_LESSEQUAL => {
-                    self.*.cmpLessEqual(curInstruction); // <=
+                    self.cmpLessEqual(curInstruction); // <=
                 },
                 .OP_GREATEREQUAL => {
-                    self.*.cmpGreaterEqual(curInstruction); // >=
+                    self.cmpGreaterEqual(curInstruction); // >=
                 },
                 .OP_GREATERTHAN => {
-                    self.*.cmpGreaterThan(curInstruction); // >
+                    self.cmpGreaterThan(curInstruction); // >
                 },
                 .OP_LESSTHAN => {
-                    self.*.cmpLessThan(curInstruction); // <
+                    self.cmpLessThan(curInstruction); // <
                 },
                 .OP_FALSE => {
                     const RC = _instruction.DECODE_RC(curInstruction);
@@ -578,12 +579,12 @@ pub const VM = struct {
 
                     if (!RC.isTruthy()) {
                         const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
-                        self.currentCallFrame().pc += jumpOffset;
+                         self.currentCallFrame().pc += jumpOffset;
                     }
                 },
                 .OP_JUMP => {
                     const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
-                    self.currentCallFrame().pc += jumpOffset;
+                     self.currentCallFrame().pc += jumpOffset;
                 },
                 .OP_SET_GLOBAL => {
                     const RC = self.registers.get(_instruction.DECODE_RC(curInstruction));
@@ -599,12 +600,10 @@ pub const VM = struct {
                 },
                 .OP_CALL => {
                     const RC = self.registers.get(_instruction.DECODE_RC(curInstruction));
-                    //
-                    RC.print();
 
                     if (RC.asFunctionExpr()) |f| {
-                        const newFrame = CallFrame.init(f);
-                        self.pushCallFrame(newFrame);
+                        self.pushCallFrame(CallFrame.init(f));
+
                     } else {
                         self.rError("type error: tried calling non-function", .{});
                     }
@@ -616,7 +615,7 @@ pub const VM = struct {
                     _ = self.popCallFrame();
 
                     self.registers.set(RC, RA);
-                    self.registers.get(RC).print();
+
                 },
                 .OP_RETURN_N => {
                     const RC = _instruction.DECODE_RC(curInstruction);

@@ -4,7 +4,7 @@ const mem = std.mem;
 const token = @import("token.zig");
 const TokenType = token.Tokens;
 
-pub const Instruction = u32; // Our bytecode is 32 bits in size
+pub const Instruction = u32;
 
 inline fn I(value: anytype) u32 { // Convenience function to make the code below less verbose
     return @as(u32, value);
