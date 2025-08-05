@@ -80,7 +80,7 @@ pub const FnStatement = struct {
 pub const Identifier = struct {
     token: Token, // IDENT token.
     literal: []const u8,
-    resolved_symbol: ?*Symbol = null,
+    resolved_symbol: ?Symbol = null,
 };
 
 pub const BlockStatement = struct {
