@@ -45,6 +45,8 @@ pub const Opcode = enum(u8) {
     OP_CALL = 23,
     OP_RETURN = 24,
     OP_RETURN_N = 25,
+
+    OP_MOVE = 26,
 };
 
 // Maybe make a struct InstructionHandler to encode/decode
@@ -118,12 +120,16 @@ pub inline fn ENCODE_LOADK(r_dest: u8, constantIndex: u16) Instruction {
     return I(@intFromEnum(Opcode.OP_LOADK)) << 26 | (I(r_dest) << 18) | I(constantIndex);
 }
 
-pub inline fn ENCODE_RETURN(r_dest: u8, ra: u8) Instruction {
-    return I(@intFromEnum(Opcode.OP_RETURN)) << 26 | (I(r_dest) << 18) | I(ra);
+pub inline fn ENCODE_MOVE(r_dest: u8, ra: u16) Instruction {
+    return I(@intFromEnum(Opcode.OP_LOADK)) << 26 | (I(r_dest) << 18) | I(ra);
 }
 
-pub inline fn ENCODE_RETURN_N(r_dest: u8) Instruction {
-    return I(@intFromEnum(Opcode.OP_RETURN_N)) << 26 | (I(r_dest) << 18);
+pub inline fn ENCODE_RETURN(r_dest: u8) Instruction {
+    return I(@intFromEnum(Opcode.OP_RETURN)) << 26 | (I(r_dest) << 18);
+}
+
+pub inline fn ENCODE_RETURN_N() Instruction {
+    return I(@intFromEnum(Opcode.OP_RETURN_N)) << 26;
 }
 
 pub inline fn ENCODE_CALL(r_dest: u8) Instruction {

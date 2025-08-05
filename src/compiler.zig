@@ -210,7 +210,7 @@ pub const Compiler = struct {
 
     /// allocates a single register for use and returns it, in case of no register available, a OutOfRegisters error is returned
     inline fn allocateRegister(self: *Compiler) !u8 {
-        for (0.._vm.MAX_REGISTERS) |i| {
+        for (1.._vm.MAX_REGISTERS) |i| {
             if (!self.registers.get(i)) {
                 self.registers.set(i, true);
                 self.current_scope_registers.append(@intCast(i)) catch unreachable;
@@ -224,6 +224,11 @@ pub const Compiler = struct {
         }
 
         return error.OutOfRegisters;
+    }
+
+    inline fn allocateReturnRegister(self: *Compiler) void {
+        self.registers.set(0, true);
+        self.current_scope_registers.append(0) catch unreachable;
     }
 
     /// free`s the given register
@@ -440,27 +445,7 @@ pub const Compiler = struct {
 
                 self.compileBlockStatement(fn_expr.body.?);
 
-                const lenFnBody = self.scopes.items[self.cur_scope].instructions.items.len;
-
-                if (lenFnBody > 0) {
-                    const last_inst = self.scopes.items[self.cur_scope].instructions.items[self.scopes.items[self.cur_scope].instructions.items.len - 1];
-
-                    if (_instruction.GET_OPCODE(last_inst) != _instruction.Opcode.OP_RETURN) {
-                        const result = self.allocateRegister() catch {
-                            self.cError("out of registers");
-                            return null;
-                        };
-
-                        self.emitInstruction(_instruction.ENCODE_RETURN_N(result));
-                    }
-                } else {
-                    const result = self.allocateRegister() catch {
-                        self.cError("out of registers");
-                        return null;
-                    };
-
-                    self.emitInstruction(_instruction.ENCODE_RETURN_N(result));
-                }
+                self.emitInstruction(_instruction.ENCODE_RETURN_N());
 
                 const compScope = self.leaveScope().?;
 
@@ -479,6 +464,8 @@ pub const Compiler = struct {
 
                 self.freeRegister(fn_register);
 
+                self.allocateReturnRegister();
+
                 return null;
             },
             AST.Expression.identifier_expr => |idenExpr| {
@@ -495,7 +482,7 @@ pub const Compiler = struct {
                 if (sb.scope == Scopes.GLOBAL) {
                     self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(reg, sb.index));
                 } else {
-                    // get local
+//                     self.emitInstruction(_instruction.ENCODE_MOVE(reg, sb.register.?));
                 }
 
                 return null;
@@ -524,7 +511,13 @@ pub const Compiler = struct {
         if (sb.scope == Scopes.GLOBAL) {
             self.emitInstruction(_instruction.ENCODE_DEFINE_GLOBAL(reg, sb.index));
         } else {
-            // define local
+//             const local = self.allocateRegister() catch {
+//                 self.cError("out of registers");
+//                 return;
+//             };
+//
+//             sb.register = local;
+//             self.emitInstruction(_instruction.ENCODE_MOVE(local, reg));
         }
 
         //self.defineGlobal(reg, identifierName, cIndex);
@@ -535,12 +528,7 @@ pub const Compiler = struct {
 
         const reg = self.current_scope_registers.pop().?;
 
-        const result = self.allocateRegister() catch {
-            self.cError("out of registers");
-            return;
-        };
-
-        self.emitInstruction(_instruction.ENCODE_RETURN(result, reg));
+        self.emitInstruction(_instruction.ENCODE_RETURN(reg));
         self.freeRegister(reg);
     }
 
@@ -587,10 +575,6 @@ pub const Compiler = struct {
             if (self.had_error) {
                 return false;
             }
-        }
-
-        for (0..self.scopes.items[self.cur_scope].instructions.items.len) |i| {
-            print("{s}\n", .{@tagName(_instruction.GET_OPCODE(self.scopes.items[self.cur_scope].instructions.items[i]))});
         }
 
         for (0.._vm.MAX_REGISTERS) |i| {

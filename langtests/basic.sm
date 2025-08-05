@@ -1,8 +1,7 @@
-var get_name = fn(){
+var get_first_name = fn(){
     return "Fábio"
 }
 
-
-var test = get_name() + " Varela"
+get_first_name() + " Gabriel" + " Rodrigues" + " Varela"
 
 

@@ -135,8 +135,8 @@ pub const SemanticAnalyzer = struct {
 
         self.analyzeExpression(stmt.expression);
 
-        const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, stmt.token.position.line, null);
-        stmt.identifier.resolved_symbol = symbol;
+        var symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, stmt.token.position.line, null);
+        stmt.identifier.resolved_symbol = &symbol;
     }
 
     pub fn analyzeFn(self: *SemanticAnalyzer, stmt: *AST.FnStatement) void { // Make this better, store on symbol if it is function or not, so that better error messages may be dispatched here
@@ -150,8 +150,8 @@ pub const SemanticAnalyzer = struct {
 
         self.leaveScope();
 
-        const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, stmt.token.position.line, null);
-        stmt.identifier.resolved_symbol = symbol;
+        var symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, stmt.token.position.line, null);
+        stmt.identifier.resolved_symbol = &symbol;
     }
 
     pub fn analyzeFnBlock(self: *SemanticAnalyzer, stmt: *AST.BlockStatement) void {
@@ -197,8 +197,8 @@ pub const SemanticAnalyzer = struct {
 
             // },
             AST.Expression.identifier_expr => |*idenExpr| {
-                if (self.symbol_table.resolve(idenExpr.literal)) |sb| {
-                    idenExpr.resolved_symbol = sb;
+                if (self.symbol_table.resolve(idenExpr.literal)) |*sb| {
+                    idenExpr.resolved_symbol = @constCast(sb);
                     self.symbol_table.updateLastUse(idenExpr.literal, self.instruction_count);
                     return;
                 }
@@ -281,9 +281,7 @@ test "semantic analyze test" {
         \\var a = 5
         \\var b = 10
         \\var c = a + b
-        \\c
-        \\if(b) {var b = 11}
-        \\var c = 1
+        \\var add = fn() { return 1 + 1 }
     ;
 
     var l: *Lexer = Lexer.init(allocator, input, "<test semantic iterator>");
@@ -302,4 +300,9 @@ test "semantic analyze test" {
     defer sema.deinit();
 
     try expect(sema.analyze());
+
+    var a = sema.symbol_table.table.iterator();
+    while (a.next()) |e| {
+        print("sb: {s} defined in {d}, last use in {any}\n", .{ e.key_ptr.*, e.value_ptr.defined, e.value_ptr.last_use });
+    }
 }

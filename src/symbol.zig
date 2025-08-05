@@ -15,12 +15,12 @@ pub const Symbol = struct {
     name: []const u8,
     scope: Scope,
     index: u16,
+    register: ?u8,
 
     defined: usize,
     last_use: ?usize,
 
     type: ?vType,
-
     is_mutable: bool,
 };
 
@@ -62,9 +62,9 @@ pub const SymbolTable = struct {
         var symbol: Symbol = undefined;
 
         if (self.parent_table != null) {
-            symbol = Symbol{ .token = token, .name = name, .index = self.total_definitions, .scope = .LOCAL, .defined = defined, .last_use = null, .type = vtype orelse null, .is_mutable = true };
+            symbol = Symbol{ .token = token, .name = name, .index = self.total_definitions, .scope = .LOCAL, .defined = defined, .last_use = null, .type = vtype orelse null, .is_mutable = true, .register = null };
         } else {
-            symbol = Symbol{ .token = token, .name = name, .index = self.total_definitions, .scope = .GLOBAL, .defined = defined, .last_use = null, .type = vtype orelse null, .is_mutable = true };
+            symbol = Symbol{ .token = token, .name = name, .index = self.total_definitions, .scope = .GLOBAL, .defined = defined, .last_use = null, .type = vtype orelse null, .is_mutable = true, .register = null };
         }
 
         self.table.put(name, symbol) catch unreachable;

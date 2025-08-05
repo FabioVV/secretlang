@@ -497,7 +497,7 @@ pub const VM = struct {
             const curInstruction = self.currentCallFrame().instructions()[pc];
             const opcode = _instruction.GET_OPCODE(curInstruction);
 
-            //std.debug.print("{s}\n", .{@tagName(opcode)});
+            std.debug.print("{s}\n", .{@tagName(opcode)});
             switch (opcode) {
                 .OP_LOADK => {
                     const constantIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
@@ -616,18 +616,25 @@ pub const VM = struct {
                     }
                 },
                 .OP_RETURN => {
-                    const RC = _instruction.DECODE_RC(curInstruction);
-                    const RA = self.registers.get(_instruction.DECODE_RA(curInstruction));
+                    const RC = self.registers.get(_instruction.DECODE_RC(curInstruction));
+
+                    RC.print();
 
                     _ = self.popCallFrame();
 
-                    self.registers.set(RC, RA);
+                    self.registers.set(0, RC);
+                    self.registers.get(0).print();
                 },
                 .OP_RETURN_N => {
-                    const RC = _instruction.DECODE_RC(curInstruction);
                     _ = self.popCallFrame();
 
-                    self.registers.set(RC, NIL);
+                    self.registers.set(0, NIL);
+                },
+                .OP_MOVE => {
+                    const RA = self.registers.get(_instruction.DECODE_RA(curInstruction));
+                    const RC = _instruction.DECODE_RC(curInstruction);
+
+                    self.registers.set(RC, RA);
                 },
                 else => {
                     self.rError("Unhandled OPCODE: {any} \n", .{opcode});
