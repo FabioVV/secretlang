@@ -1,7 +1,17 @@
-var get_first_name = fn(){
-    return "Fábio"
+var global = 50
+
+var remove_one = fn(){
+    var temp =  1
+    var temptwo = global - temp
+    return temptwo
 }
 
-get_first_name() + " Gabriel" + " Rodrigues" + " Varela"
+var remove_two = fn(){
+    var temptwo = global - 2
+    return temptwo
+}
+
+remove_one() + remove_one()
 
 
+global + 1

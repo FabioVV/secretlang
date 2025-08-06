@@ -135,7 +135,7 @@ pub const SemanticAnalyzer = struct {
 
         self.analyzeExpression(stmt.expression);
 
-        var symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, stmt.token.position.line, null);
+        const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, stmt.token.position.line, null);
         stmt.identifier.resolved_symbol = symbol;
     }
 
@@ -150,7 +150,7 @@ pub const SemanticAnalyzer = struct {
 
         self.leaveScope();
 
-        var symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, stmt.token.position.line, null);
+        const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, stmt.token.position.line, null);
         stmt.identifier.resolved_symbol = symbol;
     }
 

@@ -121,7 +121,7 @@ pub inline fn ENCODE_LOADK(r_dest: u8, constantIndex: u16) Instruction {
 }
 
 pub inline fn ENCODE_MOVE(r_dest: u8, ra: u16) Instruction {
-    return I(@intFromEnum(Opcode.OP_LOADK)) << 26 | (I(r_dest) << 18) | I(ra);
+    return I(@intFromEnum(Opcode.OP_MOVE)) << 26 | (I(r_dest) << 18) | (I(ra) << 10);
 }
 
 pub inline fn ENCODE_RETURN(r_dest: u8) Instruction {

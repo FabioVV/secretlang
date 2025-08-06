@@ -1,6 +1,7 @@
 const std = @import("std");
 const print = @import("std").debug.print;
 const expect = std.testing.expect;
+const assert = std.debug.assert;
 
 const dbg = @import("debug.zig");
 const errh = @import("error.zig");
@@ -33,9 +34,20 @@ const CompilerError = struct {
 pub const compilationScope = struct {
     instructions: std.ArrayList(Instruction),
     instructions_positions: std.AutoHashMap(u32, Position),
+    registers: std.BoundedArray(bool, _vm.MAX_REGISTERS),
+    used_registers: std.ArrayList(u8),
 
     pub fn init(allocator: std.mem.Allocator) compilationScope {
-        return compilationScope{ .instructions = std.ArrayList(Instruction).init(allocator), .instructions_positions = std.AutoHashMap(u32, Position).init(allocator) };
+        var cs = compilationScope{
+            .instructions = std.ArrayList(Instruction).init(allocator),
+            .instructions_positions = std.AutoHashMap(u32, Position).init(allocator),
+            .registers = std.BoundedArray(bool, _vm.MAX_REGISTERS).init(_vm.MAX_REGISTERS) catch unreachable,
+            .used_registers = std.ArrayList(u8).init(allocator),
+        };
+
+        @memset(cs.registers.slice(), false);
+
+        return cs;
     }
 };
 
@@ -58,9 +70,6 @@ pub const Compiler = struct {
     strings: *std.StringHashMap(Value),
     objects: ?*Object,
 
-    registers: std.BoundedArray(bool, _vm.MAX_REGISTERS),
-    current_scope_registers: std.ArrayList(u8),
-
     had_error: bool,
 
     pub fn init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8, filename: *[]const u8) *Compiler {
@@ -82,10 +91,6 @@ pub const Compiler = struct {
 
         compiler.strings = compiler.allocator.create(std.StringHashMap(Value)) catch unreachable;
         compiler.strings.* = std.StringHashMap(Value).init(compiler.allocator);
-
-        compiler.registers = std.BoundedArray(bool, _vm.MAX_REGISTERS).init(_vm.MAX_REGISTERS) catch unreachable;
-        @memset(compiler.registers.slice(), false);
-        compiler.current_scope_registers = std.ArrayList(u8).init(compiler.allocator);
 
         compiler.objects = null;
         compiler.cur_node = undefined;
@@ -116,10 +121,6 @@ pub const Compiler = struct {
         compiler.constantsPoolHashes = std.AutoHashMap(u64, u16).init(compiler.allocator);
 
         compiler.strings = strings_table;
-
-        compiler.registers = std.BoundedArray(bool, _vm.MAX_REGISTERS).init(_vm.MAX_REGISTERS) catch unreachable;
-        @memset(compiler.registers.slice(), false);
-        compiler.current_scope_registers = std.ArrayList(u8).init(compiler.allocator);
 
         compiler.objects = null;
         compiler.cur_node = undefined;
@@ -157,18 +158,18 @@ pub const Compiler = struct {
         defer self.allocator.free(fmtCaret.spacing);
 
         const errMsg = std.fmt.allocPrint(self.allocator,
-            \\
-            \\-> In [{s}] {d}:{d}
-            \\ {d} | {s}
-            \\   {s}| {s}
-            \\   {s}| compilation failed: {s}
-            \\
-            \\
-        , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, errorMessage }) catch |err| {
-            errh.exitWithError("unrecoverable error trying to write parse error message", err);
-        };
+                                          \\
+                                          \\-> In [{s}] {d}:{d}
+                                          \\ {d} | {s}
+                                          \\   {s}| {s}
+                                          \\   {s}| compilation failed: {s}
+                                          \\
+                                          \\
+                                          , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, errorMessage }) catch |err| {
+                                              errh.exitWithError("unrecoverable error trying to write parse error message", err);
+                                          };
 
-        errh.printError(errMsg);
+                                          errh.printError(errMsg);
     }
 
     pub fn canOpError(self: *Compiler, opcode: Opcode) bool {
@@ -211,9 +212,9 @@ pub const Compiler = struct {
     /// allocates a single register for use and returns it, in case of no register available, a OutOfRegisters error is returned
     inline fn allocateRegister(self: *Compiler) !u8 {
         for (1.._vm.MAX_REGISTERS) |i| {
-            if (!self.registers.get(i)) {
-                self.registers.set(i, true);
-                self.current_scope_registers.append(@intCast(i)) catch unreachable;
+            if (!self.currentScope().registers.get(i)) {
+                self.currentScope().registers.set(i, true);
+                self.currentScope().used_registers.append(@intCast(i)) catch unreachable;
 
                 if (dbg.DEBUG_REGISTER_ALLOCATION) {
                     print("Allocated R{d}\n", .{i});
@@ -226,23 +227,35 @@ pub const Compiler = struct {
         return error.OutOfRegisters;
     }
 
-    inline fn allocateReturnRegister(self: *Compiler) void {
-        self.registers.set(0, true);
-        self.current_scope_registers.append(0) catch unreachable;
-    }
-
     /// free`s the given register
     inline fn freeRegister(self: *Compiler, reg: u8) void {
-        std.debug.assert(self.registers.get(reg)); // Detects double-free
-
         if (dbg.DEBUG_REGISTER_ALLOCATION) {
             print("Freed R{d}\n", .{reg});
         }
 
-        self.registers.set(reg, false);
+        if(self.currentScope().registers.get(reg)){
+            self.currentScope().registers.set(reg, false);
+        }
     }
 
-    fn enterScope(self: *Compiler) void {
+    inline fn allocateReturnRegister(self: *Compiler) void {
+        self.currentScope().registers.set(0, true);
+        self.currentScope().used_registers.append(0) catch unreachable;
+    }
+
+    inline fn currentScope(self: *Compiler) *compilationScope {
+        return &self.scopes.items[self.cur_scope];
+    }
+
+    inline fn currentScopeInstructions(self: *Compiler) *compilationScope {
+        return &self.scopes.items[self.cur_scope].instructions;
+    }
+
+    inline fn currentScopeUsedRegisters(self: *Compiler) *std.ArrayList(u8) {
+        return &self.currentScope().used_registers;
+    }
+
+    inline fn enterScope(self: *Compiler) void {
         self.scopes.append(compilationScope.init(self.allocator)) catch unreachable;
         self.cur_scope += 1;
     }
@@ -347,16 +360,6 @@ pub const Compiler = struct {
         self.scopes.items[self.cur_scope].instructions.items[pos] = self.scopes.items[self.cur_scope].instructions.items[pos] | (@as(Instruction, @intCast(jump)) & 0x3FFFF);
     }
 
-    //     inline fn defineGlobal(self: *Compiler, result_register: u8, name: []const u8) void {
-    //         //const val = self.constantsPool.items[contantIndex];
-    //
-    //         if (sb.scope == Scopes.GLOBAL) {
-    //             self.emitInstruction(_instruction.ENCODE_DEFINE_GLOBAL(result_register, sb.index));
-    //         } else {
-    //             // define local
-    //         }
-    //     }
-
     fn compileExpression(self: *Compiler, expr: ?*AST.Expression) ?u16 {
         self.cur_node = AST.CurrentNode{ .expression = @constCast(&expr.?.*) };
 
@@ -389,8 +392,9 @@ pub const Compiler = struct {
                 _ = self.compileExpression(infixExpr.left);
                 _ = self.compileExpression(infixExpr.right);
 
-                const left_register = self.current_scope_registers.pop().?;
-                const right_register = self.current_scope_registers.pop().?;
+
+                const left_register = self.currentScope().used_registers.pop().?;
+                const right_register = self.currentScope().used_registers.pop().?;
 
                 const reg = self.allocateRegister() catch {
                     self.cError("out of registers");
@@ -411,7 +415,7 @@ pub const Compiler = struct {
                     self.cError("out of registers");
                     return null;
                 };
-                const right_register = self.current_scope_registers.pop().?;
+                const right_register = self.currentScope().used_registers.pop().?;
 
                 self.emitInstruction(_instruction.ENCODE_PREFIX(operator, reg, right_register));
 
@@ -420,7 +424,7 @@ pub const Compiler = struct {
             AST.Expression.if_expr => |ifExpr| {
                 _ = self.compileExpression(ifExpr.condition);
 
-                const cond_register = self.current_scope_registers.pop().?;
+                const cond_register = self.currentScope().used_registers.pop().?;
 
                 const ifJump = self.emitJumpIfFalse(cond_register);
 
@@ -449,7 +453,7 @@ pub const Compiler = struct {
 
                 const compScope = self.leaveScope().?;
 
-                if (self.current_scope_registers.pop()) |r| {
+                if (self.currentScope().used_registers.pop()) |r| {
                     self.freeRegister(r);
                 }
 
@@ -458,12 +462,11 @@ pub const Compiler = struct {
             AST.Expression.call_expr => |call_expr| {
                 _ = self.compileExpression(call_expr.function.?);
 
-                const fn_register = self.current_scope_registers.pop().?;
+                const fn_register = self.currentScope().used_registers.pop().?;
 
                 self.emitInstruction(_instruction.ENCODE_CALL(fn_register));
 
                 self.freeRegister(fn_register);
-
                 self.allocateReturnRegister();
 
                 return null;
@@ -477,13 +480,15 @@ pub const Compiler = struct {
                 // const identifierName = self.allocator.dupe(u8, idenExpr.literal) catch unreachable;
                 // _ = self.addConstant(Value.createString(self.allocator, identifierName)); // Is this necessary?
 
-                const sb = idenExpr.resolved_symbol.?;
 
-                if (sb.scope == Scopes.GLOBAL) {
-                    self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(reg, sb.index));
-                } else {
-//                     self.emitInstruction(_instruction.ENCODE_MOVE(reg, sb.register.?));
+                if(idenExpr.resolved_symbol) |sym|{
+                    if (sym.scope == Scopes.GLOBAL) {
+                        self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(reg, sym.index));
+                    } else {
+                        self.emitInstruction(_instruction.ENCODE_MOVE(reg, sym.register.?));
+                    }
                 }
+
 
                 return null;
             },
@@ -497,36 +502,38 @@ pub const Compiler = struct {
         //const identifierName = self.allocator.dupe(u8, stmt.identifier.literal) catch unreachable;
         //_ = self.addConstant(Value.createString(self.allocator, identifierName)); // Is this necessary?
 
-        const sb = stmt.identifier.resolved_symbol.?;
-        //var cIndex: u16 = 0; // Nil is the first constant in the pool, so if it stays zero here, it means a nil was emitted, so no need to change
         if (stmt.expression != null) {
             _ = self.compileExpression(stmt.expression);
         } else {
             self.emitNil();
         }
 
-        const reg = self.current_scope_registers.pop().?;
+        const reg = self.currentScope().used_registers.pop().?;
         self.freeRegister(reg);
 
-        if (sb.scope == Scopes.GLOBAL) {
-            self.emitInstruction(_instruction.ENCODE_DEFINE_GLOBAL(reg, sb.index));
-        } else {
-//             const local = self.allocateRegister() catch {
-//                 self.cError("out of registers");
-//                 return;
-//             };
-//
-//             sb.register = local;
-//             self.emitInstruction(_instruction.ENCODE_MOVE(local, reg));
+        if(stmt.identifier.resolved_symbol) |sym| {
+            if (sym.scope == Scopes.GLOBAL) {
+                self.emitInstruction(_instruction.ENCODE_DEFINE_GLOBAL(reg, sym.index));
+                return;
+            } else {
+                const local = self.allocateRegister() catch {
+                    self.cError("out of registers");
+                    return;
+                };
+
+                sym.register = local;
+                self.emitInstruction(_instruction.ENCODE_MOVE(local, reg));
+                return;
+            }
         }
 
-        //self.defineGlobal(reg, identifierName, cIndex);
+        self.cError("PANIC: undefined symbol");
     }
 
     fn compileReturnStatement(self: *Compiler, stmt: *AST.ReturnStatement) void {
         _ = self.compileExpression(stmt.expression);
 
-        const reg = self.current_scope_registers.pop().?;
+        const reg = self.currentScope().used_registers.pop().?;
 
         self.emitInstruction(_instruction.ENCODE_RETURN(reg));
         self.freeRegister(reg);
@@ -541,7 +548,7 @@ pub const Compiler = struct {
     inline fn compileExpressionStatement(self: *Compiler, stmt: *AST.ExpressionStatement) void {
         _ = self.compileExpression(stmt.expression);
 
-        if (self.current_scope_registers.pop()) |r| {
+        if (self.currentScope().used_registers.pop()) |r| {
             self.freeRegister(r);
         }
     }
@@ -577,8 +584,12 @@ pub const Compiler = struct {
             }
         }
 
+        //         for (0..self.scopes.items[self.cur_scope].instructions.items.len) |i| {
+        //             print("{s}\n", .{@tagName(_instruction.GET_OPCODE(self.scopes.items[self.cur_scope].instructions.items[i]))});
+        //         }
+
         for (0.._vm.MAX_REGISTERS) |i| {
-            std.debug.assert(!self.registers.get(i)); // All registers should be freed
+            assert(!self.currentScope().registers.get(i)); // All registers should be freed
         }
 
         return true;
