@@ -4,6 +4,10 @@ const compilationScope = @import("compiler.zig").compilationScope;
 const Instruction = @import("instruction.zig").Instruction;
 const Position = @import("token.zig").Position;
 
+fn printStdOut(comptime str: []const u8, varagars: anytype) void {
+    _ = std.io.getStdOut().writer().print(str, varagars) catch unreachable;
+}
+
 pub const ValueType = enum {
     NUMBER,
     BOOLEAN,
@@ -285,31 +289,31 @@ pub const Value = union(ValueType) {
     }
 
     pub fn printArrItems(arr: *Array) void {
-        std.debug.print("[", .{});
+        printStdOut("[", .{});
         for (arr.items.items) |arr_i| {
             switch (arr_i) {
-                .BOOLEAN => |b| std.debug.print("{},", .{b}),
-                .NIL => std.debug.print("nil,", .{}),
-                .NUMBER => |n| std.debug.print("{d:.2},", .{n}),
+                .BOOLEAN => |b| printStdOut("{}", .{b}),
+                .NIL => printStdOut("nil,", .{}),
+                .NUMBER => |n| printStdOut("{d:.2},", .{n}),
                 .OBJECT => |inn_obj| switch (inn_obj.*.data) {
-                    .STRING => std.debug.print("{s},", .{inn_obj.data.STRING.chars}),
+                    .STRING => printStdOut("{s},", .{inn_obj.data.STRING.chars}),
                     .ARRAY => printArrItems(inn_obj.data.ARRAY),
-                    .FUNCTION_EXPR => std.debug.print("<anonymous function expression>\n", .{}),
+                    .FUNCTION_EXPR => printStdOut("<anonymous function expression>\n", .{}),
                 },
             }
         }
-        std.debug.print("]", .{});
+        printStdOut("]", .{});
     }
 
     pub inline fn print(self: Value) void {
         return switch (self) {
-            .BOOLEAN => |b| std.debug.print("{}\n", .{b}),
-            .NIL => std.debug.print("nil\n", .{}),
-            .NUMBER => |n| std.debug.print("{d:.2}\n", .{n}),
+            .BOOLEAN => |b| printStdOut("{}\n", .{b}),
+            .NIL => printStdOut("nil\n", .{}),
+            .NUMBER => |n| printStdOut("{d:.2}\n", .{n}),
             .OBJECT => |obj| switch (obj.*.data) {
-                .STRING => std.debug.print("{s}\n", .{obj.data.STRING.chars}),
+                .STRING => printStdOut("{s}\n", .{obj.data.STRING.chars}),
                 .ARRAY => printArrItems(obj.data.ARRAY),
-                .FUNCTION_EXPR => std.debug.print("<anonymous function expression>\n", .{}),
+                .FUNCTION_EXPR => printStdOut("<anonymous function expression>\n", .{}),
             },
         };
     }
