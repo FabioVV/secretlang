@@ -334,209 +334,228 @@ pub const Lexer = struct {
         }
     }
 };
-//
-// test "Lexer initialization" {
-//     const input: []const u8 = "test input";
-//     const l: Lexer = try Lexer.init(input);
-//
-//     try expect(mem.eql(u8, input, l.source));
-// }
-//
-// test "Input tokenization" {
-//     const source =
-//         \\ / + - *
-//         \\10.10
-//         \\11.50
-//         \\1
-//         \\2
-//         \\"a string"
-//         \\
-//     ;
-//
-//     var l: Lexer = try Lexer.init(source);
-//     const testArr: [9]Token = .{
-//         Token{ .token_type = Tokens.FSLASH, .literal = "/" },
-//         Token{ .token_type = Tokens.PLUS, .literal = "+" },
-//         Token{ .token_type = Tokens.MINUS, .literal = "-" },
-//         Token{ .token_type = Tokens.ASTERISK, .literal = "*" },
-//         Token{ .token_type = Tokens.NUMBER, .literal = "10.10" },
-//         Token{ .token_type = Tokens.NUMBER, .literal = "11.50" },
-//         Token{ .token_type = Tokens.NUMBER, .literal = "1" },
-//         Token{ .token_type = Tokens.NUMBER, .literal = "2" },
-//         Token{ .token_type = Tokens.STRING, .literal = "a string" },
-//     };
-//
-//     var idx: usize = 0;
-//     while (true) : (idx += 1) {
-//         const actual = l.nextToken();
-//
-//         if (actual.token_type == Tokens.EOF) {
-//             break; // Exit the loop on EOF
-//         }
-//         dbg.printToken(actual);
-//         const expected = testArr[idx];
-//         if (expected.token_type != actual.token_type) {
-//             std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
-//             try expect(false);
-//         }
-//         if (!std.mem.eql(u8, expected.literal, actual.literal)) {
-//             std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
-//             try expect(false);
-//         }
-//     }
-// }
-//
-// test "Variable declaration tokenization" {
-//     const source =
-//         \\var a = 5
-//         \\var b = 10
-//         \\var c = 15
-//         \\var d = 20.20
-//         \\var e = "25"
-//         \\var f = "3" + "0"
-//         \\var g = nil
-//     ;
-//
-//     var l: Lexer = try Lexer.init(source);
-//     const testArr: [30]Token = .{
-//         Token{ .token_type = Tokens.VAR, .literal = "VAR" },
-//         Token{ .token_type = Tokens.IDENT, .literal = "a" },
-//         Token{ .token_type = Tokens.EQUAL, .literal = "=" },
-//         Token{ .token_type = Tokens.NUMBER, .literal = "5" },
-//
-//         Token{ .token_type = Tokens.VAR, .literal = "VAR" },
-//         Token{ .token_type = Tokens.IDENT, .literal = "b" },
-//         Token{ .token_type = Tokens.EQUAL, .literal = "=" },
-//         Token{ .token_type = Tokens.NUMBER, .literal = "10" },
-//
-//         Token{ .token_type = Tokens.VAR, .literal = "VAR" },
-//         Token{ .token_type = Tokens.IDENT, .literal = "c" },
-//         Token{ .token_type = Tokens.EQUAL, .literal = "=" },
-//         Token{ .token_type = Tokens.NUMBER, .literal = "15" },
-//
-//         Token{ .token_type = Tokens.VAR, .literal = "VAR" },
-//         Token{ .token_type = Tokens.IDENT, .literal = "d" },
-//         Token{ .token_type = Tokens.EQUAL, .literal = "=" },
-//         Token{ .token_type = Tokens.NUMBER, .literal = "20.20" },
-//
-//         Token{ .token_type = Tokens.VAR, .literal = "VAR" },
-//         Token{ .token_type = Tokens.IDENT, .literal = "e" },
-//         Token{ .token_type = Tokens.EQUAL, .literal = "=" },
-//         Token{ .token_type = Tokens.STRING, .literal = "25" },
-//
-//         Token{ .token_type = Tokens.VAR, .literal = "VAR" },
-//         Token{ .token_type = Tokens.IDENT, .literal = "f" },
-//         Token{ .token_type = Tokens.EQUAL, .literal = "=" },
-//         Token{ .token_type = Tokens.STRING, .literal = "3" },
-//         Token{ .token_type = Tokens.PLUS, .literal = "+" },
-//         Token{ .token_type = Tokens.STRING, .literal = "0" },
-//
-//         Token{ .token_type = Tokens.VAR, .literal = "VAR" },
-//         Token{ .token_type = Tokens.IDENT, .literal = "g" },
-//         Token{ .token_type = Tokens.EQUAL, .literal = "=" },
-//         Token{ .token_type = Tokens.NIL, .literal = "NIL" },
-//     };
-//
-//     var idx: usize = 0;
-//     while (true) : (idx += 1) {
-//         const actual = l.nextToken();
-//
-//         if (actual.token_type == Tokens.EOF) {
-//             break;
-//         }
-//
-//         //dbg.printToken(actual);
-//         const expected = testArr[idx];
-//         if (expected.token_type != actual.token_type) {
-//             std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
-//             try expect(false);
-//         }
-//         if (!std.mem.eql(u8, expected.literal, actual.literal)) {
-//             std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
-//             try expect(false);
-//         }
-//     }
-// }
-//
-// test "Simple utf8 lexing" {
-//     const source =
-//         \\var ço = 5
-//         \\var á = "até"
-//         \\var _name = "Fábio Gabriel Rodrigues Varela"
-//     ;
-//
-//     var l: Lexer = try Lexer.init(source);
-//     const testArr: [16]Token = .{
-//         Token{ .token_type = Tokens.VAR, .literal = "VAR" },
-//         Token{ .token_type = Tokens.IDENT, .literal = "ço" },
-//         Token{ .token_type = Tokens.EQUAL, .literal = "=" },
-//         Token{ .token_type = Tokens.NUMBER, .literal = "5" },
-//
-//         Token{ .token_type = Tokens.VAR, .literal = "VAR" },
-//         Token{ .token_type = Tokens.IDENT, .literal = "á" },
-//         Token{ .token_type = Tokens.EQUAL, .literal = "=" },
-//         Token{ .token_type = Tokens.STRING, .literal = "até" },
-//
-//         Token{ .token_type = Tokens.VAR, .literal = "VAR" },
-//         Token{ .token_type = Tokens.IDENT, .literal = "_name" },
-//         Token{ .token_type = Tokens.EQUAL, .literal = "=" },
-//         Token{ .token_type = Tokens.STRING, .literal = "Fábio Gabriel Rodrigues Varela" },
-//
-//         Token{ .token_type = Tokens.VAR, .literal = "VAR" },
-//         Token{ .token_type = Tokens.IDENT, .literal = "d" },
-//         Token{ .token_type = Tokens.EQUAL, .literal = "=" },
-//         Token{ .token_type = Tokens.NUMBER, .literal = "20.20" },
-//     };
-//
-//     var idx: usize = 0;
-//     while (true) : (idx += 1) {
-//         const actual = l.nextToken();
-//
-//         if (actual.token_type == Tokens.EOF) {
-//             break;
-//         }
-//
-//         const expected = testArr[idx];
-//         if (expected.token_type != actual.token_type) {
-//             std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
-//             try expect(false);
-//         }
-//         if (!std.mem.eql(u8, expected.literal, actual.literal)) {
-//             std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
-//             try expect(false);
-//         }
-//     }
-// }
-//
-// test "Another Simple utf8 lexing" {
-//     const source =
-//         \\var 名前 = "私の名前はファビオ・バレラです。"
-//     ;
-//
-//     var l: Lexer = try Lexer.init(source);
-//     const testArr: [4]Token = .{
-//         Token{ .token_type = Tokens.VAR, .literal = "VAR" },
-//         Token{ .token_type = Tokens.IDENT, .literal = "名前" },
-//         Token{ .token_type = Tokens.EQUAL, .literal = "=" },
-//         Token{ .token_type = Tokens.STRING, .literal = "私の名前はファビオ・バレラです。" },
-//     };
-//
-//     var idx: usize = 0;
-//     while (true) : (idx += 1) {
-//         const actual = l.nextToken();
-//
-//         if (actual.token_type == Tokens.EOF) {
-//             break;
-//         }
-//
-//         const expected = testArr[idx];
-//         if (expected.token_type != actual.token_type) {
-//             std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
-//             try expect(false);
-//         }
-//         if (!std.mem.eql(u8, expected.literal, actual.literal)) {
-//             std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
-//             try expect(false);
-//         }
-//     }
-// }
+
+test "Lexer initialization" {
+    const source: []const u8 = "test input";
+    const gpa = std.testing.allocator;
+
+    const l: *Lexer = Lexer.init(gpa, source, "<Lexer initialization>");
+    defer l.deinit();
+
+    try expect(mem.eql(u8, source, l.source));
+}
+
+test "Input tokenization" {
+    const source =
+        \\ / + - *
+        \\10.10
+        \\11.50
+        \\1
+        \\2
+        \\"a string"
+        \\
+    ;
+
+    const gpa = std.testing.allocator;
+
+    const l: *Lexer = Lexer.init(gpa, source, "<Input tokenization>");
+    defer l.deinit();
+
+    const testArr: [9]Token = .{
+        Token{ .token_type = Tokens.FSLASH, .literal = "/" },
+        Token{ .token_type = Tokens.PLUS, .literal = "+" },
+        Token{ .token_type = Tokens.MINUS, .literal = "-" },
+        Token{ .token_type = Tokens.ASTERISK, .literal = "*" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "10.10" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "11.50" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "1" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "2" },
+        Token{ .token_type = Tokens.STRING, .literal = "a string" },
+    };
+
+    var idx: usize = 0;
+    while (true) : (idx += 1) {
+        const actual = l.nextToken();
+
+        if (actual.token_type == Tokens.EOF) {
+            break; // Exit the loop on EOF
+        }
+        dbg.printToken(actual);
+        const expected = testArr[idx];
+        if (expected.token_type != actual.token_type) {
+            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+        if (!std.mem.eql(u8, expected.literal, actual.literal)) {
+            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+    }
+}
+
+test "Variable declaration tokenization" {
+    const source =
+        \\var a = 5
+        \\var b = 10
+        \\var c = 15
+        \\var d = 20.20
+        \\var e = "25"
+        \\var f = "3" + "0"
+        \\var g = nil
+    ;
+
+    const gpa = std.testing.allocator;
+
+    const l: *Lexer = Lexer.init(gpa, source, "<Variable declaration tokenization>");
+    defer l.deinit();
+
+    const testArr: [30]Token = .{
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "a" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "5" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "b" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "10" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "c" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "15" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "d" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "20.20" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "e" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.STRING, .literal = "25" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "f" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.STRING, .literal = "3" },
+        Token{ .token_type = Tokens.PLUS, .literal = "+" },
+        Token{ .token_type = Tokens.STRING, .literal = "0" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "g" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.NIL, .literal = "NIL" },
+    };
+
+    var idx: usize = 0;
+    while (true) : (idx += 1) {
+        const actual = l.nextToken();
+
+        if (actual.token_type == Tokens.EOF) {
+            break;
+        }
+
+        //dbg.printToken(actual);
+        const expected = testArr[idx];
+        if (expected.token_type != actual.token_type) {
+            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+        if (!std.mem.eql(u8, expected.literal, actual.literal)) {
+            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+    }
+}
+
+test "Simple utf8 lexing" {
+    const source =
+        \\var ço = 5
+        \\var á = "até"
+        \\var _name = "Fábio Gabriel Rodrigues Varela"
+    ;
+
+    const gpa = std.testing.allocator;
+
+    const l: *Lexer = Lexer.init(gpa, source, "<Simple utf8 lexing>");
+    defer l.deinit();
+
+    const testArr: [16]Token = .{
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "ço" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "5" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "á" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.STRING, .literal = "até" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "_name" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.STRING, .literal = "Fábio Gabriel Rodrigues Varela" },
+
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "d" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.NUMBER, .literal = "20.20" },
+    };
+
+    var idx: usize = 0;
+    while (true) : (idx += 1) {
+        const actual = l.nextToken();
+
+        if (actual.token_type == Tokens.EOF) {
+            break;
+        }
+
+        const expected = testArr[idx];
+        if (expected.token_type != actual.token_type) {
+            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+        if (!std.mem.eql(u8, expected.literal, actual.literal)) {
+            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+    }
+}
+
+test "Another Simple utf8 lexing" {
+    const source =
+        \\var 名前 = "私の名前はファビオ・バレラです。"
+    ;
+
+    const gpa = std.testing.allocator;
+
+    const l: *Lexer = Lexer.init(gpa, source, "<Another Simple utf8 lexing>");
+    defer l.deinit();
+
+    const testArr: [4]Token = .{
+        Token{ .token_type = Tokens.VAR, .literal = "VAR" },
+        Token{ .token_type = Tokens.IDENT, .literal = "名前" },
+        Token{ .token_type = Tokens.EQUAL, .literal = "=" },
+        Token{ .token_type = Tokens.STRING, .literal = "私の名前はファビオ・バレラです。" },
+    };
+
+    var idx: usize = 0;
+    while (true) : (idx += 1) {
+        const actual = l.nextToken();
+
+        if (actual.token_type == Tokens.EOF) {
+            break;
+        }
+
+        const expected = testArr[idx];
+        if (expected.token_type != actual.token_type) {
+            std.debug.print("Token mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+        if (!std.mem.eql(u8, expected.literal, actual.literal)) {
+            std.debug.print("Token literal mismatch: expected {s}, got {s}\n", .{ expected.literal, actual.literal });
+            try expect(false);
+        }
+    }
+}
