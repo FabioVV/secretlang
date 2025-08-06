@@ -70,6 +70,8 @@ pub const Compiler = struct {
     strings: *std.StringHashMap(Value),
     objects: ?*Object,
 
+    //defined_functions: std.StringHashMap(void),
+
     had_error: bool,
 
     pub fn init(allocator: std.mem.Allocator, ast: *AST.Program, source: *[]const u8, filename: *[]const u8) *Compiler {
@@ -158,18 +160,18 @@ pub const Compiler = struct {
         defer self.allocator.free(fmtCaret.spacing);
 
         const errMsg = std.fmt.allocPrint(self.allocator,
-                                          \\
-                                          \\-> In [{s}] {d}:{d}
-                                          \\ {d} | {s}
-                                          \\   {s}| {s}
-                                          \\   {s}| compilation failed: {s}
-                                          \\
-                                          \\
-                                          , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, errorMessage }) catch |err| {
-                                              errh.exitWithError("unrecoverable error trying to write parse error message", err);
-                                          };
+            \\
+            \\-> In [{s}] {d}:{d}
+            \\ {d} | {s}
+            \\   {s}| {s}
+            \\   {s}| compilation failed: {s}
+            \\
+            \\
+        , .{ token.position.filename, token.position.line, token.position.column, token.position.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, errorMessage }) catch |err| {
+            errh.exitWithError("unrecoverable error trying to write parse error message", err);
+        };
 
-                                          errh.printError(errMsg);
+        errh.printError(errMsg);
     }
 
     pub fn canOpError(self: *Compiler, opcode: Opcode) bool {
@@ -233,7 +235,7 @@ pub const Compiler = struct {
             print("Freed R{d}\n", .{reg});
         }
 
-        if(self.currentScope().registers.get(reg)){
+        if (self.currentScope().registers.get(reg)) {
             self.currentScope().registers.set(reg, false);
         }
     }
@@ -392,7 +394,6 @@ pub const Compiler = struct {
                 _ = self.compileExpression(infixExpr.left);
                 _ = self.compileExpression(infixExpr.right);
 
-
                 const left_register = self.currentScope().used_registers.pop().?;
                 const right_register = self.currentScope().used_registers.pop().?;
 
@@ -447,6 +448,25 @@ pub const Compiler = struct {
             AST.Expression.fn_expr => |fn_expr| {
                 self.enterScope();
 
+                print("len params {d}\n", .{fn_expr.parameters.slice().len});
+                var params_registers = std.BoundedArray(u8, 32).init(0) catch unreachable;
+                const arity = fn_expr.parameters.slice().len;
+
+                print("arity {d}\n", .{arity});
+
+                for (0..arity) |i| {
+                    var param = fn_expr.parameters.slice()[i];
+
+                    const local = self.allocateRegister() catch {
+                        self.cError("out of registers");
+                        return null;
+                    };
+
+                    param.resolved_symbol.?.register = local;
+                    params_registers.append(local) catch unreachable;
+                    //self.emitInstruction(_instruction.ENCODE_NIL(local)); do i need this?
+                }
+
                 self.compileBlockStatement(fn_expr.body.?);
 
                 self.emitInstruction(_instruction.ENCODE_RETURN_N());
@@ -456,17 +476,30 @@ pub const Compiler = struct {
                 if (self.currentScope().used_registers.pop()) |r| {
                     self.freeRegister(r);
                 }
+                print("len params registers {d}\n", .{params_registers.len});
 
-                return self.emitConstant(Value.createFunctionExpr(self.allocator, compScope, &self.objects));
+                return self.emitConstant(Value.createFunctionExpr(self.allocator, compScope, params_registers, &self.objects));
             },
             AST.Expression.call_expr => |call_expr| {
-                _ = self.compileExpression(call_expr.function.?);
-
+                _ = self.compileExpression(call_expr.function); // function here being an identifier that will be resolved
                 const fn_register = self.currentScope().used_registers.pop().?;
 
-                self.emitInstruction(_instruction.ENCODE_CALL(fn_register));
+                var total_args: u8 = 0;
 
+                for (0..call_expr.arguments.slice().len) |i| {
+                    _ = self.compileExpression(call_expr.arguments.slice()[i]);
+
+                    total_args += 1;
+                }
+
+                self.emitInstruction(_instruction.ENCODE_CALL(fn_register, total_args));
                 self.freeRegister(fn_register);
+
+                for (0..total_args) |_| {
+                    const arg_register = self.currentScope().used_registers.pop().?;
+                    self.freeRegister(arg_register);
+                }
+
                 self.allocateReturnRegister();
 
                 return null;
@@ -480,15 +513,13 @@ pub const Compiler = struct {
                 // const identifierName = self.allocator.dupe(u8, idenExpr.literal) catch unreachable;
                 // _ = self.addConstant(Value.createString(self.allocator, identifierName)); // Is this necessary?
 
-
-                if(idenExpr.resolved_symbol) |sym|{
+                if (idenExpr.resolved_symbol) |sym| {
                     if (sym.scope == Scopes.GLOBAL) {
                         self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(reg, sym.index));
                     } else {
                         self.emitInstruction(_instruction.ENCODE_MOVE(reg, sym.register.?));
                     }
                 }
-
 
                 return null;
             },
@@ -511,7 +542,7 @@ pub const Compiler = struct {
         const reg = self.currentScope().used_registers.pop().?;
         self.freeRegister(reg);
 
-        if(stmt.identifier.resolved_symbol) |sym| {
+        if (stmt.identifier.resolved_symbol) |sym| {
             if (sym.scope == Scopes.GLOBAL) {
                 self.emitInstruction(_instruction.ENCODE_DEFINE_GLOBAL(reg, sym.index));
                 return;
@@ -589,7 +620,11 @@ pub const Compiler = struct {
         //         }
 
         for (0.._vm.MAX_REGISTERS) |i| {
-            assert(!self.currentScope().registers.get(i)); // All registers should be freed
+            if (self.currentScope().registers.get(i)) {
+                print("R{d} never freed scope: {d}\n", .{ i, self.cur_scope });
+                assert(!self.currentScope().registers.get(i)); // All registers should be freed
+
+            }
         }
 
         return true;

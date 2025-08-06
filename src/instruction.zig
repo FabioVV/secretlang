@@ -129,8 +129,8 @@ pub inline fn ENCODE_RETURN_N() Instruction {
     return I(@intFromEnum(Opcode.OP_RETURN_N)) << 26;
 }
 
-pub inline fn ENCODE_CALL(r_dest: u8) Instruction {
-    return I(@intFromEnum(Opcode.OP_CALL)) << 26 | (I(r_dest) << 18);
+pub inline fn ENCODE_CALL(r_dest: u8, ra: u8) Instruction {
+    return I(@intFromEnum(Opcode.OP_CALL)) << 26 | (I(r_dest) << 18) | (I(ra) << 10);
 }
 
 pub inline fn DECODE_JUMP_OFFSET(instruction: Instruction) usize {

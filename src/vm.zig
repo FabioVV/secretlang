@@ -88,7 +88,7 @@ pub const VM = struct {
         vm.strings = strings;
         vm.objects = objects;
 
-        const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, &vm.objects);
+        const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, null, &vm.objects);
         vm.frames.set(0, CallFrame.init(mainFunction.asFunctionExpr().?));
 
         return vm;
@@ -113,7 +113,7 @@ pub const VM = struct {
         vm.strings = strings;
         vm.objects = objects;
 
-        const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, &vm.objects);
+        const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, null, &vm.objects);
         vm.frames.set(0, CallFrame.init(mainFunction.asFunctionExpr().?));
 
         return vm;
@@ -153,18 +153,18 @@ pub const VM = struct {
         };
 
         const errMsg = std.fmt.allocPrint(self.allocator,
-                                          \\
-                                          \\-> In [{s}] {d}:{d}
-                                          \\ {d} | {s}
-                                          \\   {s}| {s}
-                                          \\   {s}| runtime error: {s}
-                                          \\
-                                          \\
-                                          , .{ pos.filename, pos.line, pos.column, pos.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, runtimeErrMsg }) catch |err| {
-                                              errh.exitWithError("unrecoverable error trying to write runtime error full message", err);
-                                          };
+            \\
+            \\-> In [{s}] {d}:{d}
+            \\ {d} | {s}
+            \\   {s}| {s}
+            \\   {s}| runtime error: {s}
+            \\
+            \\
+        , .{ pos.filename, pos.line, pos.column, pos.line, source, fmtCaret.spacing, fmtCaret.caret, fmtCaret.spacing, runtimeErrMsg }) catch |err| {
+            errh.exitWithError("unrecoverable error trying to write runtime error full message", err);
+        };
 
-                                          errh.printError(errMsg);
+        errh.printError(errMsg);
     }
 
     inline fn currentCallFrame(self: *VM) *CallFrame {
@@ -231,11 +231,11 @@ pub const VM = struct {
             },
             .OBJECT => |a| switch (a.data) {
                 .STRING => |str_a| if (RB.asZigString()) |str_b|
-                std.mem.eql(u8, str_b, str_a.chars)
+                    std.mem.eql(u8, str_b, str_a.chars)
                 else
                     false,
-                    .ARRAY => false,
-                    .FUNCTION_EXPR => false,
+                .ARRAY => false,
+                .FUNCTION_EXPR => false,
             },
             .NIL => switch (RB) {
                 .NIL => true,
@@ -263,11 +263,11 @@ pub const VM = struct {
             },
             .OBJECT => |a| switch (a.data) {
                 .STRING => |str_a| if (RB.asZigString()) |str_b|
-                !std.mem.eql(u8, str_b, str_a.chars)
+                    !std.mem.eql(u8, str_b, str_a.chars)
                 else
                     true,
-                    .ARRAY => false,
-                    .FUNCTION_EXPR => false,
+                .ARRAY => false,
+                .FUNCTION_EXPR => false,
             },
             .NIL => switch (RB) {
                 .NIL => false,
@@ -613,13 +613,30 @@ pub const VM = struct {
                     self.currentCallFrameRegisters().set(RC, self.globals.slice()[globalIdx]);
                 },
                 .OP_CALL => {
-                    const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(curInstruction));
+                    var RC_R = _instruction.DECODE_RC(curInstruction);
+                    const RC = self.currentCallFrameRegisters().get(RC_R);
+                    const RA = _instruction.DECODE_RA(curInstruction);
+                    RC_R += 1;
+                    std.debug.print("RA? {d}\n", .{RA});
+
+                    for (RC_R..RA) |i| {
+                        self.currentCallFrameRegisters().get(i).print();
+                    }
 
                     if (RC.asFunctionExpr()) |f| {
+                        std.debug.print("len {d}\n", .{f.params_registers.?.constSlice().len});
+
+                        for (f.params_registers.?.constSlice()) |i| {
+                            std.debug.print("RP {d}\n", .{i});
+
+                            //                             const reg = f.params_registers.?.slice()[i];
+                            //                             self.currentCallFrameRegisters().set(reg, self.currentCallFrameRegisters().get(RC_R + i));
+                        }
+
                         self.pushCallFrame(CallFrame.init(f));
-                    } else {
-                        self.rError("type error: tried calling non-function", .{});
+                        continue;
                     }
+                    self.rError("type error: tried calling non-function", .{});
                 },
                 .OP_RETURN => {
                     const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(curInstruction));

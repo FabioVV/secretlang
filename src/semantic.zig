@@ -135,7 +135,7 @@ pub const SemanticAnalyzer = struct {
 
         self.analyzeExpression(stmt.expression);
 
-        const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, stmt.token.position.line, null);
+        const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, self.instruction_count, null);
         stmt.identifier.resolved_symbol = symbol;
     }
 
@@ -146,11 +146,16 @@ pub const SemanticAnalyzer = struct {
         }
         self.enterScope();
 
+        for (0..stmt.parameters.slice().len) |i| {
+            var param = stmt.parameters.slice()[i];
+            param.resolved_symbol = self.symbol_table.define(param.token, param.literal, self.instruction_count, null);
+        }
+
         self.analyzeFnBlock(stmt.body.?);
 
         self.leaveScope();
 
-        const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, stmt.token.position.line, null);
+        const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, self.instruction_count, null);
         stmt.identifier.resolved_symbol = symbol;
     }
 
@@ -205,8 +210,13 @@ pub const SemanticAnalyzer = struct {
 
                 self.sError("undefined variable: {s}", .{idenExpr.literal});
             },
-            AST.Expression.fn_expr => |fnExpr| {
+            AST.Expression.fn_expr => |*fnExpr| {
                 self.enterScope();
+
+                for (0..fnExpr.parameters.slice().len) |i| {
+                    var param = @constCast(&fnExpr.parameters.slice()[i]);
+                    param.resolved_symbol = self.symbol_table.define(param.token, param.literal, self.instruction_count, null);
+                }
 
                 self.analyzeFnBlock(fnExpr.body.?);
 

@@ -2,6 +2,7 @@ TODO: fix tests
 
 TODO: store the line of code of the instruction in the instruction_position hash, much easier
 
+
 1 - Add error correction suggestion:
 context aware suggestions
 spelling checking with Levenshtein Distance
@@ -20,6 +21,7 @@ spelling checking with Levenshtein Distance
 Language ideas
 
  - Have a options to output a dump/object file that later the VM can run by itself, without going through the entire pipeline(executables but for the VM, i think)
+
 
 2.1 - other ideas
 
