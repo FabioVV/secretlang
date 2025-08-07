@@ -222,7 +222,11 @@ pub const SemanticAnalyzer = struct {
 
                 self.leaveScope();
             },
-            AST.Expression.call_expr => |callExpr| {
+            AST.Expression.call_expr => |*callExpr| {
+                for (0..callExpr.arguments.slice().len) |i| {
+                    self.analyzeExpression(callExpr.arguments.slice()[i]);
+                }
+
                 self.analyzeExpression(callExpr.function);
             },
             else => {

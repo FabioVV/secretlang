@@ -149,6 +149,7 @@ pub const callExpression = struct {
             .function = fn_expr,
             .arguments = .{},
         };
+
         return callExpr;
     }
 };

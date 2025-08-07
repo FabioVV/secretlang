@@ -50,7 +50,7 @@ pub const FunctionExpr = struct {
     instructions_positions: std.AutoHashMap(u32, Position),
     params_registers: ?std.BoundedArray(u8, 32),
 
-    pub fn init(allocator: std.mem.Allocator, compiledFn: compilationScope, params: ?std.BoundedArray(u8, 32)) *FunctionExpr {
+    pub fn init(allocator: std.mem.Allocator, compiledFn: compilationScope, params_registers: ?std.BoundedArray(u8, 32)) *FunctionExpr {
         const fn_obj = allocator.create(FunctionExpr) catch unreachable;
 
         var compiledFunction = compiledFn;
@@ -59,7 +59,11 @@ pub const FunctionExpr = struct {
         var instructions = std.ArrayList(Instruction).init(allocator);
         instructions.appendSlice(compiledInstructions) catch unreachable;
 
-        fn_obj.* = FunctionExpr{ .instructions = instructions, .instructions_positions = compiledFn.instructions_positions.cloneWithAllocator(allocator) catch unreachable, .params_registers = params };
+        fn_obj.* = FunctionExpr{
+            .instructions = instructions,
+            .instructions_positions = compiledFn.instructions_positions.cloneWithAllocator(allocator) catch unreachable,
+            .params_registers = params_registers,
+        };
 
         compiledFunction.instructions.deinit();
         compiledFunction.instructions_positions.deinit();
@@ -159,8 +163,8 @@ pub const Value = union(ValueType) {
         return Value{ .BOOLEAN = boolean };
     }
 
-    pub inline fn createFunctionExpr(allocator: std.mem.Allocator, compiledFn: compilationScope, params: ?std.BoundedArray(u8, 32), objects: *?*Object) Value {
-        const fn_obj = FunctionExpr.init(allocator, compiledFn, params);
+    pub inline fn createFunctionExpr(allocator: std.mem.Allocator, compiledFn: compilationScope, params_registers: ?std.BoundedArray(u8, 32), objects: *?*Object) Value {
+        const fn_obj = FunctionExpr.init(allocator, compiledFn, params_registers);
         const obj = Object.initFnExpr(allocator, fn_obj, objects);
 
         const val = Value{ .OBJECT = obj };

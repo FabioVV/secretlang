@@ -1,7 +1,11 @@
 var add = fn(a, b){
-    var temp = a + b
+
+    var adder = fn(d, e){
+        return d + e
+    }
+
+    var temp = adder(a, b)
     return temp
 }
 
-
-add(5, 4)  +  11
+add(5 , 5) + 10

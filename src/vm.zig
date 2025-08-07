@@ -613,27 +613,21 @@ pub const VM = struct {
                     self.currentCallFrameRegisters().set(RC, self.globals.slice()[globalIdx]);
                 },
                 .OP_CALL => {
-                    var RC_R = _instruction.DECODE_RC(curInstruction);
+                    const RC_R = _instruction.DECODE_RC(curInstruction);
                     const RC = self.currentCallFrameRegisters().get(RC_R);
                     const RA = _instruction.DECODE_RA(curInstruction);
-                    RC_R += 1;
-                    std.debug.print("RA? {d}\n", .{RA});
-
-                    for (RC_R..RA) |i| {
-                        self.currentCallFrameRegisters().get(i).print();
-                    }
 
                     if (RC.asFunctionExpr()) |f| {
-                        std.debug.print("len {d}\n", .{f.params_registers.?.constSlice().len});
+                        var callFrame = CallFrame.init(f);
 
-                        for (f.params_registers.?.constSlice()) |i| {
-                            std.debug.print("RP {d}\n", .{i});
-
-                            //                             const reg = f.params_registers.?.slice()[i];
-                            //                             self.currentCallFrameRegisters().set(reg, self.currentCallFrameRegisters().get(RC_R + i));
+                        for (1..RA + 1) |r| {
+                            const argRegister = RC_R + r;
+                            const arg = self.currentCallFrameRegisters().get(argRegister);
+                            callFrame.registers.set(r, arg);
                         }
 
-                        self.pushCallFrame(CallFrame.init(f));
+                        self.pushCallFrame(callFrame);
+
                         continue;
                     }
                     self.rError("type error: tried calling non-function", .{});

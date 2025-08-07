@@ -448,13 +448,8 @@ pub const Compiler = struct {
             AST.Expression.fn_expr => |fn_expr| {
                 self.enterScope();
 
-                print("len params {d}\n", .{fn_expr.parameters.slice().len});
                 var params_registers = std.BoundedArray(u8, 32).init(0) catch unreachable;
-                const arity = fn_expr.parameters.slice().len;
-
-                print("arity {d}\n", .{arity});
-
-                for (0..arity) |i| {
+                for (0..fn_expr.parameters.slice().len) |i| {
                     var param = fn_expr.parameters.slice()[i];
 
                     const local = self.allocateRegister() catch {
@@ -464,6 +459,7 @@ pub const Compiler = struct {
 
                     param.resolved_symbol.?.register = local;
                     params_registers.append(local) catch unreachable;
+
                     //self.emitInstruction(_instruction.ENCODE_NIL(local)); do i need this?
                 }
 
@@ -473,31 +469,22 @@ pub const Compiler = struct {
 
                 const compScope = self.leaveScope().?;
 
-                if (self.currentScope().used_registers.pop()) |r| {
-                    self.freeRegister(r);
-                }
-                print("len params registers {d}\n", .{params_registers.len});
-
                 return self.emitConstant(Value.createFunctionExpr(self.allocator, compScope, params_registers, &self.objects));
             },
             AST.Expression.call_expr => |call_expr| {
-                _ = self.compileExpression(call_expr.function); // function here being an identifier that will be resolved
+                _ = self.compileExpression(call_expr.function); //function here being an identifier that will be resolved
                 const fn_register = self.currentScope().used_registers.pop().?;
 
-                var total_args: u8 = 0;
-
-                for (0..call_expr.arguments.slice().len) |i| {
-                    _ = self.compileExpression(call_expr.arguments.slice()[i]);
-
-                    total_args += 1;
+                const totalArgs = @as(u8, @intCast(call_expr.arguments.slice().len));
+                for (call_expr.arguments.constSlice()) |arg| {
+                    _ = self.compileExpression(arg);
                 }
 
-                self.emitInstruction(_instruction.ENCODE_CALL(fn_register, total_args));
+                self.emitInstruction(_instruction.ENCODE_CALL(fn_register, totalArgs));
                 self.freeRegister(fn_register);
 
-                for (0..total_args) |_| {
-                    const arg_register = self.currentScope().used_registers.pop().?;
-                    self.freeRegister(arg_register);
+                for (0..totalArgs) |_| {
+                    self.freeRegister(self.currentScope().used_registers.pop().?);
                 }
 
                 self.allocateReturnRegister();
