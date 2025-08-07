@@ -505,62 +505,62 @@ pub const VM = struct {
 
             std.debug.print("{s}\n", .{@tagName(opcode)});
             switch (opcode) {
-                .OP_LOADK => {
+                .LOADK => {
                     const constantIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
                     const RC = _instruction.DECODE_RC(curInstruction);
                     const contantValue = self.GET_CONSTANT(constantIdx).?;
 
                     self.currentCallFrameRegisters().set(RC, contantValue);
                 },
-                .OP_ADD => {
+                .ADD => {
                     self.mathAdd(curInstruction);
                 },
-                .OP_SUB => {
+                .SUB => {
                     self.mathSub(curInstruction);
                 },
-                .OP_MUL => {
+                .MUL => {
                     self.mathMul(curInstruction);
                 },
-                .OP_DIV => {
+                .DIV => {
                     self.mathDiv(curInstruction);
                 },
-                .OP_EQUAL => {
+                .EQUAL => {
                     self.cmpEqual(curInstruction); // ==
                 },
-                .OP_NOTEQUAL => {
+                .NOTEQUAL => {
                     self.cmpNotEqual(curInstruction); // !=
                 },
-                .OP_LESSEQUAL => {
+                .LESSEQUAL => {
                     self.cmpLessEqual(curInstruction); // <=
                 },
-                .OP_GREATEREQUAL => {
+                .GREATEREQUAL => {
                     self.cmpGreaterEqual(curInstruction); // >=
                 },
-                .OP_GREATERTHAN => {
+                .GREATERTHAN => {
                     self.cmpGreaterThan(curInstruction); // >
                 },
-                .OP_LESSTHAN => {
+                .LESSTHAN => {
                     self.cmpLessThan(curInstruction); // <
                 },
-                .OP_FALSE => {
+                .LOADF => {
                     const RC = _instruction.DECODE_RC(curInstruction);
                     self.currentCallFrameRegisters().set(RC, Value.createBoolean(false));
 
                     self.currentCallFrameRegisters().get(RC).print();
                 },
-                .OP_TRUE => {
+                .LOADT => {
                     const RC = _instruction.DECODE_RC(curInstruction);
                     self.currentCallFrameRegisters().set(RC, Value.createBoolean(true));
 
                     self.currentCallFrameRegisters().get(RC).print();
                 },
-                .OP_NIL => {
+                .LOADN => {
                     const RC = _instruction.DECODE_RC(curInstruction);
                     self.currentCallFrameRegisters().set(RC, Value.createNil());
 
                     self.currentCallFrameRegisters().get(RC).print();
                 },
-                .OP_BANG => {
+                .BANG => {
                     const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(curInstruction));
                     const RC = _instruction.DECODE_RC(curInstruction);
 
@@ -574,7 +574,7 @@ pub const VM = struct {
 
                     self.currentCallFrameRegisters().get(RC).print();
                 },
-                .OP_MINUS => {
+                .MINUS => {
                     const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(curInstruction));
                     const RC = _instruction.DECODE_RC(curInstruction);
 
@@ -588,7 +588,7 @@ pub const VM = struct {
 
                     self.currentCallFrameRegisters().get(RC).print();
                 },
-                .OP_JUMP_IF_FALSE => {
+                .JMPF => {
                     const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(curInstruction));
 
                     if (!RC.isTruthy()) {
@@ -596,23 +596,23 @@ pub const VM = struct {
                         self.currentCallFrame().pc += jumpOffset;
                     }
                 },
-                .OP_JUMP => {
+                .JMP => {
                     const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
                     self.currentCallFrame().pc += jumpOffset;
                 },
-                .OP_SET_GLOBAL => {
+                .SGLOBAL => {
                     const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(curInstruction));
                     const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
 
                     self.globals.slice()[globalIdx] = RC;
                 },
-                .OP_GET_GLOBAL => {
+                .GGLOBAL => {
                     const RC = _instruction.DECODE_RC(curInstruction);
                     const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
 
                     self.currentCallFrameRegisters().set(RC, self.globals.slice()[globalIdx]);
                 },
-                .OP_CALL => {
+                .CALL => {
                     const RC_R = _instruction.DECODE_RC(curInstruction);
                     const RC = self.currentCallFrameRegisters().get(RC_R);
                     const RA = _instruction.DECODE_RA(curInstruction);
@@ -632,19 +632,19 @@ pub const VM = struct {
                     }
                     self.rError("type error: tried calling non-function", .{});
                 },
-                .OP_RETURN => {
+                .RET => {
                     const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(curInstruction));
 
                     _ = self.popCallFrame();
 
                     self.currentCallFrameRegisters().set(0, RC);
                 },
-                .OP_RETURN_N => {
+                .RETN => {
                     _ = self.popCallFrame();
 
                     self.currentCallFrameRegisters().set(0, NIL);
                 },
-                .OP_MOVE => {
+                .MOVE => {
                     const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(curInstruction));
                     const RC = _instruction.DECODE_RC(curInstruction);
 

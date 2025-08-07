@@ -177,20 +177,20 @@ pub const Compiler = struct {
     pub fn canOpError(self: *Compiler, opcode: Opcode) bool {
         _ = self;
         return switch (opcode) {
-            .OP_ADD,
-            .OP_SUB,
-            .OP_MUL,
-            .OP_DIV,
-            .OP_EQUAL,
-            .OP_NOTEQUAL,
-            .OP_GREATERTHAN,
-            .OP_LESSTHAN,
-            .OP_LESSEQUAL,
-            .OP_GREATEREQUAL,
-            .OP_MINUS,
-            .OP_BANG,
-            .OP_GET_GLOBAL, // can runtime error
-            .OP_CALL,
+            .ADD,
+            .SUB,
+            .MUL,
+            .DIV,
+            .EQUAL,
+            .NOTEQUAL,
+            .GREATERTHAN,
+            .LESSTHAN,
+            .LESSEQUAL,
+            .GREATEREQUAL,
+            .MINUS,
+            .BANG,
+            .GGLOBAL, // can runtime error
+            .CALL,
             => true,
             else => false, // won't error (problably)
         };

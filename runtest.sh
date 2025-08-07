@@ -1,7 +1,5 @@
 #!/bin/bash
 
-zig build
-
 if [ -z "$1" ]; then
     echo
     echo "Error: missing test filename argument" >&2
