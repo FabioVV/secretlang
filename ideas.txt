@@ -2,6 +2,7 @@ TODO: fix tests
 
 TODO: store the line of code of the instruction in the instruction_position hash, much easier
 
+TODO: keep ip in a local variable in the main run loop, so that it gets opmtized by zig, instead of always getting it from the current callframe function
 
 1 - Add error correction suggestion:
 context aware suggestions

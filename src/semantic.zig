@@ -132,11 +132,10 @@ pub const SemanticAnalyzer = struct {
             self.sError("variable '{s}' already defined on line {d}", .{ stmt.identifier.literal, s.token.position.line });
             return;
         }
-
-        self.analyzeExpression(stmt.expression);
-
         const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, self.instruction_count, null);
         stmt.identifier.resolved_symbol = symbol;
+
+        self.analyzeExpression(stmt.expression);
     }
 
     pub fn analyzeFn(self: *SemanticAnalyzer, stmt: *AST.FnStatement) void { // Make this better, store on symbol if it is function or not, so that better error messages may be dispatched here

@@ -1,12 +1,13 @@
 
 var add = fn(a, b){
 
-    var adder = fn(d, e){
-        return d + e
+    var adder = fn(c,d){
+        return c + d
     }
 
-    var temp = adder(a, b)
-    return temp
+    return adder(a, b) + adder(a, b)
 }
 
-add(5 , 5) + 10
+var test = add(10, 10)
+
+test + 1

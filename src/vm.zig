@@ -632,22 +632,24 @@ pub const VM = struct {
                     if (RC.asFunctionExpr()) |f| {
                         var callFrame = CallFrame.init(f);
 
-                        if (f.params_registers != null and f.params_registers.?.len != RA - 1) {
-                            self.rError("argument error: expected {d} arguments but got {d}", .{ f.params_registers.?.len, RA - 1 });
+                        if (f.params_registers != null and f.params_registers.?.len != RA) {
+                            self.rError("argument error: expected {d} arguments but got {d}", .{ f.params_registers.?.len, RA });
                             return false;
                         }
 
-                        for (1..RA) |r| {
-                            const argRegister = RC_R + r;
-                            const arg = self.currentCallFrameRegisters().get(argRegister);
-                            callFrame.registers.set(r, arg);
+                        for (0..RA) |i| {
+                            const caller_arg_reg = RC_R + 1 + i; // Args are after func register
+                            const callee_param_reg = f.params_registers.?.slice()[i];
+                            const arg_value = self.currentCallFrameRegisters().get(caller_arg_reg);
+                            std.debug.print("ARG(V): {d} - R{d}\n", .{ arg_value.NUMBER, caller_arg_reg });
+                            callFrame.registers.set(callee_param_reg, arg_value);
                         }
 
                         self.pushCallFrame(callFrame);
-
-                        continue;
+                    } else {
+                        self.rError("type error: tried calling non-function", .{});
+                        return false;
                     }
-                    self.rError("type error: tried calling non-function", .{});
                 },
                 .RET => {
                     const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(curInstruction));

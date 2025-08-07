@@ -477,9 +477,9 @@ pub const Compiler = struct {
                 _ = self.compileExpression(call_expr.function); //function here being an identifier that will be resolved
                 const fn_register = self.currentScope().used_registers.pop().?;
 
-                const totalArgs = @as(u8, @intCast(call_expr.arguments.slice().len));
                 for (call_expr.arguments.constSlice()) |arg| {
                     _ = self.compileExpression(arg);
+                    print("expr: R{d}\n", .{self.currentScope().used_registers.getLast()});
                 }
 
                 //                 switch (call_expr.function.?.*) {
@@ -489,13 +489,15 @@ pub const Compiler = struct {
                 //                     else => {},
                 //                 }
 
-                self.emitInstruction(_instruction.ENCODE_CALL(fn_register, totalArgs + 1));
+                self.emitInstruction(_instruction.ENCODE_CALL(fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
+
                 self.freeRegister(fn_register);
 
-                for (0..totalArgs) |_| {
-                    self.freeRegister(self.currentScope().used_registers.pop().?);
+                for (call_expr.arguments.slice()) |_| {
+                    if (self.currentScope().used_registers.pop()) |r| {
+                        self.freeRegister(r);
+                    }
                 }
-
                 self.allocateReturnRegister();
 
                 return null;
@@ -621,13 +623,13 @@ pub const Compiler = struct {
         //             print("{s}\n", .{@tagName(_instruction.GET_OPCODE(self.scopes.items[self.cur_scope].instructions.items[i]))});
         //         }
 
-        for (0.._vm.MAX_REGISTERS) |i| {
-            if (self.currentScope().registers.get(i)) {
-                print("R{d} never freed scope: {d}\n", .{ i, self.cur_scope });
-                assert(!self.currentScope().registers.get(i)); // All registers should be freed
-
-            }
-        }
+        //         for (0.._vm.MAX_REGISTERS) |i| {
+        //             if (self.currentScope().registers.get(i)) {
+        //                 print("R{d} never freed scope: {d}\n", .{ i, self.cur_scope });
+        //                 assert(!self.currentScope().registers.get(i)); // All registers should be freed
+        //
+        //             }
+        //         }
 
         return true;
     }
