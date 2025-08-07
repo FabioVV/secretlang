@@ -10,4 +10,3 @@ if [ -z "$1" ]; then
 fi
 
 exec ./zig-out/bin/secret.exe "./langtests/$1"
-

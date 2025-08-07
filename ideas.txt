@@ -18,10 +18,11 @@ spelling checking with Levenshtein Distance
 
  - fix strings handling/interning !IMPORTANT
 
-Language ideas
-
  - Have a options to output a dump/object file that later the VM can run by itself, without going through the entire pipeline(executables but for the VM, i think)
 
+
+- Maybe have a simple line arguments like -sf (safe), when the user passes it in, it enables some runtime checks? like arity checking etc
+i dont know
 
 2.1 - other ideas
 

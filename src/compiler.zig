@@ -480,7 +480,14 @@ pub const Compiler = struct {
                     _ = self.compileExpression(arg);
                 }
 
-                self.emitInstruction(_instruction.ENCODE_CALL(fn_register, totalArgs));
+                //                 switch (call_expr.function.?.*) {
+                //                     AST.Expression.identifier_expr => |iden| {
+                //                         print("Function {any}\n", .{iden});
+                //                     },
+                //                     else => {},
+                //                 }
+
+                self.emitInstruction(_instruction.ENCODE_CALL(fn_register, totalArgs + 1));
                 self.freeRegister(fn_register);
 
                 for (0..totalArgs) |_| {
@@ -520,11 +527,12 @@ pub const Compiler = struct {
         //const identifierName = self.allocator.dupe(u8, stmt.identifier.literal) catch unreachable;
         //_ = self.addConstant(Value.createString(self.allocator, identifierName)); // Is this necessary?
 
-        if (stmt.expression != null) {
-            _ = self.compileExpression(stmt.expression);
-        } else {
-            self.emitNil();
-        }
+        _ = self.compileExpression(stmt.expression);
+
+        //         const maybe_fn = self.constantsPool.items[constantIdx];
+        //         if (Value.asFunctionExpr(maybe_fn)) |f| {
+        //             _ = f;
+        //         }
 
         const reg = self.currentScope().used_registers.pop().?;
         self.freeRegister(reg);
