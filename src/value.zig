@@ -1,6 +1,6 @@
 const std = @import("std");
 const VM = @import("vm.zig").VM;
-const compilationScope = @import("compiler.zig").compilationScope;
+const CompilationScope = @import("compiler.zig").CompilationScope;
 const Instruction = @import("instruction.zig").Instruction;
 const Position = @import("token.zig").Position;
 
@@ -50,7 +50,7 @@ pub const FunctionExpr = struct {
     instructions_positions: std.AutoHashMap(u32, Position),
     params_registers: ?std.BoundedArray(u8, 32),
 
-    pub fn init(allocator: std.mem.Allocator, compiledFn: compilationScope, params_registers: ?std.BoundedArray(u8, 32)) *FunctionExpr {
+    pub fn init(allocator: std.mem.Allocator, compiledFn: CompilationScope, params_registers: ?std.BoundedArray(u8, 32)) *FunctionExpr {
         const fn_obj = allocator.create(FunctionExpr) catch unreachable;
 
         var compiledFunction = compiledFn;
@@ -163,7 +163,7 @@ pub const Value = union(ValueType) {
         return Value{ .BOOLEAN = boolean };
     }
 
-    pub inline fn createFunctionExpr(allocator: std.mem.Allocator, compiledFn: compilationScope, params_registers: ?std.BoundedArray(u8, 32), objects: *?*Object) Value {
+    pub inline fn createFunctionExpr(allocator: std.mem.Allocator, compiledFn: CompilationScope, params_registers: ?std.BoundedArray(u8, 32), objects: *?*Object) Value {
         const fn_obj = FunctionExpr.init(allocator, compiledFn, params_registers);
         const obj = Object.initFnExpr(allocator, fn_obj, objects);
 

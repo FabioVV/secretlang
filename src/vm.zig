@@ -11,7 +11,7 @@ const Position = _token.Position;
 const Lexer = @import("lexer.zig").Lexer;
 const Parser = @import("parser.zig").Parser;
 const AST = @import("ast.zig");
-const compilationScope = @import("compiler.zig").compilationScope;
+const CompilationScope = @import("compiler.zig").CompilationScope;
 const _instruction = @import("instruction.zig");
 const _value = @import("value.zig");
 const Value = _value.Value;
@@ -68,7 +68,7 @@ pub const VM = struct {
 
     frameIndex: usize,
 
-    pub fn init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), compiledInst: *compilationScope, source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
+    pub fn init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), compiledInst: *CompilationScope, source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const vm = arena.allocator().create(VM) catch unreachable;
 
@@ -94,7 +94,7 @@ pub const VM = struct {
         return vm;
     }
 
-    pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), compiledInst: *compilationScope, globals: *std.BoundedArray(Value, MAX_GLOBALS), source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
+    pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), compiledInst: *CompilationScope, globals: *std.BoundedArray(Value, MAX_GLOBALS), source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
         const vm = allocator.create(VM) catch unreachable;
 
         vm.frameIndex = 0;

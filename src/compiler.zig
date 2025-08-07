@@ -31,14 +31,14 @@ const CompilerError = struct {
     message: []const u8,
 };
 
-pub const compilationScope = struct {
+pub const CompilationScope = struct {
     instructions: std.ArrayList(Instruction),
     instructions_positions: std.AutoHashMap(u32, Position),
     registers: std.BoundedArray(bool, _vm.MAX_REGISTERS),
     used_registers: std.ArrayList(u8),
 
-    pub fn init(allocator: std.mem.Allocator) compilationScope {
-        var cs = compilationScope{
+    pub fn init(allocator: std.mem.Allocator) CompilationScope {
+        var cs = CompilationScope{
             .instructions = std.ArrayList(Instruction).init(allocator),
             .instructions_positions = std.AutoHashMap(u32, Position).init(allocator),
             .registers = std.BoundedArray(bool, _vm.MAX_REGISTERS).init(_vm.MAX_REGISTERS) catch unreachable,
@@ -51,6 +51,8 @@ pub const compilationScope = struct {
     }
 };
 
+// const ScopeType = enum { MAIN, FUNCTION };
+
 pub const Compiler = struct {
     source: *[]const u8,
     filename: *[]const u8,
@@ -62,7 +64,7 @@ pub const Compiler = struct {
     arena: ?std.heap.ArenaAllocator,
 
     cur_scope: usize,
-    scopes: std.ArrayList(compilationScope),
+    scopes: std.ArrayList(CompilationScope),
 
     constantsPool: std.ArrayList(Value),
     constantsPoolHashes: std.AutoHashMap(u64, u16), // For deduplication of constants
@@ -85,8 +87,8 @@ pub const Compiler = struct {
         compiler.filename = filename;
 
         compiler.cur_scope = 0;
-        compiler.scopes = std.ArrayList(compilationScope).init(compiler.allocator);
-        compiler.scopes.append(compilationScope.init(compiler.allocator)) catch unreachable; // main scope
+        compiler.scopes = std.ArrayList(CompilationScope).init(compiler.allocator);
+        compiler.scopes.append(CompilationScope.init(compiler.allocator)) catch unreachable; // main scope
 
         compiler.constantsPool = std.ArrayList(Value).init(compiler.allocator);
         compiler.constantsPoolHashes = std.AutoHashMap(u64, u16).init(compiler.allocator);
@@ -116,8 +118,8 @@ pub const Compiler = struct {
         compiler.filename = filename;
 
         compiler.cur_scope = 0;
-        compiler.scopes = std.ArrayList(compilationScope).init(compiler.allocator);
-        compiler.scopes.append(compilationScope.init(compiler.allocator)) catch unreachable; // main scope
+        compiler.scopes = std.ArrayList(CompilationScope).init(compiler.allocator);
+        compiler.scopes.append(CompilationScope.init(compiler.allocator)) catch unreachable; // main scope
 
         compiler.constantsPool = std.ArrayList(Value).init(compiler.allocator);
         compiler.constantsPoolHashes = std.AutoHashMap(u64, u16).init(compiler.allocator);
@@ -245,11 +247,11 @@ pub const Compiler = struct {
         self.currentScope().used_registers.append(0) catch unreachable;
     }
 
-    inline fn currentScope(self: *Compiler) *compilationScope {
+    inline fn currentScope(self: *Compiler) *CompilationScope {
         return &self.scopes.items[self.cur_scope];
     }
 
-    inline fn currentScopeInstructions(self: *Compiler) *compilationScope {
+    inline fn currentScopeInstructions(self: *Compiler) *CompilationScope {
         return &self.scopes.items[self.cur_scope].instructions;
     }
 
@@ -258,11 +260,11 @@ pub const Compiler = struct {
     }
 
     inline fn enterScope(self: *Compiler) void {
-        self.scopes.append(compilationScope.init(self.allocator)) catch unreachable;
+        self.scopes.append(CompilationScope.init(self.allocator)) catch unreachable;
         self.cur_scope += 1;
     }
 
-    fn leaveScope(self: *Compiler) ?compilationScope {
+    fn leaveScope(self: *Compiler) ?CompilationScope {
         self.cur_scope -= 1;
         if (self.scopes.pop()) |sc| {
             return sc;
@@ -557,6 +559,11 @@ pub const Compiler = struct {
     }
 
     fn compileReturnStatement(self: *Compiler, stmt: *AST.ReturnStatement) void {
+        if (self.cur_scope == 0) {
+            self.cError("tried returning from top-level code");
+            return;
+        }
+
         _ = self.compileExpression(stmt.expression);
 
         const reg = self.currentScope().used_registers.pop().?;
