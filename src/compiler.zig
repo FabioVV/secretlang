@@ -475,9 +475,23 @@ pub const Compiler = struct {
             },
             AST.Expression.call_expr => |call_expr| {
                 _ = self.compileExpression(call_expr.function); //function here being an identifier that will be resolved
+
                 const fn_register = self.currentScope().used_registers.pop().?;
 
                 for (call_expr.arguments.constSlice()) |arg| {
+                    //                     print("ARG: {any}\n", .{arg});
+                    //
+                    //                     switch (arg.?.*) {
+                    //                         AST.Expression.infix_expr => |ifx| {
+                    //                             switch (ifx.left.?.*) {
+                    //                                 AST.Expression.identifier_expr => |idenExpr| {
+                    //                                     print("sb: {s}\n", .{idenExpr.resolved_symbol.?.name});
+                    //                                 },
+                    //                                 else => {},
+                    //                             }
+                    //                         },
+                    //                         else => {},
+                    //                     }
                     _ = self.compileExpression(arg);
 
                     const arg_reg = self.currentScope().used_registers.pop().?;
@@ -485,17 +499,15 @@ pub const Compiler = struct {
                     self.freeRegister(arg_reg);
                 }
 
-                //                 switch (call_expr.function.?.*) {
-                //                     AST.Expression.identifier_expr => |iden| {
-                //                         print("Function {any}\n", .{iden});
-                //                     },
-                //                     else => {},
-                //                 }
-
                 self.emitInstruction(_instruction.ENCODE_CALL(fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
-                self.freeRegister(fn_register);
 
-                self.allocateReturnRegister();
+                //self.allocateReturnRegister();
+                const result_reg = self.allocateRegister() catch {
+                    self.cError("out of registers");
+                    return null;
+                };
+                self.emitInstruction(_instruction.ENCODE_MOVE(result_reg, 0)); // Move return value from R0
+                self.freeRegister(fn_register);
 
                 return null;
             },

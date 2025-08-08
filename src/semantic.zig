@@ -150,12 +150,12 @@ pub const SemanticAnalyzer = struct {
             param.resolved_symbol = self.symbol_table.define(param.token, param.literal, self.instruction_count, null);
         }
 
+        const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, self.instruction_count, null);
+        stmt.identifier.resolved_symbol = symbol;
+
         self.analyzeFnBlock(stmt.body.?);
 
         self.leaveScope();
-
-        const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, self.instruction_count, null);
-        stmt.identifier.resolved_symbol = symbol;
     }
 
     pub fn analyzeFnBlock(self: *SemanticAnalyzer, stmt: *AST.BlockStatement) void {

@@ -7,3 +7,5 @@ var factorial = fn(n){
 }
 
 var test = factorial(7)
+
+test +  1

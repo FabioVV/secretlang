@@ -630,7 +630,7 @@ pub const VM = struct {
                 .PUSH => {
                     const RC = _instruction.DECODE_RC(curInstruction);
                     self.push(self.currentCallFrameRegisters().get(RC));
-                    std.debug.print("pushed: {d}\n", .{self.currentCallFrameRegisters().get(RC).NUMBER});
+//                     std.debug.print("pushed: {d}\n", .{self.currentCallFrameRegisters().get(RC).NUMBER});
                 },
                 .CALL => {
                     const RC_R = _instruction.DECODE_RC(curInstruction);
@@ -648,17 +648,23 @@ pub const VM = struct {
 
                         for (0..RA) |_| {
                             const popped = self.pop().?;
-                            std.debug.print("poped: {any}\n", .{popped});
+                            //                             std.debug.print("poped: {any}\n", .{popped});
                             args_temp.append(popped) catch unreachable;
                         }
 
+                        //                         for (f.params_registers.?.slice()) |pr| {
+                        //                             std.debug.print("PARAM REGISTER: R{d}\n", .{pr});
+                        //                         }
+
                         for (1..RA + 1) |i| {
+                            //                             const v = args_temp.get(RA - i);
+                            //                             std.debug.print("SETTING R{d} AS {any}\n", .{ i, v });
                             callFrame.registers.set(i, args_temp.get(RA - i));
                         }
 
                         self.pushCallFrame(callFrame);
                     } else {
-                        self.rError("type error: tried calling non-function", .{});
+                        self.rError("type error: tried calling non-function: {any}", .{@tagName(RC)});
                         return false;
                     }
                 },
