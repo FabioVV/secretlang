@@ -1,0 +1,12 @@
+
+if(true){
+    var test = 50 + 50
+    test + 1
+} else {
+    var testt = 100 + 100
+    testt + 1
+}
+
+
+var a = 5
+a + 1

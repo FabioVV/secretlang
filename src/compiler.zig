@@ -439,10 +439,10 @@ pub const Compiler = struct {
 
                 self.patchJump(ifJump);
 
-                if (ifExpr.elseBlock == null) {
-                    self.emitNil();
-                } else {
+                if (ifExpr.elseBlock != null) {
                     self.compileBlockStatement(ifExpr.elseBlock.?);
+                } else {
+                    self.emitNil();
                 }
 
                 self.patchJump(elseJump);
@@ -471,7 +471,6 @@ pub const Compiler = struct {
 
                 const compScope = self.leaveScope().?;
 
-
                 return self.emitConstant(Value.createFunctionExpr(self.allocator, compScope, params_registers, &self.objects));
             },
             AST.Expression.call_expr => |call_expr| {
@@ -480,6 +479,7 @@ pub const Compiler = struct {
 
                 for (call_expr.arguments.constSlice()) |arg| {
                     _ = self.compileExpression(arg);
+
                     const arg_reg = self.currentScope().used_registers.pop().?;
                     self.emitInstruction(_instruction.ENCODE_PUSH(arg_reg));
                     self.freeRegister(arg_reg);
@@ -512,7 +512,6 @@ pub const Compiler = struct {
                     if (sym.scope == Scopes.GLOBAL) {
                         self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(reg, sym.index));
                     } else {
-                        print("AAAAAAAAAAAaq\n", .{});
                         self.emitInstruction(_instruction.ENCODE_MOVE(reg, sym.register.?));
                     }
                 }

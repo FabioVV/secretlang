@@ -1,8 +1,0 @@
-var fib = fn(n) {
-    n - 1
-
-    return n
-}
-
-var result = fib(10)
-

@@ -1,0 +1,10 @@
+var fib = fn(n){
+    if(n < 2){
+        return n
+    }
+
+    return fib(n - 2) + fib(n - 1)
+}
+
+var test = fib(5)
+test + 1

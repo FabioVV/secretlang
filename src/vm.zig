@@ -433,6 +433,9 @@ pub const VM = struct {
         const RB = self.currentCallFrameRegisters().get(_instruction.DECODE_RB(instruction));
         const RC = _instruction.DECODE_RC(instruction);
 
+        RA.print();
+        RB.print();
+
         switch (RA) {
             .NUMBER => |a| switch (RB) {
                 .NUMBER => |b| {
@@ -628,7 +631,6 @@ pub const VM = struct {
                     const RC = _instruction.DECODE_RC(curInstruction);
                     self.push(self.currentCallFrameRegisters().get(RC));
                     std.debug.print("pushed: {d}\n", .{self.currentCallFrameRegisters().get(RC).NUMBER});
-
                 },
                 .CALL => {
                     const RC_R = _instruction.DECODE_RC(curInstruction);
@@ -644,11 +646,11 @@ pub const VM = struct {
                             return false;
                         }
 
-                        for (0..RA ) |_| {
-                            const arg_value = self.pop().?;
-                            args_temp.append(arg_value) catch unreachable;
+                        for (0..RA) |_| {
+                            const popped = self.pop().?;
+                            std.debug.print("poped: {any}\n", .{popped});
+                            args_temp.append(popped) catch unreachable;
                         }
-
 
                         for (1..RA + 1) |i| {
                             callFrame.registers.set(i, args_temp.get(RA - i));
