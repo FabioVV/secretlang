@@ -515,7 +515,7 @@ pub const VM = struct {
             const curInstruction = self.currentCallFrame().instructions()[pc];
             const opcode = _instruction.GET_OPCODE(curInstruction);
 
-            //std.debug.print("{s}\n", .{@tagName(opcode)});
+            std.debug.print("{s}\n", .{@tagName(opcode)});
             switch (opcode) {
                 .LOADK => {
                     const constantIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
@@ -644,7 +644,7 @@ pub const VM = struct {
                             return false;
                         }
 
-                        for (0..RA + 1) |_| {
+                        for (0..RA ) |_| {
                             const arg_value = self.pop().?;
                             args_temp.append(arg_value) catch unreachable;
                         }

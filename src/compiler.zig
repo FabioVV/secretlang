@@ -512,6 +512,7 @@ pub const Compiler = struct {
                     if (sym.scope == Scopes.GLOBAL) {
                         self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(reg, sym.index));
                     } else {
+                        print("AAAAAAAAAAAaq\n", .{});
                         self.emitInstruction(_instruction.ENCODE_MOVE(reg, sym.register.?));
                     }
                 }
