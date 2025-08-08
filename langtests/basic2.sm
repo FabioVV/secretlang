@@ -7,3 +7,15 @@ var GET_CONSTANT = fn(){
 }
 
 GET_CONSTANT()() + " Varela"
+
+
+var INNER_FN = fn(){
+    var test = fn(){
+        return fn (){
+            return 5
+        }
+    }
+    return test
+}
+
+INNER_FN()()() + 5

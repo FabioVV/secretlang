@@ -23,7 +23,7 @@ const Instruction = _instruction.Instruction;
 pub const MAX_REGISTERS = 255;
 pub const MAX_GLOBALS = 65535;
 pub const MAX_FRAMES = 1024;
-pub const STACK_SIZE = 4096;
+pub const STACK_SIZE = 2048;
 
 const NIL = Value{ .NIL = void{} };
 const TRUE = Value{ .BOOLEAN = true };
@@ -78,7 +78,7 @@ pub const VM = struct {
         vm.arena = arena;
         vm.allocator = vm.arena.?.allocator();
 
-        vm.stack = std.BoundedArray(Value, STACK_SIZE).init(STACK_SIZE) catch unreachable;
+        vm.stack = std.BoundedArray(Value, STACK_SIZE).init(0) catch unreachable;
         vm.frames = std.BoundedArray(CallFrame, MAX_FRAMES).init(MAX_FRAMES) catch unreachable;
 
         //vm.compiledInstructions = compiledInst;
@@ -103,7 +103,7 @@ pub const VM = struct {
         vm.arena = null;
         vm.allocator = allocator;
 
-        vm.stack = std.BoundedArray(Value, STACK_SIZE).init(STACK_SIZE) catch unreachable;
+        vm.stack = std.BoundedArray(Value, STACK_SIZE).init(0) catch unreachable;
         vm.frames = std.BoundedArray(CallFrame, MAX_FRAMES).init(MAX_FRAMES) catch unreachable;
 
         //vm.compiledInstructions = compiledInst;
@@ -191,7 +191,7 @@ pub const VM = struct {
         };
     }
 
-    inline fn pop(self: *VM) Value {
+    inline fn pop(self: *VM) ?Value {
         if (self.stack.len == 0) {
             self.rError("stack underflow", .{});
             return NIL;
@@ -624,6 +624,12 @@ pub const VM = struct {
 
                     self.currentCallFrameRegisters().set(RC, self.globals.slice()[globalIdx]);
                 },
+                .PUSH => {
+                    const RC = _instruction.DECODE_RC(curInstruction);
+                    self.push(self.currentCallFrameRegisters().get(RC));
+                    std.debug.print("pushed: {d}\n", .{self.currentCallFrameRegisters().get(RC).NUMBER});
+
+                },
                 .CALL => {
                     const RC_R = _instruction.DECODE_RC(curInstruction);
                     const RC = self.currentCallFrameRegisters().get(RC_R);
@@ -631,18 +637,21 @@ pub const VM = struct {
 
                     if (RC.asFunctionExpr()) |f| {
                         var callFrame = CallFrame.init(f);
+                        var args_temp = std.BoundedArray(Value, 32).init(0) catch unreachable;
 
                         if (f.params_registers != null and f.params_registers.?.len != RA) {
                             self.rError("argument error: expected {d} arguments but got {d}", .{ f.params_registers.?.len, RA });
                             return false;
                         }
 
-                        for (0..RA) |i| {
-                            const caller_arg_reg = RC_R + 1 + i; // Args are after func register
-                            const callee_param_reg = f.params_registers.?.slice()[i];
-                            const arg_value = self.currentCallFrameRegisters().get(caller_arg_reg);
-                            std.debug.print("ARG(V): {d} - R{d}\n", .{ arg_value.NUMBER, caller_arg_reg });
-                            callFrame.registers.set(callee_param_reg, arg_value);
+                        for (0..RA + 1) |_| {
+                            const arg_value = self.pop().?;
+                            args_temp.append(arg_value) catch unreachable;
+                        }
+
+
+                        for (1..RA + 1) |i| {
+                            callFrame.registers.set(i, args_temp.get(RA - i));
                         }
 
                         self.pushCallFrame(callFrame);

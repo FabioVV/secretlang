@@ -1,9 +1,8 @@
-var factorial = fn(n) {
-    if (n <= 1) {
-         return 1
-    } else {
-         return n * factorial(n - 1)
-    }
+var fib = fn(n) {
+    n - 1
+
+    return n
 }
 
-var result = factorial(5)
+var result = fib(10)
+

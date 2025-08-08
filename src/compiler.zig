@@ -471,6 +471,7 @@ pub const Compiler = struct {
 
                 const compScope = self.leaveScope().?;
 
+
                 return self.emitConstant(Value.createFunctionExpr(self.allocator, compScope, params_registers, &self.objects));
             },
             AST.Expression.call_expr => |call_expr| {
@@ -479,7 +480,9 @@ pub const Compiler = struct {
 
                 for (call_expr.arguments.constSlice()) |arg| {
                     _ = self.compileExpression(arg);
-                    print("expr: R{d}\n", .{self.currentScope().used_registers.getLast()});
+                    const arg_reg = self.currentScope().used_registers.pop().?;
+                    self.emitInstruction(_instruction.ENCODE_PUSH(arg_reg));
+                    self.freeRegister(arg_reg);
                 }
 
                 //                 switch (call_expr.function.?.*) {
@@ -490,14 +493,8 @@ pub const Compiler = struct {
                 //                 }
 
                 self.emitInstruction(_instruction.ENCODE_CALL(fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
-
                 self.freeRegister(fn_register);
 
-                for (call_expr.arguments.slice()) |_| {
-                    if (self.currentScope().used_registers.pop()) |r| {
-                        self.freeRegister(r);
-                    }
-                }
                 self.allocateReturnRegister();
 
                 return null;

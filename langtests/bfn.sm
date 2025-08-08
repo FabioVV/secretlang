@@ -5,7 +5,7 @@ var add = fn(a, b){
         return c + d
     }
 
-    return adder(a, b) + adder(a, b)
+    return adder(a - 5, b - 5)
 }
 
 var test = add(10, 10)
