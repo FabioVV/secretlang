@@ -19,7 +19,6 @@ pub const Opcode = enum(u8) {
     LOADF = 4, // loads FALSE into register RC
     LOADN = 5, // loads NIL into register RC
 
-
     ADD = 6,
     SUB = 7,
     MUL = 8,
@@ -137,13 +136,12 @@ pub inline fn ENCODE_RETURN_N() Instruction {
     return I(@intFromEnum(Opcode.RETN)) << 26;
 }
 
-pub inline fn ENCODE_CALL(r_dest: u8, ra: u8) Instruction {
-    return I(@intFromEnum(Opcode.CALL)) << 26 | (I(r_dest) << 18) | (I(ra) << 10);
+pub inline fn ENCODE_CALL(r_dest: u8, ra: u8, rb: u8) Instruction {
+    return I(@intFromEnum(Opcode.CALL)) << 26 | (I(r_dest) << 18) | (I(ra) << 10) | I(rb);
 }
 
 pub inline fn ENCODE_PUSH(r_from: u8) Instruction {
     return I(@intFromEnum(Opcode.PUSH)) << 26 | (I(r_from) << 18);
-
 }
 
 pub inline fn DECODE_JUMP_OFFSET(instruction: Instruction) usize {

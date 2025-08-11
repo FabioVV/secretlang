@@ -18,4 +18,4 @@ var INNER_FN = fn(){
     return test
 }
 
-INNER_FN()()() + 5
+var bb = INNER_FN()()() + 5

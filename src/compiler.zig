@@ -478,6 +478,11 @@ pub const Compiler = struct {
 
                 const fn_register = self.currentScope().used_registers.pop().?;
 
+                const result_reg = self.allocateRegister() catch {
+                    self.cError("out of registers");
+                    return null;
+                };
+
                 for (call_expr.arguments.constSlice()) |arg| {
                     //                     print("ARG: {any}\n", .{arg});
                     //
@@ -499,14 +504,7 @@ pub const Compiler = struct {
                     self.freeRegister(arg_reg);
                 }
 
-                self.emitInstruction(_instruction.ENCODE_CALL(fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
-
-                //self.allocateReturnRegister();
-                const result_reg = self.allocateRegister() catch {
-                    self.cError("out of registers");
-                    return null;
-                };
-                self.emitInstruction(_instruction.ENCODE_MOVE(result_reg, 0)); // Move return value from R0
+                self.emitInstruction(_instruction.ENCODE_CALL(result_reg, fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
                 self.freeRegister(fn_register);
 
                 return null;

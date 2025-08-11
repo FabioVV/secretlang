@@ -10,4 +10,3 @@ var add = fn(a, b){
 
 var test = add(10, 10)
 
-test + 1

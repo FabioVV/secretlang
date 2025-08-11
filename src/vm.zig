@@ -33,12 +33,14 @@ const CallFrame = struct {
     function: *FunctionExpr,
     registers: std.BoundedArray(Value, MAX_REGISTERS),
     pc: usize,
+    return_register: u8,
 
-    pub fn init(function: *FunctionExpr) CallFrame {
+    pub fn init(function: *FunctionExpr, return_register: u8) CallFrame {
         return CallFrame{
             .pc = 0,
             .function = function,
             .registers = std.BoundedArray(Value, MAX_REGISTERS).init(MAX_REGISTERS) catch unreachable,
+            .return_register = return_register,
         };
     }
 
@@ -89,7 +91,7 @@ pub const VM = struct {
         vm.objects = objects;
 
         const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, null, &vm.objects);
-        vm.frames.set(1, CallFrame.init(mainFunction.asFunctionExpr().?));
+        vm.frames.set(1, CallFrame.init(mainFunction.asFunctionExpr().?, 0));
 
         return vm;
     }
@@ -114,7 +116,7 @@ pub const VM = struct {
         vm.objects = objects;
 
         const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, null, &vm.objects);
-        vm.frames.set(1, CallFrame.init(mainFunction.asFunctionExpr().?));
+        vm.frames.set(1, CallFrame.init(mainFunction.asFunctionExpr().?, 0));
 
         return vm;
     }
@@ -182,7 +184,7 @@ pub const VM = struct {
 
     inline fn popCallFrame(self: *VM) CallFrame {
         self.frameIndex -= 1;
-        return self.frames.get(self.frameIndex);
+        return self.frames.get(self.frameIndex + 1);
     }
 
     inline fn push(self: *VM, v: Value) void {
@@ -507,7 +509,7 @@ pub const VM = struct {
             pc += 1;
 
             const opcode = _instruction.GET_OPCODE(curInstruction);
-            //std.debug.print("OP {s} @ PC={d}\n", .{ @tagName(opcode), pc });
+            std.debug.print("OP {s} @ PC={d}\n", .{ @tagName(opcode), pc });
             switch (opcode) {
                 .LOADK => {
                     const constantIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
@@ -613,58 +615,53 @@ pub const VM = struct {
                     //                     std.debug.print("pushed: {d}\n", .{self.currentCallFrameRegisters().get(RC).NUMBER});
                 },
                 .CALL => {
-                    const RC_R = _instruction.DECODE_RC(curInstruction);
-                    const RC = self.currentCallFrameRegisters().get(RC_R);
-                    const RA = _instruction.DECODE_RA(curInstruction);
+                    const RC = _instruction.DECODE_RC(curInstruction);
+                    const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(curInstruction));
+                    const RB = _instruction.DECODE_RB(curInstruction);
 
-                    if (RC.asFunctionExpr()) |f| {
-                        var callFrame = CallFrame.init(f);
-                        var args_temp = std.BoundedArray(Value, 32).init(0) catch unreachable;
+                    if (RA.asFunctionExpr()) |f| {
+                        var callFrame = CallFrame.init(f, RC);
 
-                        if (f.params_registers != null and f.params_registers.?.len != RA) {
-                            self.rError("argument error: expected {d} arguments but got {d}", .{ f.params_registers.?.len, RA });
+                        if (f.params_registers != null and f.params_registers.?.len != RB) {
+                            self.rError("argument error: expected {d} arguments but got {d}", .{ f.params_registers.?.len, RB });
                             return false;
                         }
 
-                        for (0..RA) |_| {
-                            const popped = self.pop().?;
-                            args_temp.append(popped) catch unreachable;
-                        }
-
-                        for (1..RA + 1) |i| {
-                            callFrame.registers.set(i, args_temp.get(RA - i));
+                        for (0..RB) |i| {
+                            const arg = self.pop().?;
+                            callFrame.registers.set(i + 1, arg);
                         }
 
                         frame.pc = pc;
 
                         self.pushCallFrame(callFrame);
                         frame = self.currentCallFrame();
+                        frame.registers.set(0, self.currentCallFrameRegisters().get(0));
                         pc = 0;
                     } else {
-                        self.rError("type error: tried calling non-function: {any}", .{@tagName(RC)});
+                        self.rError("type error: tried calling non-function: {any}", .{@tagName(RA)});
                         return false;
                     }
                 },
                 .RET => {
                     const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(curInstruction));
 
-                    _ = self.popCallFrame();
+                    const poppedFrame = self.popCallFrame();
 
                     if (self.frameIndex == 0) return true; // if we are in frame 0, the program has finished executing
 
                     frame = self.currentCallFrame();
-
-                    self.currentCallFrameRegisters().set(0, RC);
+                    self.currentCallFrameRegisters().set(poppedFrame.return_register, RC);
                     pc = frame.pc;
                 },
                 .RETN => {
-                    _ = self.popCallFrame();
+                    const poppedFrame = self.popCallFrame();
 
                     if (self.frameIndex == 0) return true; // if we are in frame 0, the program has finished executing
 
                     frame = self.currentCallFrame();
 
-                    self.currentCallFrameRegisters().set(0, NIL);
+                    self.currentCallFrameRegisters().set(poppedFrame.return_register, NIL);
                     pc = frame.pc;
                 },
                 .MOVE => {
