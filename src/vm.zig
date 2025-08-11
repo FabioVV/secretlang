@@ -29,6 +29,11 @@ const NIL = Value{ .NIL = void{} };
 const TRUE = Value{ .BOOLEAN = true };
 const FALSE = Value{ .BOOLEAN = false };
 
+pub fn _print_(arity: u8) Value {
+    _ = arity;
+    @panic("OH NO, THE PRINT FUNCTION");
+}
+
 const CallFrame = struct {
     function: *FunctionExpr,
     registers: std.BoundedArray(Value, MAX_REGISTERS),
@@ -92,6 +97,8 @@ pub const VM = struct {
 
         const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, null, &vm.objects);
         vm.frames.set(1, CallFrame.init(mainFunction.asFunctionExpr().?, 0));
+
+        vm.defineNative("print", _print_);
 
         return vm;
     }
@@ -169,6 +176,12 @@ pub const VM = struct {
         errh.printError(errMsg);
     }
 
+    fn defineNative(self: *VM, name: []const u8, function: _value.Nfunction) void {
+        _ = Value.copyString(self.allocator, name, self.strings, &self.objects);
+        const Nfunction = Value.createNativeFunction(self.allocator, function, 0, &self.objects);
+        self.globals.append(Nfunction) catch unreachable;
+    }
+
     inline fn currentCallFrame(self: *VM) *CallFrame {
         return &self.frames.slice()[self.frameIndex];
     }
@@ -238,6 +251,7 @@ pub const VM = struct {
                     false,
                 .ARRAY => false,
                 .FUNCTION_EXPR => false,
+                .NATIVE_FUNCTION => false,
             },
             .NIL => switch (RB) {
                 .NIL => true,
@@ -269,6 +283,7 @@ pub const VM = struct {
                     true,
                 .ARRAY => false,
                 .FUNCTION_EXPR => false,
+                .NATIVE_FUNCTION => false,
             },
             .NIL => switch (RB) {
                 .NIL => false,
@@ -509,7 +524,7 @@ pub const VM = struct {
             pc += 1;
 
             const opcode = _instruction.GET_OPCODE(curInstruction);
-            std.debug.print("OP {s} @ PC={d}\n", .{ @tagName(opcode), pc });
+            //std.debug.print("OP {s} @ PC={d}\n", .{ @tagName(opcode), pc });
             switch (opcode) {
                 .LOADK => {
                     const constantIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
@@ -601,7 +616,6 @@ pub const VM = struct {
                     const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
 
                     self.globals.slice()[globalIdx] = RC;
-                    RC.print();
                 },
                 .GGLOBAL => {
                     const RC = _instruction.DECODE_RC(curInstruction);
@@ -638,6 +652,9 @@ pub const VM = struct {
                         frame = self.currentCallFrame();
                         frame.registers.set(0, self.currentCallFrameRegisters().get(0));
                         pc = 0;
+                    } else if (RA.asNativeFunction()) |f| {
+                        const result: Value = f.function(0);
+                        frame.registers.set(RC, result);
                     } else {
                         self.rError("type error: tried calling non-function: {any}", .{@tagName(RA)});
                         return false;

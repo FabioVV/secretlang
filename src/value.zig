@@ -8,6 +8,8 @@ fn printStdOut(comptime str: []const u8, varagars: anytype) void {
     _ = std.io.getStdOut().writer().print(str, varagars) catch unreachable;
 }
 
+pub const Nfunction = *const fn (arity: u8) Value;
+
 pub const ValueType = enum {
     NUMBER,
     BOOLEAN,
@@ -19,6 +21,7 @@ pub const ObjectTypes = enum {
     STRING,
     ARRAY,
     FUNCTION_EXPR,
+    NATIVE_FUNCTION,
 };
 
 pub const Array = struct {
@@ -42,6 +45,22 @@ pub const String = struct {
 
         string_obj.* = String{ .chars = owned_chars };
         return string_obj;
+    }
+};
+
+pub const NativeFunction = struct {
+    arity: u8,
+    function: Nfunction,
+
+    pub fn init(allocator: std.mem.Allocator, function: Nfunction, arity: u8) *NativeFunction {
+        const nfn_obj = allocator.create(NativeFunction) catch unreachable;
+
+        nfn_obj.* = NativeFunction{
+            .function = function,
+            .arity = arity,
+        };
+
+        return nfn_obj;
     }
 };
 
@@ -79,7 +98,21 @@ pub const Object = struct {
         STRING: *String,
         ARRAY: *Array,
         FUNCTION_EXPR: *FunctionExpr,
+        NATIVE_FUNCTION: *NativeFunction,
     },
+
+    pub fn initNativeFn(allocator: std.mem.Allocator, data: *NativeFunction, objects: *?*Object) *Object {
+        const obj = allocator.create(Object) catch unreachable;
+
+        obj.* = Object{
+            .data = .{ .NATIVE_FUNCTION = data },
+            .next = objects.*,
+        };
+
+        objects.* = obj;
+
+        return obj;
+    }
 
     pub fn initFnExpr(allocator: std.mem.Allocator, data: *FunctionExpr, objects: *?*Object) *Object {
         const obj = allocator.create(Object) catch unreachable;
@@ -145,6 +178,9 @@ pub const Value = union(ValueType) {
                 .FUNCTION_EXPR => |f| {
                     hasher.update(&std.mem.toBytes(f.*));
                 },
+                .NATIVE_FUNCTION => |f| {
+                    hasher.update(&std.mem.toBytes(f.*));
+                },
             },
         }
 
@@ -166,6 +202,15 @@ pub const Value = union(ValueType) {
     pub inline fn createFunctionExpr(allocator: std.mem.Allocator, compiledFn: CompilationScope, params_registers: ?std.BoundedArray(u8, 32), objects: *?*Object) Value {
         const fn_obj = FunctionExpr.init(allocator, compiledFn, params_registers);
         const obj = Object.initFnExpr(allocator, fn_obj, objects);
+
+        const val = Value{ .OBJECT = obj };
+
+        return val;
+    }
+
+    pub inline fn createNativeFunction(allocator: std.mem.Allocator, function: Nfunction, arity: u8, objects: *?*Object) Value {
+        const fn_obj = NativeFunction.init(allocator, function, arity);
+        const obj = Object.initNativeFn(allocator, fn_obj, objects);
 
         const val = Value{ .OBJECT = obj };
 
@@ -245,6 +290,16 @@ pub const Value = union(ValueType) {
         };
     }
 
+    pub inline fn asNativeFunction(self: Value) ?*NativeFunction {
+        return switch (self) {
+            .OBJECT => |obj| switch (obj.*.data) {
+                .NATIVE_FUNCTION => |f| f,
+                else => null,
+            },
+            else => null,
+        };
+    }
+
     pub inline fn getType(self: Value) ValueType {
         return switch (self) {
             .NUMBER => .NUMBER,
@@ -289,6 +344,7 @@ pub const Value = union(ValueType) {
                 .STRING => |str| str.chars.len > 0,
                 .ARRAY => |arr| arr.items.items.len > 0,
                 .FUNCTION_EXPR => true,
+                .NATIVE_FUNCTION => true,
             },
         };
     }
@@ -304,6 +360,7 @@ pub const Value = union(ValueType) {
                     .STRING => printStdOut("{s},", .{inn_obj.data.STRING.chars}),
                     .ARRAY => printArrItems(inn_obj.data.ARRAY),
                     .FUNCTION_EXPR => printStdOut("<anonymous function expression>\n", .{}),
+                    .NATIVE_FUNCTION => printStdOut("<native function>\n", .{}),
                 },
             }
         }
@@ -319,6 +376,7 @@ pub const Value = union(ValueType) {
                 .STRING => printStdOut("{s}\n", .{obj.data.STRING.chars}),
                 .ARRAY => printArrItems(obj.data.ARRAY),
                 .FUNCTION_EXPR => printStdOut("<anonymous function expression>\n", .{}),
+                .NATIVE_FUNCTION => printStdOut("<native function>\n", .{}),
             },
         };
     }
