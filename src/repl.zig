@@ -9,6 +9,7 @@ const Parser = @import("parser.zig").Parser;
 const Compiler = @import("compiler.zig").Compiler;
 const AST = @import("ast.zig");
 const SymbolTable = @import("symbol.zig").SymbolTable;
+const SemanticAnalyzer = @import("semantic.zig").SemanticAnalyzer;
 const _vm = @import("vm.zig");
 const VM = _vm.VM;
 const _instruction = @import("instruction.zig");
@@ -16,7 +17,7 @@ const _value = @import("value.zig");
 const Value = _value.Value;
 const Instruction = _instruction.Instruction;
 
-pub fn launchRepl() !void {
+pub fn launch() !void {
     const stdin = std.io.getStdIn().reader();
     const stdout = std.io.getStdOut().writer();
 
@@ -48,9 +49,9 @@ pub fn launchRepl() !void {
         try stdout.print("{d}:>  ", .{lineCount});
 
         if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |input_text| {
-            var l: Lexer = try Lexer.init(input_text, "stdin");
+            var l: *Lexer = Lexer.init(allocator, input_text, "stdin");
 
-            var p: *Parser = Parser.init(&l, allocator);
+            var p: *Parser = Parser.init(allocator, l);
 
             const program = try p.parseProgram(allocator);
             defer program.?.deinit();
@@ -59,20 +60,28 @@ pub fn launchRepl() !void {
                 try stdout.print("Error parsing program\n", .{});
             }
 
-            if (p.errors.items.len > 0) {
-                for (p.errors.items) |err| {
-                    try stdout.print("{s}\n", .{err.message});
-                }
+            if (p.had_error) {
                 continue;
             }
 
-            var c: *Compiler = Compiler.repl_init(allocator, program.?, &l.source, &l.filename, symbol_table, &strings);
+            var sema: *SemanticAnalyzer = SemanticAnalyzer.init(allocator, program.?, &l.source, &l.filename);
+            defer sema.deinit();
 
-            c.compile();
+            if (!sema.analyze()) {
+                continue;
+            }
 
-            var vm: *VM = VM.repl_init(allocator, &c.constantsPool, &c.instructions, &c.instructions_positions, @constCast(&globals), &l.source, c.strings, c.objects);
+            var c: *Compiler = Compiler.repl_init(allocator, program.?, &l.source, &l.filename, &strings);
 
-            vm.run();
+            if (!c.compile()) {
+                continue;
+            }
+
+            var vm: *VM = VM.repl_init(allocator, &c.constantsPool, &c.scopes.items[0], @constCast(&globals), &l.source, c.strings, c.objects);
+
+            if (!vm.run()) {
+                //?
+            }
         }
     }
 }

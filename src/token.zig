@@ -3,10 +3,13 @@ const std = @import("std");
 pub const Tokens = enum {
     IDENT, // variables or const names
 
-    NUMBER, // 1234, 1.23, 12.232
+    NUMBER, // 1234, 1.23, 12.232 // TODO: remove this and use the other two below
+    INTEGER,
+    FLOAT,
     STRING, // "this is a string"
 
     COMMA, // ,
+    SEMICOLON, // ;
 
     PLUS, // +
     MINUS, // -
@@ -46,7 +49,8 @@ pub const Tokens = enum {
 
     IF, // if
     ELSE, // else
-    FOR, //
+    FOR, // for loop
+    WHILE, // while loop
 
     FN, // Function
 
@@ -60,7 +64,7 @@ pub const Tokens = enum {
     EOF, // end of file
 };
 
-pub const Keywords = enum { FN, IF, ELSE, THEN, END, FOR, VAR, NIL, TRUE, FALSE, RETURN };
+pub const Keywords = enum { FN, IF, ELSE, THEN, END, FOR, WHILE, VAR, NIL, TRUE, FALSE, RETURN };
 
 pub const KeywordMap = std.StaticStringMap(Keywords).initComptime(.{
     .{ "fn", Keywords.FN },
@@ -74,6 +78,7 @@ pub const KeywordMap = std.StaticStringMap(Keywords).initComptime(.{
     .{ "nil", Keywords.NIL },
     .{ "return", Keywords.RETURN },
     .{ "for", Keywords.FOR },
+    .{ "while", Keywords.WHILE },
 });
 
 pub const Position = struct {

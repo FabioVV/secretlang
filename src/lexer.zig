@@ -13,26 +13,43 @@ const KeywordMap = _token.KeywordMap;
 const Position = _token.Position;
 const dbg = @import("debug.zig");
 
-
 pub const Lexer = struct {
+    arena: std.heap.ArenaAllocator,
+
     source: []const u8,
     filename: []const u8,
     iterator: unicode.Utf8Iterator,
-    currentChar: ?[]const u8 = null,
-    column: usize = 1,
-    line: usize = 1,
-    current: u32 = 0,
+    currentChar: ?[]const u8,
 
-    pub fn init(source: []const u8, filename: []const u8) !Lexer {
-        var iterator = (try unicode.Utf8View.init(source));
-        const lexer = Lexer{ .source = source, .iterator = iterator.iterator(), .filename = filename };
+    column: usize,
+    line: usize,
+    current: u32,
+
+    pub fn init(allocator: std.mem.Allocator, source: []const u8, filename: []const u8) *Lexer {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        const lexer = arena.allocator().create(Lexer) catch unreachable;
+
+        var iterator = unicode.Utf8View.init(source) catch unreachable;
+
+        lexer.arena = arena;
+        lexer.filename = filename;
+        lexer.source = source;
+        lexer.iterator = iterator.iterator();
+        lexer.column = 1;
+        lexer.line = 1;
+        lexer.current = 0;
+        lexer.currentChar = null;
+
         return lexer;
+    }
+
+    pub fn deinit(self: *Lexer) void {
+        self.arena.deinit();
     }
 
     pub fn advance(self: *Lexer) ?[]const u8 {
         if (self.iterator.nextCodepointSlice()) |char| {
             self.currentChar = char;
-
 
             self.current += @intCast(char.len);
 
@@ -64,13 +81,16 @@ pub const Lexer = struct {
             const codep = self.peekByte(1);
 
             switch (codep) {
-                ' ', '\n', '\t', '\r',ascii.control_code.vt, ascii.control_code.ff => {
-                    _= self.advance();
-                    continue;
+                ' ', '\t', '\r', ascii.control_code.vt, ascii.control_code.ff => {
+                    _ = self.advance();
                 },
-                '/' =>{
-                    if(self.peekByte(2) == '/'){
-                        while(self.peekByte(1) != '\n' and self.peekByte(1) != 0){
+                '\n' => {
+                    _ = self.advance().?;
+                },
+                '/' => {
+                    if (self.peekByte(2) == '/') {
+                        // Skip single-line comments
+                        while (self.peekByte(1) != '\n' and self.peekByte(1) != 0) {
                             _ = self.advance();
                         }
                     } else {
@@ -79,7 +99,6 @@ pub const Lexer = struct {
                 },
                 else => return,
             }
-
         }
     }
 
@@ -124,6 +143,7 @@ pub const Lexer = struct {
                 .NIL => Token.makeToken(Tokens.NIL, "NIL", pos),
                 .TRUE => Token.makeToken(Tokens.TRUE, "TRUE", pos),
                 .FALSE => Token.makeToken(Tokens.FALSE, "FALSE", pos),
+                .RETURN => Token.makeToken(Tokens.RETURN, "RETURN", pos),
                 else => unreachable,
             };
         } else {
@@ -132,7 +152,7 @@ pub const Lexer = struct {
     }
 
     pub fn lexNumber(self: *Lexer, startColumn: usize, startLine: usize) Token {
-        var numbers = std.ArrayList(u8).init(std.heap.page_allocator);
+        var numbers = std.ArrayList(u8).init(self.arena.allocator());
         defer numbers.deinit();
 
         numbers.appendSlice(self.currentChar.?) catch unreachable;
@@ -160,8 +180,8 @@ pub const Lexer = struct {
         return Token.makeToken(Tokens.NUMBER, fullNumber, pos);
     }
 
-    pub fn lexString(self: *Lexer, startColumn: usize) Token {
-        var chars = std.ArrayList(u8).init(std.heap.page_allocator);
+    pub fn lexString(self: *Lexer, startColumn: usize, startLine: usize) Token {
+        var chars = std.ArrayList(u8).init(self.arena.allocator());
         defer chars.deinit();
 
         while (self.peekByte(1) != '"') {
@@ -171,7 +191,7 @@ pub const Lexer = struct {
             if (self.advance()) |c| {
                 chars.appendSlice(c) catch unreachable;
             } else {
-                const pos = Position{ .column = startColumn + 1, .line = self.line, .filename = self.filename };
+                const pos = Position{ .column = startColumn + 1, .line = startLine, .filename = self.filename };
                 return Token.makeIllegalToken("unterminated string", pos);
             }
         }
@@ -185,7 +205,7 @@ pub const Lexer = struct {
     }
 
     pub fn lexIdentifier(self: *Lexer, startColumn: usize, startLine: usize) Token {
-        var iden = std.ArrayList(u8).init(std.heap.page_allocator);
+        var iden = std.ArrayList(u8).init(self.arena.allocator());
         defer iden.deinit();
 
         iden.appendSlice(self.currentChar.?) catch unreachable;
@@ -200,14 +220,13 @@ pub const Lexer = struct {
 
     pub fn nextToken(self: *Lexer) Token {
         self.eatWhitespace();
+
         const startColumn = self.column;
         const startLine = self.line;
 
         const ch: ?[]const u8 = self.advance();
 
-
         const pos = Position{ .column = startColumn, .line = startLine, .filename = self.filename };
-
 
         if (ch == null) {
             return Token.makeToken(Tokens.EOF, "EOF", pos);
@@ -307,7 +326,7 @@ pub const Lexer = struct {
                 return Token.makeToken(Tokens.GREATERT, ">", pos);
             },
             '"' => {
-                return self.lexString(startColumn);
+                return self.lexString(startColumn, startLine);
             },
             else => {
                 return Token.makeIllegalToken("unexpected character", pos);
@@ -317,10 +336,13 @@ pub const Lexer = struct {
 };
 
 test "Lexer initialization" {
-    const input: []const u8 = "test input";
-    const l: Lexer = try Lexer.init(input);
+    const source: []const u8 = "test input";
+    const gpa = std.testing.allocator;
 
-    try expect(mem.eql(u8, input, l.source));
+    const l: *Lexer = Lexer.init(gpa, source, "<Lexer initialization>");
+    defer l.deinit();
+
+    try expect(mem.eql(u8, source, l.source));
 }
 
 test "Input tokenization" {
@@ -334,7 +356,11 @@ test "Input tokenization" {
         \\
     ;
 
-    var l: Lexer = try Lexer.init(source);
+    const gpa = std.testing.allocator;
+
+    const l: *Lexer = Lexer.init(gpa, source, "<Input tokenization>");
+    defer l.deinit();
+
     const testArr: [9]Token = .{
         Token{ .token_type = Tokens.FSLASH, .literal = "/" },
         Token{ .token_type = Tokens.PLUS, .literal = "+" },
@@ -378,7 +404,11 @@ test "Variable declaration tokenization" {
         \\var g = nil
     ;
 
-    var l: Lexer = try Lexer.init(source);
+    const gpa = std.testing.allocator;
+
+    const l: *Lexer = Lexer.init(gpa, source, "<Variable declaration tokenization>");
+    defer l.deinit();
+
     const testArr: [30]Token = .{
         Token{ .token_type = Tokens.VAR, .literal = "VAR" },
         Token{ .token_type = Tokens.IDENT, .literal = "a" },
@@ -446,7 +476,11 @@ test "Simple utf8 lexing" {
         \\var _name = "Fábio Gabriel Rodrigues Varela"
     ;
 
-    var l: Lexer = try Lexer.init(source);
+    const gpa = std.testing.allocator;
+
+    const l: *Lexer = Lexer.init(gpa, source, "<Simple utf8 lexing>");
+    defer l.deinit();
+
     const testArr: [16]Token = .{
         Token{ .token_type = Tokens.VAR, .literal = "VAR" },
         Token{ .token_type = Tokens.IDENT, .literal = "ço" },
@@ -494,7 +528,11 @@ test "Another Simple utf8 lexing" {
         \\var 名前 = "私の名前はファビオ・バレラです。"
     ;
 
-    var l: Lexer = try Lexer.init(source);
+    const gpa = std.testing.allocator;
+
+    const l: *Lexer = Lexer.init(gpa, source, "<Another Simple utf8 lexing>");
+    defer l.deinit();
+
     const testArr: [4]Token = .{
         Token{ .token_type = Tokens.VAR, .literal = "VAR" },
         Token{ .token_type = Tokens.IDENT, .literal = "名前" },

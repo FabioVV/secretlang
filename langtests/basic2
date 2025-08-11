@@ -1,0 +1,21 @@
+var get_name = fn(){
+    return "Fábio"
+}
+
+var GET_CONSTANT = fn(){
+    return get_name
+}
+
+GET_CONSTANT()() + " Varela"
+
+
+var INNER_FN = fn(){
+    var test = fn(){
+        return fn (){
+            return 5
+        }
+    }
+    return test
+}
+
+var bb = INNER_FN()()() + 5

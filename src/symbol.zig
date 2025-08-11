@@ -1,4 +1,8 @@
-pub const std = @import("std");
+const std = @import("std");
+
+const _token = @import("token.zig");
+const Token = _token.Token;
+const vType = @import("value.zig").ValueType;
 
 pub const Scope = enum {
     GLOBAL,
@@ -6,21 +10,31 @@ pub const Scope = enum {
 };
 
 pub const Symbol = struct {
+    token: Token,
+
     name: []const u8,
     scope: Scope,
     index: u16,
+    register: ?u8,
+
+    defined: usize,
+    last_use: ?usize,
+
+    type: ?vType,
+    is_mutable: bool,
 };
 
 pub const SymbolTable = struct {
     parent_table: ?*SymbolTable,
-
-    table: std.StringHashMap(Symbol),
+    table: std.StringHashMap(*Symbol),
     total_definitions: u16,
+    allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) *SymbolTable {
         const st = allocator.create(SymbolTable) catch unreachable;
 
-        st.table = std.StringHashMap(Symbol).init(allocator);
+        st.table = std.StringHashMap(*Symbol).init(allocator);
+        st.allocator = allocator;
         st.total_definitions = 0;
         st.parent_table = null;
 
@@ -30,7 +44,8 @@ pub const SymbolTable = struct {
     pub fn initEnclosed(allocator: std.mem.Allocator, outer: *SymbolTable) *SymbolTable {
         const st = allocator.create(SymbolTable) catch unreachable;
 
-        st.table = std.StringHashMap(Symbol).init(allocator);
+        st.table = std.StringHashMap(*Symbol).init(allocator);
+        st.allocator = allocator;
         st.total_definitions = 0;
         st.parent_table = outer;
 
@@ -46,14 +61,13 @@ pub const SymbolTable = struct {
         }
     }
 
-    pub inline fn define(self: *SymbolTable, name: []const u8) Symbol { // Maybe create a defineLocal so it can have register states etc
-        var symbol: Symbol = undefined;
+    pub fn define(self: *SymbolTable, token: Token, name: []const u8, defined: usize, vtype: ?vType) *Symbol { // Maybe create a defineLocal so it can have register states etc
+        const symbol = self.allocator.create(Symbol) catch unreachable;
 
-        if(self.parent_table != null){
-            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .LOCAL };
+        if (self.parent_table != null) {
+            symbol.* = Symbol{ .token = token, .name = name, .index = self.total_definitions, .scope = .LOCAL, .defined = defined, .last_use = null, .type = vtype orelse null, .is_mutable = true, .register = null };
         } else {
-            symbol = Symbol{ .name = name, .index = self.total_definitions, .scope = .GLOBAL };
-
+            symbol.* = Symbol{ .token = token, .name = name, .index = self.total_definitions, .scope = .GLOBAL, .defined = defined, .last_use = null, .type = vtype orelse null, .is_mutable = true, .register = null };
         }
 
         self.table.put(name, symbol) catch unreachable;
@@ -62,7 +76,7 @@ pub const SymbolTable = struct {
         return symbol;
     }
 
-    pub fn resolve(self: *SymbolTable, name: []const u8) ?Symbol {
+    pub fn resolve(self: *SymbolTable, name: []const u8) ?*Symbol {
         if (self.table.get(name)) |s| {
             return s;
         }
@@ -72,5 +86,21 @@ pub const SymbolTable = struct {
         }
 
         return null;
+    }
+
+    pub fn resolveCurrent(self: *SymbolTable, name: []const u8) ?*Symbol {
+        if (self.table.get(name)) |s| {
+            return s;
+        }
+
+        return null;
+    }
+
+    pub fn updateLastUse(self: *SymbolTable, name: []const u8, line: usize) void {
+        if (self.table.get(name)) |symbol| {
+            symbol.last_use = line;
+        } else if (self.parent_table) |parent| {
+            parent.updateLastUse(name, line);
+        }
     }
 };

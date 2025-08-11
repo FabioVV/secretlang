@@ -1,8 +1,29 @@
+TODO: fix tests
+
+TODO: store the line of code of the instruction in the instruction_position hash, much easier
+
+TODO: keep ip in a local variable in the main run loop, so that it gets opmtized by zig, instead of always getting it from the current callframe function
+
+the move operation is making locals change registers and them be affected by expressions stmts like
+(i dont know, it may be that or not)
+var fib = fn(n) {
+    n - 1
+
+    return n
+}
+
+var result = fib(10)
+
+
+returs 9 and not 10
 
 1 - Add error correction suggestion:
 context aware suggestions
 spelling checking with Levenshtein Distance
 
+ - Add more specialized instructions like addi (i know both are integers, dispacth a instructions that does not type checking during runtime and just adds them)
+
+ - add simple type checking before runtime so that the specialized instructions from above can work
 
  - Change error text from the current expected both to be, got ? to this: expect expectec both to be ?, but got ? and ?
 
@@ -11,7 +32,11 @@ spelling checking with Levenshtein Distance
 
  - fix strings handling/interning !IMPORTANT
 
-Language ideas
+ - Have a options to output a dump/object file that later the VM can run by itself, without going through the entire pipeline(executables but for the VM, i think)
+
+
+- Maybe have a simple line arguments like -sf (safe), when the user passes it in, it enables some runtime checks? like arity checking etc
+i dont know
 
 2.1 - other ideas
 

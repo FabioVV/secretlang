@@ -1,5 +1,6 @@
 const std = @import("std");
 const _token = @import("token.zig");
+const Symbol = @import("symbol.zig").Symbol;
 const Token = _token.Token;
 const Tokens = _token.Tokens;
 
@@ -46,6 +47,8 @@ pub const Program = struct {
     }
 };
 
+pub const NilExpression = struct { token: Token, value: void };
+
 pub const NumberExpression = struct { token: Token, value: f64 };
 
 pub const StringExpression = struct { token: Token, value: []const u8 };
@@ -58,9 +61,26 @@ pub const VarStatement = struct {
     expression: ?*Expression, // the value being assigned to the var variable
 };
 
+pub const FnStatement = struct {
+    token: Token, // fn token.
+    identifier: Identifier, // name
+    parameters: std.BoundedArray(Identifier, 32), // Max 32 params,
+    body: ?*BlockStatement = null,
+
+    pub fn init(token: Token) FnStatement {
+        const fnStatement = FnStatement{
+            .token = token,
+            .parameters = .{},
+            .identifier = undefined,
+        };
+        return fnStatement;
+    }
+};
+
 pub const Identifier = struct {
     token: Token, // IDENT token.
     literal: []const u8,
+    resolved_symbol: ?*Symbol = null,
 };
 
 pub const BlockStatement = struct {
@@ -100,14 +120,14 @@ pub const PrefixExpression = struct {
 pub const IfExpression = struct {
     token: Token,
     condition: ?*Expression = undefined,
-    ifBlock: ?BlockStatement = undefined,
-    elseBlock: ?BlockStatement = undefined,
+    ifBlock: ?*BlockStatement = undefined,
+    elseBlock: ?*BlockStatement = undefined,
 };
 
 pub const fnExpression = struct {
     token: Token,
     parameters: std.BoundedArray(Identifier, 32), // Max 32 params,
-    body: ?BlockStatement = undefined,
+    body: ?*BlockStatement = undefined,
 
     pub fn init(token: Token) fnExpression {
         const fnLiteralExpression = fnExpression{
@@ -129,6 +149,7 @@ pub const callExpression = struct {
             .function = fn_expr,
             .arguments = .{},
         };
+
         return callExpr;
     }
 };
@@ -158,16 +179,19 @@ pub const StmtTypes = enum {
     return_stmt,
     expression_stmt,
     block_stmt,
+    fn_stmt,
 };
 
 pub const Statement = union(StmtTypes) {
-    var_stmt: VarStatement,
-    return_stmt: ReturnStatement,
-    expression_stmt: ExpressionStatement,
-    block_stmt: BlockStatement,
+    var_stmt: *VarStatement,
+    return_stmt: *ReturnStatement,
+    expression_stmt: *ExpressionStatement,
+    block_stmt: *BlockStatement,
+    fn_stmt: *FnStatement,
 };
 
 pub const ExprTypes = enum {
+    nil_expr,
     boolean_expr,
     number_expr,
     string_expr,
@@ -183,6 +207,7 @@ pub const ExprTypes = enum {
 };
 
 pub const Expression = union(ExprTypes) {
+    nil_expr: NilExpression,
     boolean_expr: BooleanExpression,
     number_expr: NumberExpression,
     string_expr: StringExpression,

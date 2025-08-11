@@ -5,8 +5,13 @@ const _token = @import("token.zig");
 const Token = _token.Token;
 const Tokens = _token.Tokens;
 const Position = _token.Position;
-
 const AST = @import("ast.zig");
+const dbg = @import("debug.zig");
+const panic = @import("error.zig");
+
+
+pub const DEBUG_REGISTER_ALLOCATION: bool = true;
+
 
 pub const DEBUG_PRINT_TOKENS: bool = false;
 pub const DEBUG_PRINT_VAR_STATEMENT: bool = false;
@@ -23,6 +28,10 @@ pub const ANSI_BLUE = "\x1b[34m";
 pub const ANSI_MAGENTA = "\x1b[35m";
 pub const ANSI_CYAN = "\x1b[36m";
 pub const ANSI_WHITE = "\x1b[37m";
+pub const ANSI_BOLD = "\x1b[1m";
+pub const ANSI_UNDERLINE = "\x1b[4m";
+
+
 
 // UTILITIES ->
 pub fn printNodes(stmt: AST.Statement) void {
@@ -95,7 +104,7 @@ pub fn printExpression(expr: ?*AST.Expression, message: []const u8) void {
 pub fn printTokenDebug(token: Token) void {
     const stdoutwriter = io.getStdOut().writer();
 
-    stdoutwriter.print("Token: {s} - Literal: {s}\n", .{ @tagName(token.token_type), token.literal }) catch |err| {
+    stdoutwriter.print("Token: {s} - Literal: {s} L{d}:D{d}\n", .{ @tagName(token.token_type), token.literal, token.position.line, token.position.column }) catch |err| {
         std.debug.print("Error debug printing token: {any}", .{err});
     };
 }
@@ -202,48 +211,59 @@ pub fn printFnExpressionCall(stmt: AST.callExpression) void {
     }
 }
 
-pub fn getSourceLine(source: []const u8, token: Token) []const u8 {
-    const lineError = token.position.line;
-    //const columnError = token.position.column;
-    var currentLine: u32 = 0;
-    var startLine: u32 = 0;
+pub fn getSourceLine(source: []const u8, pos: Position) []const u8 {
+    const lineError = pos.line;
+    var line_start: usize = 0;
+    var line_end: usize = 0;
+    var current_line: usize = 1;
 
-    var i: u32 = 0;
-    while (i < source.len and currentLine < lineError) {
-        if (source[i] == '\n') {
-            currentLine += 1;
-            startLine = i + 1;
+    for (source, 0..) |c, i| {
+        if (current_line == lineError) {
+            line_start = i;
+            break;
         }
-        i += 1;
+        if (c == '\n'){
+             current_line += 1;
+        }
     }
 
-    var endLine = startLine;
-    while (endLine < source.len and source[endLine] != '\n') {
-        endLine += 1;
+    line_end = line_start;
+    while(line_end < source.len and source[line_end] != '\n'){
+        line_end += 1;
     }
 
-    return source[startLine..endLine];
+    return source[line_start..line_end];
 }
 
-pub fn getSourceLineFromPosition(source: []const u8, pos: Position) []const u8 {
-    const lineError = pos.line;
-    //const columnError = pos.column;
-    var currentLine: u32 = 0;
-    var startLine: u32 = 0;
+pub fn formatSourceLineWithCaret(allocator: std.mem.Allocator, pos: Position, sourceLine: []const u8) struct{ spacing: []const u8, caret: []const u8 } {
 
-    var i: u32 = 0;
-    while (i < source.len and currentLine < lineError) {
-        if (source[i] == '\n') {
-            currentLine += 1;
-            startLine = i + 1;
-        }
-        i += 1;
+    var caret_line = allocator.alloc(u8, sourceLine.len) catch {
+         panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
+        return;
+    };
+
+    @memset(caret_line, ' ');
+    if (pos.column <= caret_line.len) {
+        caret_line[pos.column - 1] = '^';
     }
 
-    var endLine = startLine;
-    while (endLine < source.len and source[endLine] != '\n') {
-        endLine += 1;
+    var spaces: u32 = 0;
+    if (pos.line > 9) {
+        spaces += 1;
+    } else if (pos.line > 99) {
+        spaces += 2;
+    } else if (pos.line > 999) {
+        spaces += 3;
+    } else if (pos.line > 9999) {
+        spaces += 4;
     }
 
-    return source[startLine..endLine];
+    const line_number_spacing = allocator.alloc(u8, spaces) catch {
+         panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
+        return;
+    };
+    @memset(line_number_spacing, ' ');
+
+
+   return .{ .spacing = line_number_spacing,  .caret = caret_line};
 }
