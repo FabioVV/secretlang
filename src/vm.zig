@@ -72,7 +72,7 @@ pub const VM = struct {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const vm = arena.allocator().create(VM) catch unreachable;
 
-        vm.frameIndex = 0;
+        vm.frameIndex = 1;
 
         vm.source = source;
         vm.arena = arena;
@@ -89,7 +89,7 @@ pub const VM = struct {
         vm.objects = objects;
 
         const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, null, &vm.objects);
-        vm.frames.set(0, CallFrame.init(mainFunction.asFunctionExpr().?));
+        vm.frames.set(1, CallFrame.init(mainFunction.asFunctionExpr().?));
 
         return vm;
     }
@@ -97,7 +97,7 @@ pub const VM = struct {
     pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), compiledInst: *CompilationScope, globals: *std.BoundedArray(Value, MAX_GLOBALS), source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
         const vm = allocator.create(VM) catch unreachable;
 
-        vm.frameIndex = 0;
+        vm.frameIndex = 1;
 
         vm.source = source;
         vm.arena = null;
@@ -114,7 +114,7 @@ pub const VM = struct {
         vm.objects = objects;
 
         const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, null, &vm.objects);
-        vm.frames.set(0, CallFrame.init(mainFunction.asFunctionExpr().?));
+        vm.frames.set(1, CallFrame.init(mainFunction.asFunctionExpr().?));
 
         return vm;
     }
@@ -502,14 +502,12 @@ pub const VM = struct {
         var frame: *CallFrame = &self.frames.slice()[self.frameIndex];
         var pc = frame.pc;
 
-        while (pc < frame.function.instructions.items.len) : (pc += 1) {
+        while (true) {
             const curInstruction = frame.function.instructions.items[pc];
+            pc += 1;
+
             const opcode = _instruction.GET_OPCODE(curInstruction);
-
-            std.debug.print("OP {s} @ PC={d}\n", .{@tagName(opcode), pc});
-
-
-            //std.debug.print("{s}\n", .{@tagName(opcode)});
+            //std.debug.print("OP {s} @ PC={d}\n", .{ @tagName(opcode), pc });
             switch (opcode) {
                 .LOADK => {
                     const constantIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
@@ -583,7 +581,6 @@ pub const VM = struct {
                             return false;
                         },
                     }
-
                 },
                 .JMPF => {
                     const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(curInstruction));
@@ -591,7 +588,6 @@ pub const VM = struct {
                     if (!RC.isTruthy()) {
                         const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
                         pc += jumpOffset;
-                        continue;
                     }
                 },
                 .JMP => {
@@ -610,12 +606,11 @@ pub const VM = struct {
                     const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
 
                     self.currentCallFrameRegisters().set(RC, self.globals.slice()[globalIdx]);
-                    self.currentCallFrameRegisters().get(RC).print();
                 },
                 .PUSH => {
                     const RC = _instruction.DECODE_RC(curInstruction);
                     self.push(self.currentCallFrameRegisters().get(RC));
-//                     std.debug.print("pushed: {d}\n", .{self.currentCallFrameRegisters().get(RC).NUMBER});
+                    //                     std.debug.print("pushed: {d}\n", .{self.currentCallFrameRegisters().get(RC).NUMBER});
                 },
                 .CALL => {
                     const RC_R = _instruction.DECODE_RC(curInstruction);
@@ -626,7 +621,6 @@ pub const VM = struct {
                         var callFrame = CallFrame.init(f);
                         var args_temp = std.BoundedArray(Value, 32).init(0) catch unreachable;
 
-
                         if (f.params_registers != null and f.params_registers.?.len != RA) {
                             self.rError("argument error: expected {d} arguments but got {d}", .{ f.params_registers.?.len, RA });
                             return false;
@@ -634,25 +628,18 @@ pub const VM = struct {
 
                         for (0..RA) |_| {
                             const popped = self.pop().?;
-                            //                             std.debug.print("poped: {any}\n", .{popped});
                             args_temp.append(popped) catch unreachable;
                         }
 
-                        //                         for (f.params_registers.?.slice()) |pr| {
-                        //                             std.debug.print("PARAM REGISTER: R{d}\n", .{pr});
-                        //                         }
-
                         for (1..RA + 1) |i| {
-                            //                             const v = args_temp.get(RA - i);
-                            //                             std.debug.print("SETTING R{d} AS {any}\n", .{ i, v });
                             callFrame.registers.set(i, args_temp.get(RA - i));
                         }
 
-                        frame.pc = pc + 1;
+                        frame.pc = pc;
+
                         self.pushCallFrame(callFrame);
                         frame = self.currentCallFrame();
-
-
+                        pc = 0;
                     } else {
                         self.rError("type error: tried calling non-function: {any}", .{@tagName(RC)});
                         return false;
@@ -662,18 +649,22 @@ pub const VM = struct {
                     const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(curInstruction));
 
                     _ = self.popCallFrame();
+
+                    if (self.frameIndex == 0) return true; // if we are in frame 0, the program has finished executing
+
                     frame = self.currentCallFrame();
 
                     self.currentCallFrameRegisters().set(0, RC);
-
                     pc = frame.pc;
                 },
                 .RETN => {
                     _ = self.popCallFrame();
+
+                    if (self.frameIndex == 0) return true; // if we are in frame 0, the program has finished executing
+
                     frame = self.currentCallFrame();
 
                     self.currentCallFrameRegisters().set(0, NIL);
-
                     pc = frame.pc;
                 },
                 .MOVE => {

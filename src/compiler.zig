@@ -628,6 +628,7 @@ pub const Compiler = struct {
             }
         }
 
+        self.emitInstruction(_instruction.ENCODE_RETURN_N());
         //         for (0..self.scopes.items[self.cur_scope].instructions.items.len) |i| {
         //             print("{s}\n", .{@tagName(_instruction.GET_OPCODE(self.scopes.items[self.cur_scope].instructions.items[i]))});
         //         }
