@@ -141,7 +141,7 @@ pub const VM = struct {
 
     /// Emits a runtime error
     fn rError(self: *VM, comptime message: []const u8, varargs: anytype) void {
-        const pos = self.currentCallFrame().instructionsPositions().get(@intCast(self.currentCallFrame().pc - 1)).?;
+        const pos = self.currentCallFrame().instructionsPositions().get(@intCast(self.currentCallFrame().pc)).?;
         const source = dbg.getSourceLine(self.source.*, pos);
 
         const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, pos, source);
@@ -497,14 +497,19 @@ pub const VM = struct {
     }
 
     pub fn run(self: *VM) bool {
-        while (self.currentCallFrame().pc < self.currentCallFrame().instructions().len) {
-            const pc = self.currentCallFrame().pc;
-            self.currentCallFrame().pc += 1;
+        //@setRuntimeSafety(true);
 
-            const curInstruction = self.currentCallFrame().instructions()[pc];
+        var frame: *CallFrame = &self.frames.slice()[self.frameIndex];
+        var pc = frame.pc;
+
+        while (pc < frame.function.instructions.items.len) : (pc += 1) {
+            const curInstruction = frame.function.instructions.items[pc];
             const opcode = _instruction.GET_OPCODE(curInstruction);
 
-//             std.debug.print("{s}\n", .{@tagName(opcode)});
+            std.debug.print("OP {s} @ PC={d}\n", .{@tagName(opcode), pc});
+
+
+            //std.debug.print("{s}\n", .{@tagName(opcode)});
             switch (opcode) {
                 .LOADK => {
                     const constantIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
@@ -524,7 +529,6 @@ pub const VM = struct {
                 .LOADN => {
                     const RC = _instruction.DECODE_RC(curInstruction);
                     self.currentCallFrameRegisters().set(RC, Value.createNil());
-
                 },
                 .ADD => {
                     if (!self.mathAdd(curInstruction)) return false;
@@ -586,25 +590,27 @@ pub const VM = struct {
 
                     if (!RC.isTruthy()) {
                         const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
-                        self.currentCallFrame().pc += jumpOffset;
+                        pc += jumpOffset;
+                        continue;
                     }
                 },
                 .JMP => {
                     const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
-                    self.currentCallFrame().pc += jumpOffset;
+                    pc += jumpOffset;
                 },
                 .SGLOBAL => {
                     const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(curInstruction));
                     const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
 
                     self.globals.slice()[globalIdx] = RC;
-
+                    RC.print();
                 },
                 .GGLOBAL => {
                     const RC = _instruction.DECODE_RC(curInstruction);
                     const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
 
                     self.currentCallFrameRegisters().set(RC, self.globals.slice()[globalIdx]);
+                    self.currentCallFrameRegisters().get(RC).print();
                 },
                 .PUSH => {
                     const RC = _instruction.DECODE_RC(curInstruction);
@@ -619,6 +625,7 @@ pub const VM = struct {
                     if (RC.asFunctionExpr()) |f| {
                         var callFrame = CallFrame.init(f);
                         var args_temp = std.BoundedArray(Value, 32).init(0) catch unreachable;
+
 
                         if (f.params_registers != null and f.params_registers.?.len != RA) {
                             self.rError("argument error: expected {d} arguments but got {d}", .{ f.params_registers.?.len, RA });
@@ -641,7 +648,11 @@ pub const VM = struct {
                             callFrame.registers.set(i, args_temp.get(RA - i));
                         }
 
+                        frame.pc = pc + 1;
                         self.pushCallFrame(callFrame);
+                        frame = self.currentCallFrame();
+
+
                     } else {
                         self.rError("type error: tried calling non-function: {any}", .{@tagName(RC)});
                         return false;
@@ -651,13 +662,19 @@ pub const VM = struct {
                     const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(curInstruction));
 
                     _ = self.popCallFrame();
+                    frame = self.currentCallFrame();
 
                     self.currentCallFrameRegisters().set(0, RC);
+
+                    pc = frame.pc;
                 },
                 .RETN => {
                     _ = self.popCallFrame();
+                    frame = self.currentCallFrame();
 
                     self.currentCallFrameRegisters().set(0, NIL);
+
+                    pc = frame.pc;
                 },
                 .MOVE => {
                     const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(curInstruction));
