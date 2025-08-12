@@ -187,13 +187,13 @@ pub const Lexer = struct {
             const pos = Position{ .column = startColumn, .line = startLine, .filename = self.filename };
             const fullNumber = numbers.toOwnedSlice() catch unreachable;
 
-            return Token.makeToken(Tokens.NUMBER, fullNumber, pos);
+            return Token.makeToken(Tokens.FLOAT, fullNumber, pos);
         }
 
         const pos = Position{ .column = startColumn, .line = startLine, .filename = self.filename };
         const fullNumber = numbers.toOwnedSlice() catch unreachable;
 
-        return Token.makeToken(Tokens.NUMBER, fullNumber, pos);
+        return Token.makeToken(Tokens.INTEGER, fullNumber, pos);
     }
 
     pub fn lexString(self: *Lexer, startColumn: usize, startLine: usize) Token {

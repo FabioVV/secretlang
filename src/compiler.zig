@@ -531,7 +531,7 @@ pub const Compiler = struct {
         const reg = self.currentScope().used_registers.pop().?;
         self.freeRegister(reg);
 
-        _ = self.addConstant(Value.copyString(self.allocator, stmt.identifier.literal), self.strings, &self.objects);
+        _ = self.addConstant(Value.copyString(self.allocator, stmt.identifier.literal, self.strings, &self.objects));
 
         if (stmt.identifier.resolved_symbol) |sym| {
             if (sym.scope == Scopes.GLOBAL) {

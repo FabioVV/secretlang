@@ -238,8 +238,14 @@ pub const VM = struct {
         const RC = _instruction.DECODE_RC(instruction);
 
         const result = switch (RA) {
-            .NUMBER => |a| switch (RB) {
-                .NUMBER => |b| b == a,
+            .INT64 => |a| switch (RB) {
+                .INT64 => |b| b == a,
+                .FLOAT64 => |b| @as(f64, @floatFromInt(a)) == b,
+                else => false,
+            },
+            .FLOAT64 => |a| switch (RB) {
+                .INT64 => |b| a == @as(f64, @floatFromInt(b)),
+                .FLOAT64 => |b| a == b,
                 else => false,
             },
             .BOOLEAN => |a| switch (RB) {
@@ -270,9 +276,15 @@ pub const VM = struct {
         const RC = _instruction.DECODE_RC(instruction);
 
         const result = switch (RA) {
-            .NUMBER => |a| switch (RB) {
-                .NUMBER => |b| b != a,
-                else => true,
+            .INT64 => |a| switch (RB) {
+                .INT64 => |b| b != a,
+                .FLOAT64 => |b| @as(f64, @floatFromInt(a)) != b,
+                else => false,
+            },
+            .FLOAT64 => |a| switch (RB) {
+                .INT64 => |b| a != @as(f64, @floatFromInt(b)),
+                .FLOAT64 => |b| a != b,
+                else => false,
             },
             .BOOLEAN => |a| switch (RB) {
                 .BOOLEAN => |b| b != a,
@@ -301,22 +313,30 @@ pub const VM = struct {
         const RB = self.currentCallFrameRegisters().get(_instruction.DECODE_RB(instruction));
         const RC = _instruction.DECODE_RC(instruction);
 
-        switch (RA) {
-            .NUMBER => |a| switch (RB) {
-                .NUMBER => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createBoolean(b < a));
-                },
-                else => |p| {
-                    self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
+        const result = switch (RA) {
+            .INT64 => |a| switch (RB) {
+                .INT64 => |b| b < a,
+                .FLOAT64 => |b| b < @as(f64, @floatFromInt(a)),
+                else => {
+                    self.rError("TypeError: right operand must be numeric, got {s}", .{@tagName(RB)});
                     return false;
                 },
             },
-            else => |p| {
-                self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
+            .FLOAT64 => |a| switch (RB) {
+                .INT64 => |b| @as(f64, @floatFromInt(b)) < a,
+                .FLOAT64 => |b| b < a,
+                else => {
+                    self.rError("TypeError: right operand must be numeric, got {s}", .{@tagName(RB)});
+                    return false;
+                },
+            },
+            else => {
+                self.rError("TypeError: left operand must be numeric, got {s}", .{@tagName(RA)});
                 return false;
             },
-        }
+        };
 
+        self.currentCallFrameRegisters().set(RC, Value.createBoolean(result));
         return true;
     }
 
@@ -325,22 +345,30 @@ pub const VM = struct {
         const RB = self.currentCallFrameRegisters().get(_instruction.DECODE_RB(instruction));
         const RC = _instruction.DECODE_RC(instruction);
 
-        switch (RA) {
-            .NUMBER => |a| switch (RB) {
-                .NUMBER => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createBoolean(b > a));
-                },
-                else => |p| {
-                    self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
+        const result = switch (RA) {
+            .INT64 => |a| switch (RB) {
+                .INT64 => |b| b > a,
+                .FLOAT64 => |b| b > @as(f64, @floatFromInt(a)),
+                else => {
+                    self.rError("TypeError: right operand must be numeric, got {s}", .{@tagName(RB)});
                     return false;
                 },
             },
-            else => |p| {
-                self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
+            .FLOAT64 => |a| switch (RB) {
+                .INT64 => |b| @as(f64, @floatFromInt(b)) > a,
+                .FLOAT64 => |b| b > a,
+                else => {
+                    self.rError("TypeError: right operand must be numeric, got {s}", .{@tagName(RB)});
+                    return false;
+                },
+            },
+            else => {
+                self.rError("TypeError: left operand must be numeric, got {s}", .{@tagName(RA)});
                 return false;
             },
-        }
+        };
 
+        self.currentCallFrameRegisters().set(RC, Value.createBoolean(result));
         return true;
     }
 
@@ -349,22 +377,30 @@ pub const VM = struct {
         const RB = self.currentCallFrameRegisters().get(_instruction.DECODE_RB(instruction));
         const RC = _instruction.DECODE_RC(instruction);
 
-        switch (RA) {
-            .NUMBER => |a| switch (RB) {
-                .NUMBER => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createBoolean(b <= a));
-                },
-                else => |p| {
-                    self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
+        const result = switch (RA) {
+            .INT64 => |a| switch (RB) {
+                .INT64 => |b| b <= a,
+                .FLOAT64 => |b| b <= @as(f64, @floatFromInt(a)),
+                else => {
+                    self.rError("TypeError: right operand must be numeric, got {s}", .{@tagName(RB)});
                     return false;
                 },
             },
-            else => |p| {
-                self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
+            .FLOAT64 => |a| switch (RB) {
+                .INT64 => |b| @as(f64, @floatFromInt(b)) <= a,
+                .FLOAT64 => |b| b <= a,
+                else => {
+                    self.rError("TypeError: right operand must be numeric, got {s}", .{@tagName(RB)});
+                    return false;
+                },
+            },
+            else => {
+                self.rError("TypeError: left operand must be numeric, got {s}", .{@tagName(RA)});
                 return false;
             },
-        }
+        };
 
+        self.currentCallFrameRegisters().set(RC, Value.createBoolean(result));
         return true;
     }
 
@@ -373,22 +409,30 @@ pub const VM = struct {
         const RB = self.currentCallFrameRegisters().get(_instruction.DECODE_RB(instruction));
         const RC = _instruction.DECODE_RC(instruction);
 
-        switch (RA) {
-            .NUMBER => |a| switch (RB) {
-                .NUMBER => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createBoolean(b >= a));
-                },
-                else => |p| {
-                    self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
+        const result = switch (RA) {
+            .INT64 => |a| switch (RB) {
+                .INT64 => |b| b >= a,
+                .FLOAT64 => |b| b >= @as(f64, @floatFromInt(a)),
+                else => {
+                    self.rError("TypeError: right operand must be numeric, got {s}", .{@tagName(RB)});
                     return false;
                 },
             },
-            else => |p| {
-                self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
+            .FLOAT64 => |a| switch (RB) {
+                .INT64 => |b| @as(f64, @floatFromInt(b)) >= a,
+                .FLOAT64 => |b| b >= a,
+                else => {
+                    self.rError("TypeError: right operand must be numeric, got {s}", .{@tagName(RB)});
+                    return false;
+                },
+            },
+            else => {
+                self.rError("TypeError: left operand must be numeric, got {s}", .{@tagName(RA)});
                 return false;
             },
-        }
+        };
 
+        self.currentCallFrameRegisters().set(RC, Value.createBoolean(result));
         return true;
     }
 
@@ -398,12 +442,32 @@ pub const VM = struct {
         const RC = _instruction.DECODE_RC(instruction);
 
         switch (RA) {
-            .NUMBER => |a| switch (RB) {
-                .NUMBER => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createNumber(b + a));
+            .INT64 => |a| switch (RB) {
+                .INT64 => |b| {
+                    self.currentCallFrameRegisters().set(RC, Value.createI64(b + a));
+                },
+                .FLOAT64 => |b| {
+                    self.currentCallFrameRegisters().set(RC, Value.createF64(b + @as(f64, @floatFromInt(a))));
                 },
                 .OBJECT => |o| {
                     self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(o.data), @tagName(RA) });
+                    return false;
+                },
+                else => |p| {
+                    self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(p), @tagName(RA) });
+                    return false;
+                },
+            },
+            .FLOAT64 => |a| switch (RB) {
+                .INT64 => |b| {
+                    self.currentCallFrameRegisters().set(RC, Value.createF64(@as(f64, @floatFromInt(b)) + a));
+                },
+                .FLOAT64 => |b| {
+                    self.currentCallFrameRegisters().set(RC, Value.createF64(b + a));
+                },
+                .OBJECT => |o| {
+                    self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(o.data), @tagName(RA) });
+                    return false;
                 },
                 else => |p| {
                     self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(p), @tagName(RA) });
@@ -445,9 +509,24 @@ pub const VM = struct {
         const RC = _instruction.DECODE_RC(instruction);
 
         switch (RA) {
-            .NUMBER => |a| switch (RB) {
-                .NUMBER => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createNumber(b - a));
+            .INT64 => |a| switch (RB) {
+                .INT64 => |b| {
+                    self.currentCallFrameRegisters().set(RC, Value.createI64(b - a));
+                },
+                .FLOAT64 => |b| {
+                    self.currentCallFrameRegisters().set(RC, Value.createF64(@as(f64, @floatFromInt(b)) - a));
+                },
+                else => |p| {
+                    self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
+                    return false;
+                },
+            },
+            .FLOAT64 => |a| switch (RB) {
+                .INT64 => |b| {
+                    self.currentCallFrameRegisters().set(RC, Value.createI64(@as(f64, @floatFromInt(b)) - a));
+                },
+                .FLOAT64 => |b| {
+                    self.currentCallFrameRegisters().set(RC, Value.createF64(b - a));
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
@@ -469,9 +548,24 @@ pub const VM = struct {
         const RC = _instruction.DECODE_RC(instruction);
 
         switch (RA) {
-            .NUMBER => |a| switch (RB) {
-                .NUMBER => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createNumber(b * a));
+            .INT64 => |a| switch (RB) {
+                .INT64 => |b| {
+                    self.currentCallFrameRegisters().set(RC, Value.createI64(b * a));
+                },
+                .FLOAT64 => |b| {
+                    self.currentCallFrameRegisters().set(RC, Value.createF64(@as(f64, @floatFromInt(b)) * a));
+                },
+                else => |p| {
+                    self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
+                    return false;
+                },
+            },
+            .FLOAT64 => |a| switch (RB) {
+                .INT64 => |b| {
+                    self.currentCallFrameRegisters().set(RC, Value.createI64(@as(f64, @floatFromInt(b)) * a));
+                },
+                .FLOAT64 => |b| {
+                    self.currentCallFrameRegisters().set(RC, Value.createF64(b * a));
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
@@ -493,12 +587,39 @@ pub const VM = struct {
         const RC = _instruction.DECODE_RC(instruction);
 
         switch (RA) {
-            .NUMBER => |a| switch (RB) {
-                .NUMBER => |b| {
+            .INT64 => |a| switch (RB) {
+                .INT64 => |b| {
                     if (a == 0) {
                         self.rError("numeric error: division by zero", .{});
                     } else {
-                        self.currentCallFrameRegisters().set(RC, Value.createNumber(b / a));
+                        self.currentCallFrameRegisters().set(RC, Value.createI64(b / a));
+                    }
+                },
+                .FLOAT64 => |b| {
+                    if (a == 0) {
+                        self.rError("numeric error: division by zero", .{});
+                    } else {
+                        self.currentCallFrameRegisters().set(RC, Value.createF64(@as(f64, @floatFromInt(b)) / a));
+                    }
+                },
+                else => |p| {
+                    self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
+                    return false;
+                },
+            },
+            .FLOAT64 => |a| switch (RB) {
+                .INT64 => |b| {
+                    if (a == 0) {
+                        self.rError("numeric error: division by zero", .{});
+                    } else {
+                        self.currentCallFrameRegisters().set(RC, Value.createI64(@as(f64, @floatFromInt(b)) / a));
+                    }
+                },
+                .FLOAT64 => |b| {
+                    if (a == 0) {
+                        self.rError("numeric error: division by zero", .{});
+                    } else {
+                        self.currentCallFrameRegisters().set(RC, Value.createF64(b / a));
                     }
                 },
                 else => |p| {

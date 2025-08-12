@@ -94,7 +94,9 @@ pub const Parser = struct {
 
         // Setting up the parsing functions
         parser.nud(Tokens.IDENT, parseIdentifier);
-        parser.nud(Tokens.NUMBER, parseNumber);
+        parser.nud(Tokens.FLOAT, parseNumber);
+        parser.nud(Tokens.INTEGER, parseNumber);
+
         parser.nud(Tokens.TRUE, parseBoolean);
         parser.nud(Tokens.FALSE, parseBoolean);
         parser.nud(Tokens.NIL, parseNil);
@@ -340,9 +342,13 @@ pub const Parser = struct {
             },
             .MINUS => {
                 switch (expr.?.*) {
-                    .number_expr => |n| {
+                    .int64_expr => |n| {
                         const strNum = std.fmt.allocPrint(self.allocator, "{d}", .{-n.value}) catch unreachable;
-                        return AST.Expression{ .number_expr = AST.NumberExpression{ .token = Token.makeToken(Tokens.NUMBER, strNum, token.position), .value = -n.value } };
+                        return AST.Expression{ .int64_expr = AST.Int64Expression{ .token = Token.makeToken(Tokens.INTEGER, strNum, token.position), .value = -n.value } };
+                    },
+                    .float64_expr => |n| {
+                        const strNum = std.fmt.allocPrint(self.allocator, "{d}", .{-n.value}) catch unreachable;
+                        return AST.Expression{ .float64_expr = AST.Float64Expression{ .token = Token.makeToken(Tokens.FLOAT, strNum, token.position), .value = -n.value } };
                     },
                     else => return null,
                 }
@@ -384,30 +390,77 @@ pub const Parser = struct {
         const left = left_expr.?.*;
         const right = right_expr.?.*;
 
-        if (left == .number_expr and right == .number_expr) {
-            const left_val = left.number_expr.value;
-            const right_val = right.number_expr.value;
+        const makeInteger64Expr = struct {
+            fn call(parser: *Parser, value: i64, pos: Position) AST.Expression {
+                const str_num = std.fmt.allocPrint(parser.allocator, "{d}", .{value}) catch unreachable;
+                return AST.Expression{ .int64_expr = AST.Int64Expression{ .token = Token.makeToken(Tokens.INTEGER, str_num, pos), .value = value } };
+            }
+        }.call;
 
-            const makeNumberExpr = struct {
-                fn call(parser: *Parser, value: f64, pos: Position) AST.Expression {
-                    const str_num = std.fmt.allocPrint(parser.allocator, "{d}", .{value}) catch unreachable;
-                    return AST.Expression{ .number_expr = AST.NumberExpression{ .token = Token.makeToken(Tokens.NUMBER, str_num, pos), .value = value } };
-                }
-            }.call;
+        const makeFloat64Expr = struct {
+            fn call(parser: *Parser, value: f64, pos: Position) AST.Expression {
+                const str_num = std.fmt.allocPrint(parser.allocator, "{d}", .{value}) catch unreachable;
+                return AST.Expression{ .float64_expr = AST.Float64Expression{ .token = Token.makeToken(Tokens.FLOAT, str_num, pos), .value = value } };
+            }
+        }.call;
 
-            const makeBoolExpr = struct {
-                fn call(value: bool, pos: Position) AST.Expression {
-                    const token_type = if (value) Tokens.TRUE else Tokens.FALSE;
-                    const token_str = if (value) "TRUE" else "FALSE";
-                    return AST.Expression{ .boolean_expr = AST.BooleanExpression{ .token = Token.makeToken(token_type, token_str, pos), .value = value } };
-                }
-            }.call;
+        const makeBoolExpr = struct {
+            fn call(value: bool, pos: Position) AST.Expression {
+                const token_type = if (value) Tokens.TRUE else Tokens.FALSE;
+                const token_str = if (value) "TRUE" else "FALSE";
+                return AST.Expression{ .boolean_expr = AST.BooleanExpression{ .token = Token.makeToken(token_type, token_str, pos), .value = value } };
+            }
+        }.call;
+
+        if (left == .int64_expr and right == .int64_expr) {
+            const left_val = left.int64_expr.value;
+            const right_val = right.int64_expr.value;
 
             return switch (token.token_type) {
-                .PLUS => makeNumberExpr(self, left_val + right_val, token.position),
-                .MINUS => makeNumberExpr(self, left_val - right_val, token.position),
-                .ASTERISK => makeNumberExpr(self, left_val * right_val, token.position),
-                .FSLASH => if (right_val == 0) null else makeNumberExpr(self, left_val / right_val, token.position),
+                .PLUS => makeInteger64Expr(self, left_val + right_val, token.position),
+                .MINUS => makeInteger64Expr(self, left_val - right_val, token.position),
+                .ASTERISK => makeInteger64Expr(self, left_val * right_val, token.position),
+                .FSLASH => if (right_val == 0) null else makeInteger64Expr(self, left_val / right_val, token.position),
+                .NOT_EQUAL => makeBoolExpr(left_val != right_val, token.position),
+                .EQUAL_EQUAL => makeBoolExpr(left_val == right_val, token.position),
+                .GREATERT => makeBoolExpr(left_val > right_val, token.position),
+                .LESST => makeBoolExpr(left_val < right_val, token.position),
+                .LESS_EQUAL => makeBoolExpr(left_val <= right_val, token.position),
+                .GREATER_EQUAL => makeBoolExpr(left_val >= right_val, token.position),
+                else => null,
+            };
+        }
+
+        if (left == .float64_expr and right == .float64_expr) {
+            const left_val = left.float64_expr.value;
+            const right_val = right.float64_expr.value;
+
+            return switch (token.token_type) {
+                .PLUS => makeFloat64Expr(self, left_val + right_val, token.position),
+                .MINUS => makeFloat64Expr(self, left_val - right_val, token.position),
+                .ASTERISK => makeFloat64Expr(self, left_val * right_val, token.position),
+                .FSLASH => if (right_val == 0) null else makeFloat64Expr(self, left_val / right_val, token.position),
+                .NOT_EQUAL => makeBoolExpr(left_val != right_val, token.position),
+                .EQUAL_EQUAL => makeBoolExpr(left_val == right_val, token.position),
+                .GREATERT => makeBoolExpr(left_val > right_val, token.position),
+                .LESST => makeBoolExpr(left_val < right_val, token.position),
+                .LESS_EQUAL => makeBoolExpr(left_val <= right_val, token.position),
+                .GREATER_EQUAL => makeBoolExpr(left_val >= right_val, token.position),
+                else => null,
+            };
+        }
+
+        if ((left == .float64_expr and right == .int64_expr) or
+            (left == .int64_expr and right == .float64_expr))
+        {
+            const left_val = if (left == .float64_expr) left.float64_expr.value else @as(f64, @floatFromInt(left.int64_expr.value));
+            const right_val = if (right == .float64_expr) right.float64_expr.value else @as(f64, @floatFromInt(right.int64_expr.value));
+
+            return switch (token.token_type) {
+                .PLUS => makeFloat64Expr(self, left_val + right_val, token.position),
+                .MINUS => makeFloat64Expr(self, left_val - right_val, token.position),
+                .ASTERISK => makeFloat64Expr(self, left_val * right_val, token.position),
+                .FSLASH => if (right_val == 0.0) null else makeFloat64Expr(self, left_val / right_val, token.position),
                 .NOT_EQUAL => makeBoolExpr(left_val != right_val, token.position),
                 .EQUAL_EQUAL => makeBoolExpr(left_val == right_val, token.position),
                 .GREATERT => makeBoolExpr(left_val > right_val, token.position),
@@ -706,12 +759,19 @@ pub const Parser = struct {
 
     pub fn parseNumber(self: *Parser) ?*AST.Expression {
         const num_token = self.cur_token;
-
-        const result = std.fmt.parseFloat(f64, self.cur_token.literal) catch unreachable;
-        const num_exp = AST.NumberExpression{ .token = num_token, .value = result };
-
         const expr = self.createExpressionNode();
-        expr.* = AST.Expression{ .number_expr = num_exp };
+
+        if (num_token == Tokens.FLOAT) {
+            const result = std.fmt.parseFloat(f64, self.cur_token.literal) catch unreachable;
+            const num_exp = AST.Float64Expression{ .token = num_token, .value = result };
+
+            expr.* = AST.Expression{ .float64_expr = num_exp };
+        }
+
+        const result = std.fmt.parseInt(i64, self.cur_token.literal) catch unreachable;
+        const num_exp = AST.Int64Expression{ .token = num_token, .value = result };
+
+        expr.* = AST.Expression{ .int64_expr = num_exp };
 
         return expr;
     }

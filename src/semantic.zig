@@ -189,7 +189,8 @@ pub const SemanticAnalyzer = struct {
         self.cur_node = AST.CurrentNode{ .expression = expr.? };
 
         switch (expr.?.*) {
-            AST.Expression.number_expr => {},
+            AST.Expression.int64_expr => {},
+            AST.Expression.float64_expr => {},
             AST.Expression.string_expr => {},
             AST.Expression.boolean_expr => {},
             AST.Expression.infix_expr => |infixExpr| {

@@ -11,7 +11,8 @@ fn printStdOut(comptime str: []const u8, varagars: anytype) void {
 pub const Nfunction = *const fn (args: []Value) Value;
 
 pub const ValueType = enum {
-    NUMBER,
+    INT64,
+    FLOAT64,
     BOOLEAN,
     NIL,
     OBJECT,
@@ -157,7 +158,8 @@ pub const Object = struct {
 };
 
 pub const Value = union(ValueType) {
-    NUMBER: f64,
+    INT64: i64,
+    FLOAT64: f64,
     BOOLEAN: bool,
     NIL: void,
     OBJECT: *Object,
@@ -166,7 +168,10 @@ pub const Value = union(ValueType) {
         var hasher = std.hash.Wyhash.init(0);
 
         switch (self) {
-            .NUMBER => |n| {
+            .INT64 => |n| {
+                hasher.update(&std.mem.toBytes(n));
+            },
+            .FLOAT64 => |n| {
                 const bits = @as(u64, @bitCast(n));
                 hasher.update(&std.mem.toBytes(bits));
             },
@@ -189,8 +194,12 @@ pub const Value = union(ValueType) {
         return hasher.final();
     }
 
-    pub inline fn createNumber(num: f64) Value {
-        return Value{ .NUMBER = num };
+    pub inline fn createF64(num: f64) Value {
+        return Value{ .FLOAT64 = num };
+    }
+
+    pub inline fn createI64(num: i64) Value {
+        return Value{ .INT64 = num };
     }
 
     pub inline fn createNil() Value {
@@ -304,7 +313,8 @@ pub const Value = union(ValueType) {
 
     pub inline fn getType(self: Value) ValueType {
         return switch (self) {
-            .NUMBER => .NUMBER,
+            .INT64 => .INT64,
+            .FLOAT64 => .FLOAT64,
             .BOOLEAN => .BOOLEAN,
             .NIL => .NIL,
             .OBJECT => .OBJECT,
@@ -312,7 +322,7 @@ pub const Value = union(ValueType) {
     }
 
     pub inline fn isNumber(self: Value) bool {
-        return self == .NUMBER;
+        return self == .FLOAT64 or self == .INT64;
     }
 
     pub inline fn isBoolean(self: Value) bool {
@@ -341,7 +351,8 @@ pub const Value = union(ValueType) {
         return switch (self) {
             .BOOLEAN => |b| b,
             .NIL => false,
-            .NUMBER => |n| n != 0,
+            .INT64 => |n| n != 0,
+            .FLOAT64 => |n| n != 0.0,
             .OBJECT => |obj| switch (obj.data) {
                 .STRING => |str| str.chars.len > 0,
                 .ARRAY => |arr| arr.items.items.len > 0,
@@ -355,14 +366,15 @@ pub const Value = union(ValueType) {
         printStdOut("[", .{});
         for (arr.items.items) |arr_i| {
             switch (arr_i) {
-                .BOOLEAN => |b| printStdOut("{}", .{b}),
-                .NIL => printStdOut("nil,", .{}),
-                .NUMBER => |n| printStdOut("{d:.2},", .{n}),
+                .BOOLEAN => |b| printStdOut("{}, ", .{b}),
+                .NIL => printStdOut("nil, ", .{}),
+                .FLOAT64 => |n| printStdOut("{d}, ", .{n}),
+                .INT64 => |n| printStdOut("{d}, ", .{n}),
                 .OBJECT => |inn_obj| switch (inn_obj.*.data) {
-                    .STRING => printStdOut("{s},", .{inn_obj.data.STRING.chars}),
+                    .STRING => printStdOut("{s}, ", .{inn_obj.data.STRING.chars}),
                     .ARRAY => printArrItems(inn_obj.data.ARRAY),
-                    .FUNCTION_EXPR => printStdOut("<anonymous function expression>\n", .{}),
-                    .NATIVE_FUNCTION => printStdOut("<native function>\n", .{}),
+                    .FUNCTION_EXPR => printStdOut("<anonymous function expression at>, ", .{}),
+                    .NATIVE_FUNCTION => printStdOut("<native function at>, ", .{}),
                 },
             }
         }
@@ -373,12 +385,13 @@ pub const Value = union(ValueType) {
         return switch (self) {
             .BOOLEAN => |b| printStdOut("{}\n", .{b}),
             .NIL => printStdOut("nil\n", .{}),
-            .NUMBER => |n| printStdOut("{d:.2}\n", .{n}),
+            .FLOAT64 => |n| printStdOut("{d}\n", .{n}),
+            .INT64 => |n| printStdOut("{d}\n", .{n}),
             .OBJECT => |obj| switch (obj.*.data) {
                 .STRING => printStdOut("{s}\n", .{obj.data.STRING.chars}),
                 .ARRAY => printArrItems(obj.data.ARRAY),
-                .FUNCTION_EXPR => printStdOut("<anonymous function expression>\n", .{}),
-                .NATIVE_FUNCTION => printStdOut("<native function>\n", .{}),
+                .FUNCTION_EXPR => printStdOut("<anonymous function expression at>\n", .{}),
+                .NATIVE_FUNCTION => printStdOut("<native function at>\n", .{}),
             },
         };
     }
