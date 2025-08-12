@@ -11,6 +11,8 @@ const _symbol_table = @import("symbol.zig");
 const SymbolTable = _symbol_table.SymbolTable;
 const Symbol = _symbol_table.Symbol;
 const Scopes = _symbol_table.Scope;
+const vType = @import("value.zig").ValueType;
+const _nativef = @import("nativef.zig");
 const _token = @import("token.zig");
 const Token = _token.Token;
 
@@ -132,6 +134,14 @@ pub const SemanticAnalyzer = struct {
             self.sError("variable '{s}' already defined on line {d}", .{ stmt.identifier.literal, s.token.position.line });
             return;
         }
+
+        //         const vType = switch (stmt.*.expression.?.*) {
+        //             .number_expr => |n|{
+        //
+        //             },
+        //
+        //         }
+
         const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, self.instruction_count, null);
         stmt.identifier.resolved_symbol = symbol;
 
@@ -140,7 +150,7 @@ pub const SemanticAnalyzer = struct {
 
     pub fn analyzeFn(self: *SemanticAnalyzer, stmt: *AST.FnStatement) void { // Make this better, store on symbol if it is function or not, so that better error messages may be dispatched here
         if (self.symbol_table.resolveCurrent(stmt.identifier.literal)) |s| {
-            self.sError("variable '{s}' already defined on line {d}", .{ stmt.identifier.literal, s.token.position.line });
+            self.sError("function '{s}' already defined on line {d}", .{ stmt.identifier.literal, s.token.position.line });
             return;
         }
         self.enterScope();
@@ -262,6 +272,10 @@ pub const SemanticAnalyzer = struct {
     }
 
     fn analyzeStmts(self: *SemanticAnalyzer, nodes: std.ArrayList(AST.Statement)) bool {
+        for (_nativef.native_functions) |f| {
+            _ = self.symbol_table.define(undefined, f.name, undefined, vType.OBJECT);
+        }
+
         for (nodes.items) |node| {
             self.analyzeStmt(node);
 
@@ -279,16 +293,7 @@ pub const SemanticAnalyzer = struct {
 };
 
 test "semantic analyze test" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
-    defer {
-        const deinit_status = gpa.deinit();
-
-        if (deinit_status == .leak) {
-            @panic("MEMORY LEAK");
-        }
-    }
-
-    const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
 
     const input: []const u8 =
         \\var a = 5

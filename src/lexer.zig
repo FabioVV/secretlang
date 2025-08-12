@@ -128,6 +128,16 @@ pub const Lexer = struct {
         return true;
     }
 
+    fn accept(self: *Lexer, str: []const u8) bool {
+        const ch = self.peek(1);
+
+        if (mem.indexOf(u8, str, ch)) |_| {
+            return true;
+        }
+
+        return false;
+    }
+
     pub fn identifyTypeOfAlphanumeric(self: *Lexer, identifier: []u8, startColumn: usize, startLine: usize) Token {
         const pos = Position{ .column = startColumn, .line = startLine, .filename = self.filename };
 
@@ -144,6 +154,7 @@ pub const Lexer = struct {
                 .TRUE => Token.makeToken(Tokens.TRUE, "TRUE", pos),
                 .FALSE => Token.makeToken(Tokens.FALSE, "FALSE", pos),
                 .RETURN => Token.makeToken(Tokens.RETURN, "RETURN", pos),
+                .CONST => Token.makeToken(Tokens.CONST, "CONST", pos),
                 else => unreachable,
             };
         } else {
@@ -162,7 +173,7 @@ pub const Lexer = struct {
         }
 
         if (self.peekByte(1) == '.') {
-            numbers.appendSlice(self.advance().?) catch unreachable; // Consume the .
+            numbers.appendSlice(self.advance().?) catch unreachable; // append the .
 
             if (!self.isAsciiDigit(self.peek(1))) {
                 const pos = Position{ .column = self.column, .line = startLine, .filename = self.filename };
@@ -172,6 +183,11 @@ pub const Lexer = struct {
             while (self.isAsciiDigit(self.peek(1))) {
                 numbers.appendSlice(self.advance().?) catch unreachable;
             }
+
+            const pos = Position{ .column = startColumn, .line = startLine, .filename = self.filename };
+            const fullNumber = numbers.toOwnedSlice() catch unreachable;
+
+            return Token.makeToken(Tokens.NUMBER, fullNumber, pos);
         }
 
         const pos = Position{ .column = startColumn, .line = startLine, .filename = self.filename };
@@ -242,6 +258,12 @@ pub const Lexer = struct {
 
         const firstChar: u8 = ch.?[0];
         switch (firstChar) {
+            '@' => {
+                if (self.isIdentifier(self.peek(1))) {
+                    return self.lexIdentifier(startColumn, startLine);
+                }
+                return Token.makeToken(Tokens.AT, "@", pos);
+            },
             '|' => {
                 return Token.makeToken(Tokens.PIPE, "|", pos);
             },

@@ -14,6 +14,7 @@ const AST = @import("ast.zig");
 const CompilationScope = @import("compiler.zig").CompilationScope;
 const _instruction = @import("instruction.zig");
 const _value = @import("value.zig");
+const _nativef = @import("nativef.zig");
 const Value = _value.Value;
 const Object = _value.Object;
 const String = _value.String;
@@ -21,18 +22,14 @@ const FunctionExpr = _value.FunctionExpr;
 const Instruction = _instruction.Instruction;
 
 pub const MAX_REGISTERS = 255;
-pub const MAX_GLOBALS = 65535;
+pub const MAX_GLOBALS = 2048;
+//pub const MAX_GLOBALS = 65535;
 pub const MAX_FRAMES = 1024;
 pub const STACK_SIZE = 2048;
 
-const NIL = Value{ .NIL = void{} };
-const TRUE = Value{ .BOOLEAN = true };
-const FALSE = Value{ .BOOLEAN = false };
-
-pub fn _print_(arity: u8) Value {
-    _ = arity;
-    @panic("OH NO, THE PRINT FUNCTION");
-}
+pub const NIL = Value{ .NIL = void{} };
+pub const TRUE = Value{ .BOOLEAN = true };
+pub const FALSE = Value{ .BOOLEAN = false };
 
 const CallFrame = struct {
     function: *FunctionExpr,
@@ -98,7 +95,9 @@ pub const VM = struct {
         const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, null, &vm.objects);
         vm.frames.set(1, CallFrame.init(mainFunction.asFunctionExpr().?, 0));
 
-        vm.defineNative("print", _print_);
+        for (_nativef.native_functions, 0..) |f, i| {
+            vm.defineNative(f.name, f.function, @as(u16, @intCast(i)), f.arity);
+        }
 
         return vm;
     }
@@ -124,6 +123,10 @@ pub const VM = struct {
 
         const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, null, &vm.objects);
         vm.frames.set(1, CallFrame.init(mainFunction.asFunctionExpr().?, 0));
+
+        for (_nativef.native_functions, 0..) |f, i| {
+            vm.defineNative(f.name, f.function, @as(u16, @intCast(i)), f.arity);
+        }
 
         return vm;
     }
@@ -176,10 +179,9 @@ pub const VM = struct {
         errh.printError(errMsg);
     }
 
-    fn defineNative(self: *VM, name: []const u8, function: _value.Nfunction) void {
-        _ = Value.copyString(self.allocator, name, self.strings, &self.objects);
-        const Nfunction = Value.createNativeFunction(self.allocator, function, 0, &self.objects);
-        self.globals.append(Nfunction) catch unreachable;
+    fn defineNative(self: *VM, name: []const u8, function: _value.Nfunction, globalSlot: u16, arity: u8) void {
+        const Nfunction = Value.createNativeFunction(self.allocator, name, function, arity, &self.objects);
+        self.globals.slice()[globalSlot] = Nfunction;
     }
 
     inline fn currentCallFrame(self: *VM) *CallFrame {
@@ -642,19 +644,33 @@ pub const VM = struct {
                         }
 
                         for (0..RB) |i| {
-                            const arg = self.pop().?;
-                            callFrame.registers.set(i + 1, arg);
+                            callFrame.registers.set(i + 1, self.pop().?);
                         }
 
                         frame.pc = pc;
-
                         self.pushCallFrame(callFrame);
+
                         frame = self.currentCallFrame();
                         frame.registers.set(0, self.currentCallFrameRegisters().get(0));
+
                         pc = 0;
                     } else if (RA.asNativeFunction()) |f| {
-                        const result: Value = f.function(0);
+                        frame.pc = pc;
+
+                        if (f.arity != RB) {
+                            self.rError("argument error: expected {d} arguments but got {d}", .{ f.arity, RB });
+                            return false;
+                        }
+
+                        const args_slice = self.stack.slice()[self.stack.len - RB .. self.stack.len];
+
+                        const result: Value = f.function(args_slice);
+
                         frame.registers.set(RC, result);
+
+                        for (0..RB) |_| {
+                            _ = self.pop();
+                        }
                     } else {
                         self.rError("type error: tried calling non-function: {any}", .{@tagName(RA)});
                         return false;

@@ -8,7 +8,7 @@ fn printStdOut(comptime str: []const u8, varagars: anytype) void {
     _ = std.io.getStdOut().writer().print(str, varagars) catch unreachable;
 }
 
-pub const Nfunction = *const fn (arity: u8) Value;
+pub const Nfunction = *const fn (args: []Value) Value;
 
 pub const ValueType = enum {
     NUMBER,
@@ -51,13 +51,15 @@ pub const String = struct {
 pub const NativeFunction = struct {
     arity: u8,
     function: Nfunction,
+    name: []const u8,
 
-    pub fn init(allocator: std.mem.Allocator, function: Nfunction, arity: u8) *NativeFunction {
+    pub fn init(allocator: std.mem.Allocator, function: Nfunction, name: []const u8, arity: u8) *NativeFunction {
         const nfn_obj = allocator.create(NativeFunction) catch unreachable;
 
         nfn_obj.* = NativeFunction{
             .function = function,
             .arity = arity,
+            .name = name,
         };
 
         return nfn_obj;
@@ -208,8 +210,8 @@ pub const Value = union(ValueType) {
         return val;
     }
 
-    pub inline fn createNativeFunction(allocator: std.mem.Allocator, function: Nfunction, arity: u8, objects: *?*Object) Value {
-        const fn_obj = NativeFunction.init(allocator, function, arity);
+    pub inline fn createNativeFunction(allocator: std.mem.Allocator, name: []const u8, function: Nfunction, arity: u8, objects: *?*Object) Value {
+        const fn_obj = NativeFunction.init(allocator, function, name, arity);
         const obj = Object.initNativeFn(allocator, fn_obj, objects);
 
         const val = Value{ .OBJECT = obj };
