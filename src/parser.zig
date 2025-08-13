@@ -766,6 +766,7 @@ pub const Parser = struct {
             const num_exp = AST.Float64Expression{ .token = num_token, .value = result };
 
             expr.* = AST.Expression{ .float64_expr = num_exp };
+            return expr;
         }
 
         const result = std.fmt.parseInt(i64, self.cur_token.literal, 10) catch unreachable;

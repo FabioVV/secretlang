@@ -153,7 +153,7 @@ pub const VM = struct {
 
     /// Emits a runtime error
     fn rError(self: *VM, comptime message: []const u8, varargs: anytype) void {
-        const pos = self.currentCallFrame().instructionsPositions().get(@intCast(self.currentCallFrame().pc)).?;
+        const pos = self.currentCallFrame().instructionsPositions().get(@intCast(self.currentCallFrame().pc - 1)).?;
         const source = dbg.getSourceLine(self.source.*, pos);
 
         const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, pos, source);
@@ -599,7 +599,7 @@ pub const VM = struct {
                     if (a == 0) {
                         self.rError("numeric error: division by zero", .{});
                     } else {
-                        self.currentCallFrameRegisters().set(RC,  Value.createF64(b / @as(f64, @floatFromInt(a))));
+                        self.currentCallFrameRegisters().set(RC, Value.createF64(b / @as(f64, @floatFromInt(a))));
                     }
                 },
                 else => |p| {
@@ -645,6 +645,7 @@ pub const VM = struct {
         while (true) {
             const curInstruction = frame.function.instructions.items[pc];
             pc += 1;
+            frame.pc = pc;
 
             const opcode = _instruction.GET_OPCODE(curInstruction);
             //std.debug.print("OP {s} @ PC={d}\n", .{ @tagName(opcode), pc });
@@ -769,7 +770,6 @@ pub const VM = struct {
                             callFrame.registers.set(i + 1, self.pop().?);
                         }
 
-                        frame.pc = pc;
                         self.pushCallFrame(callFrame);
 
                         frame = self.currentCallFrame();
@@ -777,8 +777,6 @@ pub const VM = struct {
 
                         pc = 0;
                     } else if (RA.asNativeFunction()) |f| {
-                        frame.pc = pc;
-
                         if (f.arity != RB) {
                             self.rError("argument error: expected {d} arguments but got {d}", .{ f.arity, RB });
                             return false;
