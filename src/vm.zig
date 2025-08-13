@@ -514,7 +514,7 @@ pub const VM = struct {
                     self.currentCallFrameRegisters().set(RC, Value.createI64(b - a));
                 },
                 .FLOAT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createF64(@as(f64, @floatFromInt(b)) - a));
+                    self.currentCallFrameRegisters().set(RC, Value.createF64(b - @as(f64, @floatFromInt(a))));
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
@@ -523,7 +523,7 @@ pub const VM = struct {
             },
             .FLOAT64 => |a| switch (RB) {
                 .INT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createI64(@as(f64, @floatFromInt(b)) - a));
+                    self.currentCallFrameRegisters().set(RC, Value.createF64(@as(f64, @floatFromInt(b)) - a));
                 },
                 .FLOAT64 => |b| {
                     self.currentCallFrameRegisters().set(RC, Value.createF64(b - a));
@@ -553,7 +553,7 @@ pub const VM = struct {
                     self.currentCallFrameRegisters().set(RC, Value.createI64(b * a));
                 },
                 .FLOAT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createF64(@as(f64, @floatFromInt(b)) * a));
+                    self.currentCallFrameRegisters().set(RC, Value.createF64(b * @as(f64, @floatFromInt(a))));
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
@@ -562,7 +562,7 @@ pub const VM = struct {
             },
             .FLOAT64 => |a| switch (RB) {
                 .INT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createI64(@as(f64, @floatFromInt(b)) * a));
+                    self.currentCallFrameRegisters().set(RC, Value.createF64(@as(f64, @floatFromInt(b)) * a));
                 },
                 .FLOAT64 => |b| {
                     self.currentCallFrameRegisters().set(RC, Value.createF64(b * a));
@@ -592,14 +592,14 @@ pub const VM = struct {
                     if (a == 0) {
                         self.rError("numeric error: division by zero", .{});
                     } else {
-                        self.currentCallFrameRegisters().set(RC, Value.createI64(b / a));
+                        self.currentCallFrameRegisters().set(RC, Value{ .INT64 = @divTrunc(b, a) });
                     }
                 },
                 .FLOAT64 => |b| {
                     if (a == 0) {
                         self.rError("numeric error: division by zero", .{});
                     } else {
-                        self.currentCallFrameRegisters().set(RC, Value.createF64(@as(f64, @floatFromInt(b)) / a));
+                        self.currentCallFrameRegisters().set(RC,  Value.createF64(b / @as(f64, @floatFromInt(a))));
                     }
                 },
                 else => |p| {
@@ -612,7 +612,7 @@ pub const VM = struct {
                     if (a == 0) {
                         self.rError("numeric error: division by zero", .{});
                     } else {
-                        self.currentCallFrameRegisters().set(RC, Value.createI64(@as(f64, @floatFromInt(b)) / a));
+                        self.currentCallFrameRegisters().set(RC, Value.createF64(@as(f64, @floatFromInt(b)) / a));
                     }
                 },
                 .FLOAT64 => |b| {
@@ -637,7 +637,7 @@ pub const VM = struct {
     }
 
     pub fn run(self: *VM) bool {
-        //@setRuntimeSafety(true);
+        @setRuntimeSafety(false);
 
         var frame: *CallFrame = &self.frames.slice()[self.frameIndex];
         var pc = frame.pc;
@@ -715,7 +715,8 @@ pub const VM = struct {
                     const RC = _instruction.DECODE_RC(curInstruction);
 
                     switch (RA) {
-                        .NUMBER => |n| self.currentCallFrameRegisters().set(RC, Value.createNumber(-n)),
+                        .INT64 => |n| self.currentCallFrameRegisters().set(RC, Value.createI64(-n)),
+                        .FLOAT64 => |n| self.currentCallFrameRegisters().set(RC, Value.createF64(-n)),
                         else => |p| {
                             self.rError("type error: operand must be numeric, got {s}", .{@tagName(p)});
                             return false;

@@ -420,7 +420,7 @@ pub const Parser = struct {
                 .PLUS => makeInteger64Expr(self, left_val + right_val, token.position),
                 .MINUS => makeInteger64Expr(self, left_val - right_val, token.position),
                 .ASTERISK => makeInteger64Expr(self, left_val * right_val, token.position),
-                .FSLASH => if (right_val == 0) null else makeInteger64Expr(self, left_val / right_val, token.position),
+                .FSLASH => if (right_val == 0) null else makeInteger64Expr(self, @divTrunc(left_val, right_val), token.position),
                 .NOT_EQUAL => makeBoolExpr(left_val != right_val, token.position),
                 .EQUAL_EQUAL => makeBoolExpr(left_val == right_val, token.position),
                 .GREATERT => makeBoolExpr(left_val > right_val, token.position),
@@ -761,14 +761,14 @@ pub const Parser = struct {
         const num_token = self.cur_token;
         const expr = self.createExpressionNode();
 
-        if (num_token == Tokens.FLOAT) {
+        if (num_token.token_type == Tokens.FLOAT) {
             const result = std.fmt.parseFloat(f64, self.cur_token.literal) catch unreachable;
             const num_exp = AST.Float64Expression{ .token = num_token, .value = result };
 
             expr.* = AST.Expression{ .float64_expr = num_exp };
         }
 
-        const result = std.fmt.parseInt(i64, self.cur_token.literal) catch unreachable;
+        const result = std.fmt.parseInt(i64, self.cur_token.literal, 10) catch unreachable;
         const num_exp = AST.Int64Expression{ .token = num_token, .value = result };
 
         expr.* = AST.Expression{ .int64_expr = num_exp };

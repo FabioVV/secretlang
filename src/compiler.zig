@@ -371,8 +371,11 @@ pub const Compiler = struct {
         //defer self.registersState("after expr");
 
         switch (expr.?.*) {
-            AST.Expression.number_expr => |numExpr| {
-                return self.emitConstant(Value.createNumber(numExpr.value));
+            AST.Expression.int64_expr => |numExpr| {
+                return self.emitConstant(Value.createI64(numExpr.value));
+            },
+            AST.Expression.float64_expr => |numExpr| {
+                return self.emitConstant(Value.createF64(numExpr.value));
             },
             AST.Expression.string_expr => |strExpr| {
                 const str = Value.copyString(self.allocator, strExpr.value, self.strings, &self.objects);

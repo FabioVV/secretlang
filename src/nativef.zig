@@ -16,6 +16,6 @@ pub const native_functions = [_]NativeFunction{
     .{ .name = "@print", .function = _print_, .arity = 1 },
 };
 
-pub const BuiltinMap = std.StaticStringMap(u16).initComptime(.{ // Maps builtin functions to a global index
+pub const BuiltinMap = std.StaticStringMap(u16).initComptime(.{ // Maps builtin functions to a global index, just so i dont have to do a mem.eql
     .{ "@print", 0 },
 });
