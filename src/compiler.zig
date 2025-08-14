@@ -479,15 +479,19 @@ pub const Compiler = struct {
             },
             AST.Expression.call_expr => |call_expr| {
                 _ = self.compileExpression(call_expr.function); //function here being an identifier that will be resolved
+                _value.printStdOut("1\n", .{});
 
                 const fn_register = self.currentScope().used_registers.pop().?;
+                _value.printStdOut("2\n", .{});
 
                 const result_reg = self.allocateRegister() catch {
                     self.cError("out of registers");
                     return null;
                 };
+                _value.printStdOut("3\n", .{});
+                _value.printStdOut("{any}\n", .{call_expr.arguments});
 
-                for (call_expr.arguments.constSlice()) |arg| {
+                for (call_expr.arguments.slice()) |arg| {
                     _ = self.compileExpression(arg);
 
                     const arg_reg = self.currentScope().used_registers.pop().?;
@@ -495,19 +499,28 @@ pub const Compiler = struct {
                     self.freeRegister(arg_reg);
                 }
 
+                _value.printStdOut("4\n", .{});
+
                 self.freeRegister(fn_register);
+                _value.printStdOut("5\n", .{});
 
                 switch (call_expr.function.?.*) {
                     AST.Expression.identifier_expr => |idenExpr| {
+                        _value.printStdOut("6\n", .{});
+
                         if (idenExpr.resolved_symbol != null and idenExpr.resolved_symbol.?.type == ValueTypes.NATIVEF) {
                             self.emitInstruction(_instruction.ENCODE_BCALL(result_reg, fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
+                            _value.printStdOut("7\n", .{});
+
                             return null;
                         }
                     },
                     else => unreachable,
                 }
+                _value.printStdOut("8\n", .{});
 
                 self.emitInstruction(_instruction.ENCODE_CALL(result_reg, fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
+                _value.printStdOut("9\n", .{});
 
                 return null;
             },

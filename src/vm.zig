@@ -22,10 +22,10 @@ const FunctionExpr = _value.FunctionExpr;
 const Instruction = _instruction.Instruction;
 
 pub const MAX_REGISTERS = 255;
-pub const MAX_GLOBALS = 2048;
+pub const MAX_GLOBALS = 1024;
 //pub const MAX_GLOBALS = 65535;
-pub const MAX_FRAMES = 1024;
-pub const STACK_SIZE = 2048;
+pub const MAX_FRAMES = 1;
+pub const STACK_SIZE = 1024;
 
 pub const NIL = Value{ .NIL = void{} };
 pub const TRUE = Value{ .BOOLEAN = true };
@@ -749,8 +749,10 @@ pub const VM = struct {
                 },
                 .PUSH => {
                     const RC = _instruction.DECODE_RC(curInstruction);
+                    _value.printStdOut("GOING TO TRY TO PUSH: {any}\n", .{self.currentCallFrameRegisters().get(RC)});
+
                     self.push(self.currentCallFrameRegisters().get(RC));
-                    //                     std.debug.print("pushed: {d}\n", .{self.currentCallFrameRegisters().get(RC).NUMBER});
+                    _value.printStdOut("PUSHED: {any}\n", .{self.currentCallFrameRegisters().get(RC)});
                 },
                 .BCALL => {
                     const RC = _instruction.DECODE_RC(curInstruction);

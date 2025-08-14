@@ -45,7 +45,7 @@ pub fn launch() !void {
 
     var lineCount: u32 = 1;
     while (true) : (lineCount += 1) {
-        var buf: [2048]u8 = undefined;
+        var buf: [512]u8 = undefined;
         try stdout.print("{d}:>  ", .{lineCount});
 
         if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |input_text| {
@@ -79,9 +79,7 @@ pub fn launch() !void {
 
             var vm: *VM = VM.repl_init(allocator, &c.constantsPool, &c.scopes.items[0], @constCast(&globals), &l.source, c.strings, c.objects);
 
-            if (!vm.run()) {
-                //?
-            }
+            _ = vm.run();
         }
     }
 }

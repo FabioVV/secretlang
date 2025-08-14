@@ -56,11 +56,9 @@ fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8)
     if (!c.compile()) {
         return;
     }
-
     var vm: *VM = VM.init(allocator, &c.constantsPool, &c.scopes.items[0], &l.source, c.strings, c.objects);
-    if (!vm.run()) {
-        //?
-    }
+
+    _ = vm.run();
     defer vm.deinit();
 }
 

@@ -10,6 +10,8 @@ const Position = _token.Position;
 const Token = _token.Token;
 const Tokens = _token.Tokens;
 const Lexer = @import("lexer.zig").Lexer;
+const _value = @import("value.zig");
+
 const AST = @import("ast.zig");
 
 const Precedence = enum(u32) {
@@ -543,6 +545,8 @@ pub const Parser = struct {
         var callExpr = AST.callExpression.init(self.cur_token, fn_expr);
 
         const args = self.parseCallArgs();
+        _value.printStdOut("{any}\n", .{args});
+
         if (args != null) {
             callExpr.arguments.appendSlice(args.?) catch unreachable;
         }
