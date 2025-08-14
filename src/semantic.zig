@@ -287,7 +287,7 @@ pub const SemanticAnalyzer = struct {
 
     pub fn analyze(self: *SemanticAnalyzer) bool {
         for (_nativef.native_functions) |f| {
-            _ = self.symbol_table.define(undefined, f.name, undefined, vType.OBJECT);
+            _ = self.symbol_table.define(undefined, f.name, undefined, vType.NATIVEF);
         }
 
         return self.analyzeStmts(self.ast_program.nodes);

@@ -46,11 +46,12 @@ pub const Opcode = enum(u8) {
     GGLOBAL = 25,
 
     CALL = 26,
-    RET = 27,
-    RETN = 28,
+    BCALL = 27,
+    RET = 28,
+    RETN = 29,
 
-    MOVE = 29,
-    PUSH = 30,
+    MOVE = 30,
+    PUSH = 31,
 };
 
 // Maybe make a struct InstructionHandler to encode/decode
@@ -134,6 +135,10 @@ pub inline fn ENCODE_RETURN(r_dest: u8) Instruction {
 
 pub inline fn ENCODE_RETURN_N() Instruction {
     return I(@intFromEnum(Opcode.RETN)) << 26;
+}
+
+pub inline fn ENCODE_BCALL(r_dest: u8, ra: u8, rb: u8) Instruction {
+    return I(@intFromEnum(Opcode.BCALL)) << 26 | (I(r_dest) << 18) | (I(ra) << 10) | I(rb);
 }
 
 pub inline fn ENCODE_CALL(r_dest: u8, ra: u8, rb: u8) Instruction {

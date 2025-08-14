@@ -22,6 +22,7 @@ const _value = @import("value.zig");
 const Value = _value.Value;
 const String = _value.String;
 const Object = _value.Object;
+const ValueTypes = _value.ValueType;
 const Instruction = _instruction.Instruction;
 const Opcode = _instruction.Opcode;
 
@@ -494,8 +495,19 @@ pub const Compiler = struct {
                     self.freeRegister(arg_reg);
                 }
 
-                self.emitInstruction(_instruction.ENCODE_CALL(result_reg, fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
                 self.freeRegister(fn_register);
+
+                switch (call_expr.function.?.*) {
+                    AST.Expression.identifier_expr => |idenExpr| {
+                        if (idenExpr.resolved_symbol != null and idenExpr.resolved_symbol.?.type == ValueTypes.NATIVEF) {
+                            self.emitInstruction(_instruction.ENCODE_BCALL(result_reg, fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
+                            return null;
+                        }
+                    },
+                    else => unreachable,
+                }
+
+                self.emitInstruction(_instruction.ENCODE_CALL(result_reg, fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
 
                 return null;
             },

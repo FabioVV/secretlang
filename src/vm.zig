@@ -752,53 +752,59 @@ pub const VM = struct {
                     self.push(self.currentCallFrameRegisters().get(RC));
                     //                     std.debug.print("pushed: {d}\n", .{self.currentCallFrameRegisters().get(RC).NUMBER});
                 },
-                .CALL => {
+                .BCALL => {
                     const RC = _instruction.DECODE_RC(curInstruction);
                     const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(curInstruction));
                     const RB = _instruction.DECODE_RB(curInstruction);
 
-                    if (RA.asFunctionExpr()) |f| {
-                        var callFrame = CallFrame.init(f, RC);
+                    const args_slice = self.stack.slice()[self.stack.len - RB .. self.stack.len];
 
-                        if (f.params_registers != null and f.params_registers.?.len != RB) {
-                            self.rError("argument error: expected {d} arguments but got {d}", .{ f.params_registers.?.len, RB });
-                            return false;
-                        }
+                    switch (RA.NATIVEF.function) {
+                        .arity1 => |nfn| {
+                            if (RB != 1) {
+                                self.rError("argument error: expected {d} arguments but got {d}", .{ 1, RB });
+                                return false;
+                            }
 
-                        for (0..RB) |i| {
-                            callFrame.registers.set(i + 1, self.pop().?);
-                        }
+                            const result: Value = nfn(args_slice[0]);
 
-                        self.pushCallFrame(callFrame);
+                            frame.registers.set(RC, result);
+                        },
+                        else => unreachable,
+                    }
 
-                        frame = self.currentCallFrame();
-                        frame.registers.set(0, self.currentCallFrameRegisters().get(0));
+                    self.stack.len -= RB;
+                },
+                .CALL => {
+                    const RC = _instruction.DECODE_RC(curInstruction);
+                    const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(curInstruction));
+                    const RB = _instruction.DECODE_RB(curInstruction);
+                    const f = RA.asFunctionExpr();
 
-                        pc = 0;
-                    } else if (RA.asNativeFunction()) |f| {
-                        const args_slice = self.stack.slice()[self.stack.len - RB .. self.stack.len];
-
-                        switch (f.function) {
-                            .arity1 => |nfn| {
-                                if (RB != 1) {
-                                    self.rError("argument error: expected {d} arguments but got {d}", .{ 1, RB });
-                                    return false;
-                                }
-
-                                const result: Value = nfn(args_slice[0]);
-
-                                frame.registers.set(RC, result);
-                            },
-                            else => unreachable,
-                        }
-
-                        for (0..RB) |_| {
-                            _ = self.pop();
-                        }
-                    } else {
+                    if (f == null) {
                         self.rError("type error: tried calling non-function: {any}", .{@tagName(RA)});
                         return false;
                     }
+
+                    var callFrame = CallFrame.init(f.?, RC);
+
+                    if (f.?.params_registers != null and f.?.params_registers.?.len != RB) {
+                        self.rError("argument error: expected {d} arguments but got {d}", .{ f.?.params_registers.?.len, RB });
+                        return false;
+                    }
+
+                    const stack_start = self.stack.len - RB;
+                    for (0..RB) |i| {
+                        callFrame.registers.set(i + 1, self.stack.slice()[stack_start + i]);
+                    }
+                    self.stack.len -= RB;
+
+                    self.pushCallFrame(callFrame);
+
+                    frame = self.currentCallFrame();
+                    frame.registers.set(0, self.currentCallFrameRegisters().get(0));
+
+                    pc = 0;
                 },
                 .RET => {
                     const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(curInstruction));
