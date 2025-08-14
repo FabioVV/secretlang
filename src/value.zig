@@ -5,7 +5,7 @@ const CompilationScope = @import("compiler.zig").CompilationScope;
 const Instruction = @import("instruction.zig").Instruction;
 const Position = @import("token.zig").Position;
 
-fn printStdOut(comptime str: []const u8, varagars: anytype) void {
+pub fn printStdOut(comptime str: []const u8, varagars: anytype) void {
     _ = std.io.getStdOut().writer().print(str, varagars) catch unreachable;
 }
 

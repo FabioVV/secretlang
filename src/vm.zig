@@ -758,6 +758,11 @@ pub const VM = struct {
                     const RB = _instruction.DECODE_RB(curInstruction);
 
                     const args_slice = self.stack.slice()[self.stack.len - RB .. self.stack.len];
+                    _value.printStdOut("before\n", .{});
+
+                    _value.printStdOut("{any}\n", .{args_slice});
+
+                    _value.printStdOut("after\n", .{});
 
                     switch (RA.NATIVEF.function) {
                         .arity1 => |nfn| {
