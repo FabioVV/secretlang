@@ -1,21 +1,47 @@
 const std = @import("std");
 const _value = @import("value.zig");
-const NativeFunction = _value.NativeFunction;
 const Value = _value.Value;
 const _vm = @import("vm.zig");
 
-pub fn _print_(args: []Value) Value {
-    for (args) |h| {
-        h.print();
-    }
+pub const NativeFunctionArityTypes = enum {
+    arity0,
+    arity1,
+};
 
+pub const nativeFunction = struct {
+    name: []const u8,
+    arity: u8, // ?
+    function: union(NativeFunctionArityTypes) {
+        arity0: *const fn () Value,
+        arity1: *const fn (Value) Value,
+    },
+
+    pub fn init(comptime function: anytype, name: []const u8) nativeFunction {
+        const ftype = @TypeOf(function);
+        const finfo = @typeInfo(ftype).@"fn";
+        const arity = finfo.params.len;
+
+        return switch (arity) {
+            0 => nativeFunction{
+                .function = .{ .arity0 = function },
+                .name = name,
+                .arity = @intCast(arity),
+            },
+            1 => nativeFunction{
+                .function = .{ .arity1 = function },
+                .name = name,
+                .arity = @intCast(arity),
+            },
+            else => unreachable,
+        };
+    }
+};
+
+pub fn _print_(arg: Value) Value {
+    arg.print();
     return _vm.NIL;
 }
 
-pub const native_functions = [_]NativeFunction{
-    .{ .name = "@print", .function = _print_, .arity = 1 },
+pub const native_functions = [_]nativeFunction{
+    nativeFunction.init(_print_, "@print"),
 };
-
-pub const BuiltinMap = std.StaticStringMap(u16).initComptime(.{ // Maps builtin functions to a global index, just so i dont have to do a mem.eql
-    .{ "@print", 0 },
-});

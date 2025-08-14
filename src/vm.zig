@@ -95,8 +95,8 @@ pub const VM = struct {
         const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, null, &vm.objects);
         vm.frames.set(1, CallFrame.init(mainFunction.asFunctionExpr().?, 0));
 
-        for (_nativef.native_functions, 0..) |f, i| {
-            vm.defineNative(f.name, f.function, @as(u16, @intCast(i)), f.arity);
+        for (_nativef.native_functions, 0..) |_, i| {
+            vm.defineNative(@as(u16, @intCast(i)));
         }
 
         return vm;
@@ -124,8 +124,8 @@ pub const VM = struct {
         const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, null, &vm.objects);
         vm.frames.set(1, CallFrame.init(mainFunction.asFunctionExpr().?, 0));
 
-        for (_nativef.native_functions, 0..) |f, i| {
-            vm.defineNative(f.name, f.function, @as(u16, @intCast(i)), f.arity);
+        for (_nativef.native_functions, 0..) |_, i| {
+            vm.defineNative(@as(u16, @intCast(i)));
         }
 
         return vm;
@@ -179,9 +179,8 @@ pub const VM = struct {
         errh.printError(errMsg);
     }
 
-    fn defineNative(self: *VM, name: []const u8, function: _value.Nfunction, globalSlot: u16, arity: u8) void {
-        const Nfunction = Value.createNativeFunction(self.allocator, name, function, arity, &self.objects);
-        self.globals.slice()[globalSlot] = Nfunction;
+    inline fn defineNative(self: *VM, globalSlot: u16) void {
+        self.globals.slice()[globalSlot] = Value.getNative(globalSlot);
     }
 
     inline fn currentCallFrame(self: *VM) *CallFrame {
@@ -259,12 +258,12 @@ pub const VM = struct {
                     false,
                 .ARRAY => false,
                 .FUNCTION_EXPR => false,
-                .NATIVE_FUNCTION => false,
             },
             .NIL => switch (RB) {
                 .NIL => true,
                 else => false,
             },
+            .NATIVEF => false,
         };
 
         self.currentCallFrameRegisters().set(RC, Value.createBoolean(result));
@@ -297,12 +296,12 @@ pub const VM = struct {
                     true,
                 .ARRAY => false,
                 .FUNCTION_EXPR => false,
-                .NATIVE_FUNCTION => false,
             },
             .NIL => switch (RB) {
                 .NIL => false,
                 else => true,
             },
+            .NATIVEF => false,
         };
 
         self.currentCallFrameRegisters().set(RC, Value.createBoolean(result));
@@ -777,16 +776,21 @@ pub const VM = struct {
 
                         pc = 0;
                     } else if (RA.asNativeFunction()) |f| {
-                        if (f.arity != RB) {
-                            self.rError("argument error: expected {d} arguments but got {d}", .{ f.arity, RB });
-                            return false;
-                        }
-
                         const args_slice = self.stack.slice()[self.stack.len - RB .. self.stack.len];
 
-                        const result: Value = f.function(args_slice);
+                        switch (f.function) {
+                            .arity1 => |nfn| {
+                                if (RB != 1) {
+                                    self.rError("argument error: expected {d} arguments but got {d}", .{ 1, RB });
+                                    return false;
+                                }
 
-                        frame.registers.set(RC, result);
+                                const result: Value = nfn(args_slice[0]);
+
+                                frame.registers.set(RC, result);
+                            },
+                            else => unreachable,
+                        }
 
                         for (0..RB) |_| {
                             _ = self.pop();

@@ -135,14 +135,15 @@ pub const SemanticAnalyzer = struct {
             return;
         }
 
-        //         const vType = switch (stmt.*.expression.?.*) {
-        //             .number_expr => |n|{
-        //
-        //             },
-        //
-        //         }
+        const valueType = switch (stmt.*.expression.?.*) {
+            .int64_expr => vType.INT64,
+            .float64_expr => vType.FLOAT64,
+            .boolean_expr => vType.BOOLEAN,
+            .nil_expr => vType.NIL,
+            else => vType.OBJECT,
+        };
 
-        const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, self.instruction_count, null);
+        const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, self.instruction_count, valueType);
         stmt.identifier.resolved_symbol = symbol;
 
         self.analyzeExpression(stmt.expression);
@@ -273,10 +274,6 @@ pub const SemanticAnalyzer = struct {
     }
 
     fn analyzeStmts(self: *SemanticAnalyzer, nodes: std.ArrayList(AST.Statement)) bool {
-        for (_nativef.native_functions) |f| {
-            _ = self.symbol_table.define(undefined, f.name, undefined, vType.OBJECT);
-        }
-
         for (nodes.items) |node| {
             self.analyzeStmt(node);
 
@@ -289,6 +286,10 @@ pub const SemanticAnalyzer = struct {
     }
 
     pub fn analyze(self: *SemanticAnalyzer) bool {
+        for (_nativef.native_functions) |f| {
+            _ = self.symbol_table.define(undefined, f.name, undefined, vType.OBJECT);
+        }
+
         return self.analyzeStmts(self.ast_program.nodes);
     }
 };

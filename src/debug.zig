@@ -9,9 +9,7 @@ const AST = @import("ast.zig");
 const dbg = @import("debug.zig");
 const panic = @import("error.zig");
 
-
-pub const DEBUG_REGISTER_ALLOCATION: bool = true;
-
+pub const DEBUG_REGISTER_ALLOCATION: bool = false;
 
 pub const DEBUG_PRINT_TOKENS: bool = false;
 pub const DEBUG_PRINT_VAR_STATEMENT: bool = false;
@@ -30,8 +28,6 @@ pub const ANSI_CYAN = "\x1b[36m";
 pub const ANSI_WHITE = "\x1b[37m";
 pub const ANSI_BOLD = "\x1b[1m";
 pub const ANSI_UNDERLINE = "\x1b[4m";
-
-
 
 // UTILITIES ->
 pub fn printNodes(stmt: AST.Statement) void {
@@ -222,23 +218,22 @@ pub fn getSourceLine(source: []const u8, pos: Position) []const u8 {
             line_start = i;
             break;
         }
-        if (c == '\n'){
-             current_line += 1;
+        if (c == '\n') {
+            current_line += 1;
         }
     }
 
     line_end = line_start;
-    while(line_end < source.len and source[line_end] != '\n'){
+    while (line_end < source.len and source[line_end] != '\n') {
         line_end += 1;
     }
 
     return source[line_start..line_end];
 }
 
-pub fn formatSourceLineWithCaret(allocator: std.mem.Allocator, pos: Position, sourceLine: []const u8) struct{ spacing: []const u8, caret: []const u8 } {
-
+pub fn formatSourceLineWithCaret(allocator: std.mem.Allocator, pos: Position, sourceLine: []const u8) struct { spacing: []const u8, caret: []const u8 } {
     var caret_line = allocator.alloc(u8, sourceLine.len) catch {
-         panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
+        panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
         return;
     };
 
@@ -259,11 +254,10 @@ pub fn formatSourceLineWithCaret(allocator: std.mem.Allocator, pos: Position, so
     }
 
     const line_number_spacing = allocator.alloc(u8, spaces) catch {
-         panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
+        panic.exitWithError("Failed to allocate caret line", error.OutOfMemory);
         return;
     };
     @memset(line_number_spacing, ' ');
 
-
-   return .{ .spacing = line_number_spacing,  .caret = caret_line};
+    return .{ .spacing = line_number_spacing, .caret = caret_line };
 }

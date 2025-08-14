@@ -2,21 +2,6 @@ TODO: fix tests
 
 TODO: store the line of code of the instruction in the instruction_position hash, much easier
 
-TODO: keep ip in a local variable in the main run loop, so that it gets opmtized by zig, instead of always getting it from the current callframe function
-
-the move operation is making locals change registers and them be affected by expressions stmts like
-(i dont know, it may be that or not)
-var fib = fn(n) {
-    n - 1
-
-    return n
-}
-
-var result = fib(10)
-
-
-returs 9 and not 10
-
 1 - Add error correction suggestion:
 context aware suggestions
 spelling checking with Levenshtein Distance
