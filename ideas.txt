@@ -2,21 +2,6 @@ TODO: fix tests
 
 TODO: store the line of code of the instruction in the instruction_position hash, much easier
 
-TODO: keep ip in a local variable in the main run loop, so that it gets opmtized by zig, instead of always getting it from the current callframe function
-
-the move operation is making locals change registers and them be affected by expressions stmts like
-(i dont know, it may be that or not)
-var fib = fn(n) {
-    n - 1
-
-    return n
-}
-
-var result = fib(10)
-
-
-returs 9 and not 10
-
 1 - Add error correction suggestion:
 context aware suggestions
 spelling checking with Levenshtein Distance
@@ -49,3 +34,49 @@ module math
 end
 
 maybe allow submodules?
+
+
+
+
+
+const std = @import("std");
+const builtin = @import("builtin");
+
+pub fn _print_(value: []const u8) void {
+    std.debug.print("{s}\n", .{value});
+}
+
+pub fn _printtwo_(value: i64, valuet: i64) void {
+    std.debug.print("{d} and {d}\n", .{ value, valuet });
+}
+
+const nativeFn = struct {
+    gindex: u16,
+    name: []const u8,
+    arity: u8,
+    function: union {
+        nprint: *const fn ([]const u8) void,
+        nbprintt: *const fn (i64, i64) void,
+    },
+
+    pub fn initPrint(function: *const fn ([]const u8) void, name: []const u8, arity: u8, gindex: u16) nativeFn {
+        return nativeFn{
+            .function = .{ .nprint = function },
+            .name = name,
+            .arity = arity,
+            .gindex = gindex,
+        };
+    }
+};
+
+var globals = std.BoundedArray(nativeFn, 5).init(5) catch unreachable;
+
+pub fn main() void {
+    const n = nativeFn.initPrint(_print_, "@print", 1, 0);
+    globals.slice()[0] = n;
+
+    globals.slice()[0].function.nprint("God is good!!! All the time.");
+}
+
+
+

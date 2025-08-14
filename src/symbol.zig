@@ -3,6 +3,7 @@ const std = @import("std");
 const _token = @import("token.zig");
 const Token = _token.Token;
 const vType = @import("value.zig").ValueType;
+const _nativef = @import("nativef.zig");
 
 pub const Scope = enum {
     GLOBAL,

@@ -1,5 +1,6 @@
 const std = @import("std");
 const VM = @import("vm.zig").VM;
+const _nativef = @import("nativef.zig");
 const CompilationScope = @import("compiler.zig").CompilationScope;
 const Instruction = @import("instruction.zig").Instruction;
 const Position = @import("token.zig").Position;
@@ -8,20 +9,19 @@ fn printStdOut(comptime str: []const u8, varagars: anytype) void {
     _ = std.io.getStdOut().writer().print(str, varagars) catch unreachable;
 }
 
-pub const Nfunction = *const fn (arity: u8) Value;
-
 pub const ValueType = enum {
-    NUMBER,
+    INT64,
+    FLOAT64,
     BOOLEAN,
     NIL,
     OBJECT,
+    NATIVEF,
 };
 
 pub const ObjectTypes = enum {
     STRING,
     ARRAY,
     FUNCTION_EXPR,
-    NATIVE_FUNCTION,
 };
 
 pub const Array = struct {
@@ -45,22 +45,6 @@ pub const String = struct {
 
         string_obj.* = String{ .chars = owned_chars };
         return string_obj;
-    }
-};
-
-pub const NativeFunction = struct {
-    arity: u8,
-    function: Nfunction,
-
-    pub fn init(allocator: std.mem.Allocator, function: Nfunction, arity: u8) *NativeFunction {
-        const nfn_obj = allocator.create(NativeFunction) catch unreachable;
-
-        nfn_obj.* = NativeFunction{
-            .function = function,
-            .arity = arity,
-        };
-
-        return nfn_obj;
     }
 };
 
@@ -98,21 +82,7 @@ pub const Object = struct {
         STRING: *String,
         ARRAY: *Array,
         FUNCTION_EXPR: *FunctionExpr,
-        NATIVE_FUNCTION: *NativeFunction,
     },
-
-    pub fn initNativeFn(allocator: std.mem.Allocator, data: *NativeFunction, objects: *?*Object) *Object {
-        const obj = allocator.create(Object) catch unreachable;
-
-        obj.* = Object{
-            .data = .{ .NATIVE_FUNCTION = data },
-            .next = objects.*,
-        };
-
-        objects.* = obj;
-
-        return obj;
-    }
 
     pub fn initFnExpr(allocator: std.mem.Allocator, data: *FunctionExpr, objects: *?*Object) *Object {
         const obj = allocator.create(Object) catch unreachable;
@@ -155,16 +125,21 @@ pub const Object = struct {
 };
 
 pub const Value = union(ValueType) {
-    NUMBER: f64,
+    INT64: i64,
+    FLOAT64: f64,
     BOOLEAN: bool,
     NIL: void,
     OBJECT: *Object,
+    NATIVEF: *_nativef.nativeFunction,
 
     pub inline fn hash(self: Value) u64 {
         var hasher = std.hash.Wyhash.init(0);
 
         switch (self) {
-            .NUMBER => |n| {
+            .INT64 => |n| {
+                hasher.update(&std.mem.toBytes(n));
+            },
+            .FLOAT64 => |n| {
                 const bits = @as(u64, @bitCast(n));
                 hasher.update(&std.mem.toBytes(bits));
             },
@@ -178,17 +153,21 @@ pub const Value = union(ValueType) {
                 .FUNCTION_EXPR => |f| {
                     hasher.update(&std.mem.toBytes(f.*));
                 },
-                .NATIVE_FUNCTION => |f| {
-                    hasher.update(&std.mem.toBytes(f.*));
-                },
+            },
+            .NATIVEF => |f| {
+                hasher.update(&std.mem.toBytes(f.*));
             },
         }
 
         return hasher.final();
     }
 
-    pub inline fn createNumber(num: f64) Value {
-        return Value{ .NUMBER = num };
+    pub inline fn createF64(num: f64) Value {
+        return Value{ .FLOAT64 = num };
+    }
+
+    pub inline fn createI64(num: i64) Value {
+        return Value{ .INT64 = num };
     }
 
     pub inline fn createNil() Value {
@@ -208,13 +187,10 @@ pub const Value = union(ValueType) {
         return val;
     }
 
-    pub inline fn createNativeFunction(allocator: std.mem.Allocator, function: Nfunction, arity: u8, objects: *?*Object) Value {
-        const fn_obj = NativeFunction.init(allocator, function, arity);
-        const obj = Object.initNativeFn(allocator, fn_obj, objects);
-
-        const val = Value{ .OBJECT = obj };
-
-        return val;
+    pub inline fn getNative(gindex: u16) Value {
+        return Value{
+            .NATIVEF = @constCast(&_nativef.native_functions[gindex]),
+        };
     }
 
     pub inline fn createArray(allocator: std.mem.Allocator, objects: *?*Object) Value {
@@ -290,19 +266,17 @@ pub const Value = union(ValueType) {
         };
     }
 
-    pub inline fn asNativeFunction(self: Value) ?*NativeFunction {
+    pub inline fn asNativeFunction(self: Value) ?*_nativef.nativeFunction {
         return switch (self) {
-            .OBJECT => |obj| switch (obj.*.data) {
-                .NATIVE_FUNCTION => |f| f,
-                else => null,
-            },
+            .NATIVEF => |nfn| nfn,
             else => null,
         };
     }
 
     pub inline fn getType(self: Value) ValueType {
         return switch (self) {
-            .NUMBER => .NUMBER,
+            .INT64 => .INT64,
+            .FLOAT64 => .FLOAT64,
             .BOOLEAN => .BOOLEAN,
             .NIL => .NIL,
             .OBJECT => .OBJECT,
@@ -310,7 +284,7 @@ pub const Value = union(ValueType) {
     }
 
     pub inline fn isNumber(self: Value) bool {
-        return self == .NUMBER;
+        return self == .FLOAT64 or self == .INT64;
     }
 
     pub inline fn isBoolean(self: Value) bool {
@@ -339,13 +313,14 @@ pub const Value = union(ValueType) {
         return switch (self) {
             .BOOLEAN => |b| b,
             .NIL => false,
-            .NUMBER => |n| n != 0,
+            .INT64 => |n| n != 0,
+            .FLOAT64 => |n| n != 0.0,
             .OBJECT => |obj| switch (obj.data) {
                 .STRING => |str| str.chars.len > 0,
                 .ARRAY => |arr| arr.items.items.len > 0,
                 .FUNCTION_EXPR => true,
-                .NATIVE_FUNCTION => true,
             },
+            .NATIVEF => true,
         };
     }
 
@@ -353,14 +328,21 @@ pub const Value = union(ValueType) {
         printStdOut("[", .{});
         for (arr.items.items) |arr_i| {
             switch (arr_i) {
-                .BOOLEAN => |b| printStdOut("{}", .{b}),
-                .NIL => printStdOut("nil,", .{}),
-                .NUMBER => |n| printStdOut("{d:.2},", .{n}),
+                .BOOLEAN => |b| printStdOut("{}, ", .{b}),
+                .NIL => printStdOut("nil, ", .{}),
+                .FLOAT64 => |n| printStdOut("{d}, ", .{n}),
+                .INT64 => |n| printStdOut("{d}, ", .{n}),
                 .OBJECT => |inn_obj| switch (inn_obj.*.data) {
-                    .STRING => printStdOut("{s},", .{inn_obj.data.STRING.chars}),
+                    .STRING => printStdOut("{s}, ", .{inn_obj.data.STRING.chars}),
                     .ARRAY => printArrItems(inn_obj.data.ARRAY),
-                    .FUNCTION_EXPR => printStdOut("<anonymous function expression>\n", .{}),
-                    .NATIVE_FUNCTION => printStdOut("<native function>\n", .{}),
+                    .FUNCTION_EXPR => printStdOut("<anonymous function expression at>, ", .{}),
+                },
+                .NATIVEF => |native_fn| {
+                    const addr = switch (native_fn.function) {
+                        .arity1 => |f| @intFromPtr(f),
+                        else => unreachable,
+                    };
+                    printStdOut("<native function '{s}' at 0x{X}>, ", .{ native_fn.name, addr });
                 },
             }
         }
@@ -371,12 +353,19 @@ pub const Value = union(ValueType) {
         return switch (self) {
             .BOOLEAN => |b| printStdOut("{}\n", .{b}),
             .NIL => printStdOut("nil\n", .{}),
-            .NUMBER => |n| printStdOut("{d:.2}\n", .{n}),
+            .FLOAT64 => |n| printStdOut("{d}\n", .{n}),
+            .INT64 => |n| printStdOut("{d}\n", .{n}),
             .OBJECT => |obj| switch (obj.*.data) {
                 .STRING => printStdOut("{s}\n", .{obj.data.STRING.chars}),
                 .ARRAY => printArrItems(obj.data.ARRAY),
-                .FUNCTION_EXPR => printStdOut("<anonymous function expression>\n", .{}),
-                .NATIVE_FUNCTION => printStdOut("<native function>\n", .{}),
+                .FUNCTION_EXPR => printStdOut("<anonymous function expression at>\n", .{}),
+            },
+            .NATIVEF => |native_fn| {
+                const addr = switch (native_fn.function) {
+                    .arity1 => |f| @intFromPtr(f),
+                    else => unreachable,
+                };
+                printStdOut("<native function '{s}' at 0x{X}>\n", .{ native_fn.name, addr });
             },
         };
     }

@@ -6,4 +6,6 @@ var fib = fn(n){
     return fib(n - 2) + fib(n - 1)
 }
 
-var test = fib(15)
+var result = fib(15)
+
+@print(result)

@@ -49,7 +49,9 @@ pub const Program = struct {
 
 pub const NilExpression = struct { token: Token, value: void };
 
-pub const NumberExpression = struct { token: Token, value: f64 };
+pub const Float64Expression = struct { token: Token, value: f64 };
+
+pub const Int64Expression = struct { token: Token, value: i64 };
 
 pub const StringExpression = struct { token: Token, value: []const u8 };
 
@@ -193,7 +195,8 @@ pub const Statement = union(StmtTypes) {
 pub const ExprTypes = enum {
     nil_expr,
     boolean_expr,
-    number_expr,
+    int64_expr,
+    float64_expr,
     string_expr,
     identifier_expr,
     infix_expr,
@@ -209,7 +212,10 @@ pub const ExprTypes = enum {
 pub const Expression = union(ExprTypes) {
     nil_expr: NilExpression,
     boolean_expr: BooleanExpression,
-    number_expr: NumberExpression,
+
+    int64_expr: Int64Expression,
+    float64_expr: Float64Expression,
+
     string_expr: StringExpression,
     identifier_expr: Identifier,
     infix_expr: InfixExpression,

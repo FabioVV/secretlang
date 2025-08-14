@@ -6,4 +6,6 @@ var factorial = fn(n){
     return n * factorial(n - 1)
 }
 
-var test = factorial(5)
+var result = factorial(5)
+
+@print(result)

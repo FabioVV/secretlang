@@ -371,8 +371,11 @@ pub const Compiler = struct {
         //defer self.registersState("after expr");
 
         switch (expr.?.*) {
-            AST.Expression.number_expr => |numExpr| {
-                return self.emitConstant(Value.createNumber(numExpr.value));
+            AST.Expression.int64_expr => |numExpr| {
+                return self.emitConstant(Value.createI64(numExpr.value));
+            },
+            AST.Expression.float64_expr => |numExpr| {
+                return self.emitConstant(Value.createF64(numExpr.value));
             },
             AST.Expression.string_expr => |strExpr| {
                 const str = Value.copyString(self.allocator, strExpr.value, self.strings, &self.objects);
@@ -484,19 +487,6 @@ pub const Compiler = struct {
                 };
 
                 for (call_expr.arguments.constSlice()) |arg| {
-                    //                     print("ARG: {any}\n", .{arg});
-                    //
-                    //                     switch (arg.?.*) {
-                    //                         AST.Expression.infix_expr => |ifx| {
-                    //                             switch (ifx.left.?.*) {
-                    //                                 AST.Expression.identifier_expr => |idenExpr| {
-                    //                                     print("sb: {s}\n", .{idenExpr.resolved_symbol.?.name});
-                    //                                 },
-                    //                                 else => {},
-                    //                             }
-                    //                         },
-                    //                         else => {},
-                    //                     }
                     _ = self.compileExpression(arg);
 
                     const arg_reg = self.currentScope().used_registers.pop().?;
@@ -515,9 +505,6 @@ pub const Compiler = struct {
                     return null;
                 };
 
-                // const identifierName = self.allocator.dupe(u8, idenExpr.literal) catch unreachable;
-                // _ = self.addConstant(Value.createString(self.allocator, identifierName)); // Is this necessary?
-
                 if (idenExpr.resolved_symbol) |sym| {
                     if (sym.scope == Scopes.GLOBAL) {
                         self.emitInstruction(_instruction.ENCODE_GET_GLOBAL(reg, sym.index));
@@ -525,6 +512,8 @@ pub const Compiler = struct {
                         self.emitInstruction(_instruction.ENCODE_MOVE(reg, sym.register.?));
                     }
                 }
+
+                _ = self.addConstant(Value.copyString(self.allocator, idenExpr.literal, self.strings, &self.objects));
 
                 return null;
             },
@@ -535,9 +524,6 @@ pub const Compiler = struct {
     }
 
     fn compileVarStatement(self: *Compiler, stmt: *AST.VarStatement) void {
-        //const identifierName = self.allocator.dupe(u8, stmt.identifier.literal) catch unreachable;
-        //_ = self.addConstant(Value.createString(self.allocator, identifierName)); // Is this necessary?
-
         _ = self.compileExpression(stmt.expression);
 
         //         const maybe_fn = self.constantsPool.items[constantIdx];
@@ -547,6 +533,8 @@ pub const Compiler = struct {
 
         const reg = self.currentScope().used_registers.pop().?;
         self.freeRegister(reg);
+
+        _ = self.addConstant(Value.copyString(self.allocator, stmt.identifier.literal, self.strings, &self.objects));
 
         if (stmt.identifier.resolved_symbol) |sym| {
             if (sym.scope == Scopes.GLOBAL) {
@@ -627,17 +615,14 @@ pub const Compiler = struct {
         }
 
         self.emitInstruction(_instruction.ENCODE_RETURN_N());
-        //         for (0..self.scopes.items[self.cur_scope].instructions.items.len) |i| {
-        //             print("{s}\n", .{@tagName(_instruction.GET_OPCODE(self.scopes.items[self.cur_scope].instructions.items[i]))});
-        //         }
 
-        //         for (0.._vm.MAX_REGISTERS) |i| {
-        //             if (self.currentScope().registers.get(i)) {
-        //                 print("R{d} never freed scope: {d}\n", .{ i, self.cur_scope });
-        //                 assert(!self.currentScope().registers.get(i)); // All registers should be freed
-        //
-        //             }
-        //         }
+        for (0.._vm.MAX_REGISTERS) |i| {
+            if (self.currentScope().registers.get(i)) {
+                print("R{d} never freed scope: {d}\n", .{ i, self.cur_scope });
+                assert(!self.currentScope().registers.get(i)); // All registers should be freed
+
+            }
+        }
 
         return true;
     }
