@@ -518,7 +518,6 @@ pub const Parser = struct {
 
         const arg = self.parseExpression(Precedence.DEFAULT) orelse return null;
 
-
         args.append(arg) catch |err| {
             errh.exitWithError("Unrecoverable error when trying to append function argument.", err);
         };
@@ -935,33 +934,26 @@ pub const Parser = struct {
 
     pub fn parseVarToken(self: *Parser) ?*AST.VarStatement {
         const var_token = self.cur_token;
-        _value.printStdOut("var\n", .{});
 
         if (!self.expect(Tokens.IDENT, "identifier")) {
             return null;
         }
-        _value.printStdOut("var1\n", .{});
 
         const identifier = AST.Identifier{ .token = self.cur_token, .literal = self.cur_token.literal };
-        _value.printStdOut("var2\n", .{});
 
         if (!self.expect(Tokens.EQUAL, "=")) {
             return null;
         }
-        _value.printStdOut("var3\n", .{});
 
         if (self.expectExpressionToken(self.peek_token)) {
             return null;
         }
-        _value.printStdOut("var4\n", .{});
 
         const expression = self.parseExpression(Precedence.DEFAULT);
-        _value.printStdOut("var5\n", .{});
 
         const varstmt = self.allocator.create(AST.VarStatement) catch unreachable;
         varstmt.* = AST.VarStatement{ .token = var_token, .identifier = identifier, .expression = expression };
 
-        _value.printStdOut("var5.5\n", .{});
         return varstmt;
     }
 

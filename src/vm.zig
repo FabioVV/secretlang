@@ -25,7 +25,7 @@ const Instruction = _instruction.Instruction;
 pub const MAX_REGISTERS = 255;
 pub const MAX_GLOBALS = 1024;
 //pub const MAX_GLOBALS = 65535;
-pub const MAX_FRAMES = 1;
+pub const MAX_FRAMES = 1024;
 pub const STACK_SIZE = 1024;
 
 pub const NIL = Value{ .NIL = void{} };
@@ -637,206 +637,289 @@ pub const VM = struct {
     }
 
     pub fn run(self: *VM) bool {
-        //@setRuntimeSafety(!is_debug);
+        @setRuntimeSafety(is_debug);
 
         var frame: *CallFrame = &self.frames.slice()[self.frameIndex];
-        var pc = frame.pc;
 
-        _value.printStdOut("first\n", .{});
-        while (true) {
-            const curInstruction = frame.function.instructions.items[pc];
-            pc += 1;
-            frame.pc = pc;
+        fetch: switch (_instruction.GET_OPCODE(frame.function.instructions.items[frame.pc])) {
+            .LOADK => {
+                const instr = frame.function.instructions.items[frame.pc];
 
-            const opcode = _instruction.GET_OPCODE(curInstruction);
-            //std.debug.print("OP {s} @ PC={d}\n", .{ @tagName(opcode), pc });
-            switch (opcode) {
-                .LOADK => {
-                    const constantIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
-                    const RC = _instruction.DECODE_RC(curInstruction);
-                    const contantValue = self.GET_CONSTANT(constantIdx).?;
+                const constantIdx = _instruction.DECODE_CONSTANT_IDX(instr);
+                const RC = _instruction.DECODE_RC(instr);
+                const contantValue = self.GET_CONSTANT(constantIdx).?;
 
-                    self.currentCallFrameRegisters().set(RC, contantValue);
-                },
-                .LOADF => {
-                    const RC = _instruction.DECODE_RC(curInstruction);
-                    self.currentCallFrameRegisters().set(RC, Value.createBoolean(false));
-                },
-                .LOADT => {
-                    const RC = _instruction.DECODE_RC(curInstruction);
-                    self.currentCallFrameRegisters().set(RC, Value.createBoolean(true));
-                },
-                .LOADN => {
-                    const RC = _instruction.DECODE_RC(curInstruction);
-                    self.currentCallFrameRegisters().set(RC, Value.createNil());
-                },
-                .ADD => {
-                    if (!self.mathAdd(curInstruction)) return false;
-                },
-                .SUB => {
-                    if (!self.mathSub(curInstruction)) return false;
-                },
-                .MUL => {
-                    if (!self.mathMul(curInstruction)) return false;
-                },
-                .DIV => {
-                    if (!self.mathDiv(curInstruction)) return false;
-                },
-                .EQUAL => {
-                    self.cmpEqual(curInstruction); // ==
-                },
-                .NOTEQUAL => {
-                    self.cmpNotEqual(curInstruction); // !=
-                },
-                .LESSEQUAL => {
-                    if (!self.cmpLessEqual(curInstruction)) return false; // <=
-                },
-                .GREATEREQUAL => {
-                    if (!self.cmpGreaterEqual(curInstruction)) return false; // >=
-                },
-                .GREATERTHAN => {
-                    if (!self.cmpGreaterThan(curInstruction)) return false; // >
-                },
-                .LESSTHAN => {
-                    if (!self.cmpLessThan(curInstruction)) return false; // <
-                },
-                .BANG => {
-                    const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(curInstruction));
-                    const RC = _instruction.DECODE_RC(curInstruction);
+                self.currentCallFrameRegisters().set(RC, contantValue);
 
-                    switch (RA) {
-                        .BOOLEAN => |n| self.currentCallFrameRegisters().set(RC, Value.createBoolean(!n)),
-                        else => |p| {
-                            self.rError("type error: operand must be boolean, got {s}", .{@tagName(p)});
-                            return false;
-                        },
-                    }
-                },
-                .MINUS => {
-                    const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(curInstruction));
-                    const RC = _instruction.DECODE_RC(curInstruction);
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .LOADF => {
+                const RC = _instruction.DECODE_RC(frame.function.instructions.items[frame.pc]);
+                self.currentCallFrameRegisters().set(RC, Value.createBoolean(false));
 
-                    switch (RA) {
-                        .INT64 => |n| self.currentCallFrameRegisters().set(RC, Value.createI64(-n)),
-                        .FLOAT64 => |n| self.currentCallFrameRegisters().set(RC, Value.createF64(-n)),
-                        else => |p| {
-                            self.rError("type error: operand must be numeric, got {s}", .{@tagName(p)});
-                            return false;
-                        },
-                    }
-                },
-                .JMPF => {
-                    const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(curInstruction));
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .LOADT => {
+                const RC = _instruction.DECODE_RC(frame.function.instructions.items[frame.pc]);
+                self.currentCallFrameRegisters().set(RC, Value.createBoolean(true));
 
-                    if (!RC.isTruthy()) {
-                        const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
-                        pc += jumpOffset;
-                    }
-                },
-                .JMP => {
-                    const jumpOffset = _instruction.DECODE_JUMP_OFFSET(curInstruction);
-                    pc += jumpOffset;
-                },
-                .SGLOBAL => {
-                    const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(curInstruction));
-                    const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .LOADN => {
+                const RC = _instruction.DECODE_RC(frame.function.instructions.items[frame.pc]);
+                self.currentCallFrameRegisters().set(RC, Value.createNil());
 
-                    self.globals.slice()[globalIdx] = RC;
-                },
-                .GGLOBAL => {
-                    const RC = _instruction.DECODE_RC(curInstruction);
-                    const globalIdx = _instruction.DECODE_CONSTANT_IDX(curInstruction);
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .ADD => {
+                if (!self.mathAdd(frame.function.instructions.items[frame.pc])) return false;
 
-                    self.currentCallFrameRegisters().set(RC, self.globals.slice()[globalIdx]);
-                },
-                .PUSH => {
-                    const RC = _instruction.DECODE_RC(curInstruction);
-                    self.push(self.currentCallFrameRegisters().get(RC));
-                },
-                .BCALL => {
-                    const RC = _instruction.DECODE_RC(curInstruction);
-                    const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(curInstruction));
-                    const RB = _instruction.DECODE_RB(curInstruction);
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .SUB => {
+                if (!self.mathSub(frame.function.instructions.items[frame.pc])) return false;
 
-                    const args_slice = self.stack.slice()[self.stack.len - RB .. self.stack.len];
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .MUL => {
+                if (!self.mathMul(frame.function.instructions.items[frame.pc])) return false;
 
-                    switch (RA.NATIVEF.function) {
-                        .arity1 => |nfn| {
-                            if (RB != 1) {
-                                self.rError("argument error: expected {d} arguments but got {d}", .{ 1, RB });
-                                return false;
-                            }
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .DIV => {
+                if (!self.mathDiv(frame.function.instructions.items[frame.pc])) return false;
 
-                            const result: Value = nfn(args_slice[0]);
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .EQUAL => {
+                self.cmpEqual(frame.function.instructions.items[frame.pc]); // ==
 
-                            frame.registers.set(RC, result);
-                        },
-                        else => unreachable,
-                    }
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .NOTEQUAL => {
+                self.cmpNotEqual(frame.function.instructions.items[frame.pc]); // !=
 
-                    self.stack.len -= RB;
-                },
-                .CALL => {
-                    const RC = _instruction.DECODE_RC(curInstruction);
-                    const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(curInstruction));
-                    const RB = _instruction.DECODE_RB(curInstruction);
-                    const f = RA.asFunctionExpr();
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .LESSEQUAL => {
+                if (!self.cmpLessEqual(frame.function.instructions.items[frame.pc])) return false; // <=
 
-                    if (f == null) {
-                        self.rError("type error: tried calling non-function: {any}", .{@tagName(RA)});
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .GREATEREQUAL => {
+                if (!self.cmpGreaterEqual(frame.function.instructions.items[frame.pc])) return false; // >=
+
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .GREATERTHAN => {
+                if (!self.cmpGreaterThan(frame.function.instructions.items[frame.pc])) return false; // >
+
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .LESSTHAN => {
+                if (!self.cmpLessThan(frame.function.instructions.items[frame.pc])) return false; // <
+
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .BANG => {
+                const instr = frame.function.instructions.items[frame.pc];
+
+                const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instr));
+                const RC = _instruction.DECODE_RC(instr);
+
+                switch (RA) {
+                    .BOOLEAN => |n| self.currentCallFrameRegisters().set(RC, Value.createBoolean(!n)),
+                    else => |p| {
+                        self.rError("type error: operand must be boolean, got {s}", .{@tagName(p)});
                         return false;
-                    }
+                    },
+                }
 
-                    var callFrame = CallFrame.init(f.?, RC);
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .MINUS => {
+                const instr = frame.function.instructions.items[frame.pc];
+                const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instr));
+                const RC = _instruction.DECODE_RC(instr);
 
-                    if (f.?.params_registers != null and f.?.params_registers.?.len != RB) {
-                        self.rError("argument error: expected {d} arguments but got {d}", .{ f.?.params_registers.?.len, RB });
+                switch (RA) {
+                    .INT64 => |n| self.currentCallFrameRegisters().set(RC, Value.createI64(-n)),
+                    .FLOAT64 => |n| self.currentCallFrameRegisters().set(RC, Value.createF64(-n)),
+                    else => |p| {
+                        self.rError("type error: operand must be numeric, got {s}", .{@tagName(p)});
                         return false;
-                    }
+                    },
+                }
 
-                    for (0..RB) |i| {
-                        callFrame.registers.set(i + 1, self.pop().?);
-                    }
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .JMPF => {
+                const instr = frame.function.instructions.items[frame.pc];
+                const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(instr));
 
-                    self.pushCallFrame(callFrame);
+                if (!RC.isTruthy()) {
+                    const jumpOffset = _instruction.DECODE_JUMP_OFFSET(instr);
+                    frame.pc += jumpOffset;
+                }
 
-                    frame = self.currentCallFrame();
-                    frame.registers.set(0, self.currentCallFrameRegisters().get(0));
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .JMP => {
+                const instr = frame.function.instructions.items[frame.pc];
 
-                    pc = 0;
-                },
-                .RET => {
-                    const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(curInstruction));
+                const jumpOffset = _instruction.DECODE_JUMP_OFFSET(instr);
+                frame.pc += jumpOffset + 1;
 
-                    const poppedFrame = self.popCallFrame();
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .SGLOBAL => {
+                const instr = frame.function.instructions.items[frame.pc];
 
-                    if (self.frameIndex == 0) return true; // if we are in frame 0, the program has finished executing
+                const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(instr));
+                const globalIdx = _instruction.DECODE_CONSTANT_IDX(instr);
 
-                    frame = self.currentCallFrame();
-                    self.currentCallFrameRegisters().set(poppedFrame.return_register, RC);
-                    pc = frame.pc;
-                },
-                .RETN => {
-                    const poppedFrame = self.popCallFrame();
+                self.globals.slice()[globalIdx] = RC;
 
-                    if (self.frameIndex == 0) return true; // if we are in frame 0, the program has finished executing
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .GGLOBAL => {
+                const instr = frame.function.instructions.items[frame.pc];
 
-                    frame = self.currentCallFrame();
+                const RC = _instruction.DECODE_RC(instr);
+                const globalIdx = _instruction.DECODE_CONSTANT_IDX(instr);
 
-                    self.currentCallFrameRegisters().set(poppedFrame.return_register, NIL);
-                    pc = frame.pc;
-                },
-                .MOVE => {
-                    const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(curInstruction));
-                    const RC = _instruction.DECODE_RC(curInstruction);
+                self.currentCallFrameRegisters().set(RC, self.globals.slice()[globalIdx]);
 
-                    self.currentCallFrameRegisters().set(RC, RA);
-                },
-                else => {
-                    self.rError("Unhandled OPCODE: {any} \n", .{opcode});
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .PUSH => {
+                const RC = _instruction.DECODE_RC(frame.function.instructions.items[frame.pc]);
+                self.push(self.currentCallFrameRegisters().get(RC));
+
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .BCALL => {
+                const instr = frame.function.instructions.items[frame.pc];
+
+                const RC = _instruction.DECODE_RC(instr);
+                const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instr));
+                const RB = _instruction.DECODE_RB(instr);
+
+                const args_slice = self.stack.slice()[self.stack.len - RB .. self.stack.len];
+
+                switch (RA.NATIVEF.function) {
+                    .arity1 => |nfn| {
+                        if (RB != 1) {
+                            self.rError("argument error: expected {d} arguments but got {d}", .{ 1, RB });
+                            return false;
+                        }
+
+                        const result: Value = nfn(args_slice[0]);
+
+                        frame.registers.set(RC, result);
+                    },
+                    else => unreachable,
+                }
+
+                self.stack.len -= RB;
+
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .CALL => {
+                const instr = frame.function.instructions.items[frame.pc];
+
+                const RC = _instruction.DECODE_RC(instr);
+                const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instr));
+                const RB = _instruction.DECODE_RB(instr);
+                const f = RA.asFunctionExpr();
+
+                if (f == null) {
+                    self.rError("type error: tried calling non-function: {any}", .{@tagName(RA)});
                     return false;
-                },
-            }
+                }
+
+                var callFrame = CallFrame.init(f.?, RC);
+                callFrame.pc = frame.pc + 1;
+
+                if (f.?.params_registers != null and f.?.params_registers.?.len != RB) {
+                    self.rError("argument error: expected {d} arguments but got {d}", .{ f.?.params_registers.?.len, RB });
+                    return false;
+                }
+
+                const stack_start = self.stack.len - RB;
+                for (0..RB) |i| {
+                    callFrame.registers.set(i + 1, self.stack.slice()[stack_start + i]);
+                }
+                self.stack.len -= RB;
+
+                frame.pc += 1;
+
+                self.pushCallFrame(callFrame);
+                frame = self.currentCallFrame();
+                frame.registers.set(0, self.currentCallFrameRegisters().get(0));
+
+                frame.pc = 0;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .RET => {
+                const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(frame.function.instructions.items[frame.pc]));
+
+                const poppedFrame = self.popCallFrame();
+
+                if (self.frameIndex == 0) return true; // if we are in frame 0, the program has finished executing
+
+                frame = self.currentCallFrame();
+                self.currentCallFrameRegisters().set(poppedFrame.return_register, RC);
+
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .RETN => {
+                const poppedFrame = self.popCallFrame();
+
+                if (self.frameIndex == 0) return true; // if we are in frame 0, the program has finished executing
+
+                frame = self.currentCallFrame();
+
+                self.currentCallFrameRegisters().set(poppedFrame.return_register, NIL);
+
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            .MOVE => {
+                const instr = frame.function.instructions.items[frame.pc];
+
+                const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instr));
+                const RC = _instruction.DECODE_RC(instr);
+
+                self.currentCallFrameRegisters().set(RC, RA);
+
+                frame.pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+            },
+            else => {
+                self.rError("Unhandled OPCODE: {any} \n", .{_instruction.GET_OPCODE(frame.function.instructions.items[frame.pc])});
+                return false;
+            },
         }
 
         return true;

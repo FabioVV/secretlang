@@ -28,12 +28,8 @@ fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8)
     var l: *Lexer = Lexer.init(allocator, file, filename);
     defer l.deinit();
 
-    _value.printStdOut("Lexer ok ", .{});
-
     var p: *Parser = Parser.init(allocator, l);
     defer p.deinit();
-
-    _value.printStdOut("Parser ok ", .{});
 
     var program = try p.parseProgram(allocator);
     defer program.?.deinit();
@@ -42,8 +38,6 @@ fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8)
         errh.printError("error parsing program\n");
         return;
     }
-
-    _value.printStdOut("Program ok ", .{});
 
     if (p.had_error) {
         return;
@@ -56,23 +50,16 @@ fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8)
         return;
     }
 
-    _value.printStdOut("Semantic analyser ok ", .{});
-
-
     var c: *Compiler = Compiler.init(allocator, program.?, &l.source, &l.filename);
     defer c.deinit();
 
     if (!c.compile()) {
         return;
     }
-    _value.printStdOut("Compiler ok ", .{});
-
 
     var vm: *VM = VM.init(allocator, &c.constantsPool, &c.scopes.items[0], &l.source, c.strings, c.objects);
 
     _ = vm.run();
-
-    _value.printStdOut("VM \n ", .{});
 
     defer vm.deinit();
 }
@@ -142,7 +129,6 @@ pub fn main() !void {
     }
 
     const allocator = gpa.allocator();
-
 
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);

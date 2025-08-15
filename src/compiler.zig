@@ -499,7 +499,6 @@ pub const Compiler = struct {
 
                 switch (call_expr.function.?.*) {
                     AST.Expression.identifier_expr => |idenExpr| {
-
                         if (idenExpr.resolved_symbol != null and idenExpr.resolved_symbol.?.type == ValueTypes.NATIVEF) {
                             self.emitInstruction(_instruction.ENCODE_BCALL(result_reg, fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
 
@@ -511,7 +510,6 @@ pub const Compiler = struct {
 
                 self.emitInstruction(_instruction.ENCODE_CALL(result_reg, fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
 
-                _value.printStdOut("Here", .{});
                 return null;
             },
             AST.Expression.identifier_expr => |idenExpr| {
@@ -539,6 +537,7 @@ pub const Compiler = struct {
     }
 
     fn compileVarStatement(self: *Compiler, stmt: *AST.VarStatement) void {
+        //         _value.printStdOut("here {any}\n", .{stmt});
         _ = self.compileExpression(stmt.expression);
 
         //         const maybe_fn = self.constantsPool.items[constantIdx];
@@ -549,7 +548,7 @@ pub const Compiler = struct {
         const reg = self.currentScope().used_registers.pop().?;
         self.freeRegister(reg);
 
-        _ = self.addConstant(Value.copyString(self.allocator, stmt.identifier.literal, self.strings, &self.objects));
+        //         _ = self.addConstant(Value.copyString(self.allocator, stmt.identifier.literal, self.strings, &self.objects));
 
         if (stmt.identifier.resolved_symbol) |sym| {
             if (sym.scope == Scopes.GLOBAL) {
