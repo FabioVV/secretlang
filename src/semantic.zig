@@ -94,7 +94,7 @@ pub const SemanticAnalyzer = struct {
         };
 
         const semanticErrMsg = std.fmt.allocPrint(self.allocator, message, varargs) catch |err| {
-            errh.exitWithError("unrecoverable error trying to runtime error message", err);
+            errh.exitWithError("unrecoverable error trying to form semantic error message", err);
         };
 
         const source = dbg.getSourceLine(self.source.*, token.position);

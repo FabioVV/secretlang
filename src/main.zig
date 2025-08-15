@@ -24,7 +24,7 @@ const ArgsConfig = struct {
     repl_mode: bool = false,
 };
 
-fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8) !void {
+inline fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8) !void {
     var l: *Lexer = Lexer.init(allocator, file, filename);
     defer l.deinit();
 
@@ -32,12 +32,13 @@ fn execute(allocator: std.mem.Allocator, file: []const u8, filename: []const u8)
     defer p.deinit();
 
     var program = try p.parseProgram(allocator);
+    defer program.?.deinit();
+
     if (program == null) {
         errh.printError("error parsing program\n");
         return;
     }
 
-    defer program.?.deinit();
 
     if (p.had_error) {
         return;

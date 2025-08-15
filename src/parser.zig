@@ -11,7 +11,6 @@ const Token = _token.Token;
 const Tokens = _token.Tokens;
 const Lexer = @import("lexer.zig").Lexer;
 const _value = @import("value.zig");
-
 const AST = @import("ast.zig");
 
 const Precedence = enum(u32) {
@@ -506,18 +505,19 @@ pub const Parser = struct {
         return expr;
     }
 
-    pub fn parseCallArgs(self: *Parser) ?[]?*AST.Expression {
+    pub fn parseCallArgs(self: *Parser) ?std.BoundedArray(?*AST.Expression, 32) {
         var args = std.BoundedArray(?*AST.Expression, 32).init(0) catch unreachable;
 
         if (self.peekIs(Tokens.RPAREN)) {
             self.advance();
 
-            return &[_]?*AST.Expression{};
+            return null;
         }
 
         self.advance();
 
-        const arg = self.parseExpression(Precedence.DEFAULT) orelse null;
+        const arg = self.parseExpression(Precedence.DEFAULT) orelse return null;
+
 
         args.append(arg) catch |err| {
             errh.exitWithError("Unrecoverable error when trying to append function argument.", err);
@@ -527,7 +527,7 @@ pub const Parser = struct {
             self.advance(); // advance after the comma
             self.advance(); // advance again, this time cur_token becomes the next argument
 
-            const _arg = self.parseExpression(Precedence.DEFAULT) orelse null;
+            const _arg = self.parseExpression(Precedence.DEFAULT) orelse return null;
             args.append(_arg) catch |err| {
                 errh.exitWithError("Unrecoverable error when trying to append function argument.", err);
             };
@@ -537,7 +537,7 @@ pub const Parser = struct {
             return null;
         }
 
-        return args.slice();
+        return args;
     }
 
     pub fn parseCallExpression(self: *Parser, fn_expr: ?*AST.Expression) ?*AST.Expression {
@@ -545,10 +545,9 @@ pub const Parser = struct {
         var callExpr = AST.callExpression.init(self.cur_token, fn_expr);
 
         const args = self.parseCallArgs();
-        _value.printStdOut("{any}\n", .{args});
 
         if (args != null) {
-            callExpr.arguments.appendSlice(args.?) catch unreachable;
+            callExpr.arguments.appendSlice(args.?.slice()) catch unreachable;
         }
 
         expr.* = AST.Expression{ .call_expr = callExpr };
@@ -655,13 +654,13 @@ pub const Parser = struct {
         return expr;
     }
 
-    pub fn parseFnParameters(self: *Parser) ?[]AST.Identifier {
+    pub fn parseFnParameters(self: *Parser) ?std.BoundedArray(AST.Identifier, 32) {
         var params = std.BoundedArray(AST.Identifier, 32).init(0) catch unreachable;
 
         if (self.peekIs(Tokens.RPAREN)) {
             self.advance();
 
-            return &[_]AST.Identifier{};
+            return null;
         }
 
         self.advance();
@@ -685,7 +684,7 @@ pub const Parser = struct {
             return null;
         }
 
-        return params.slice();
+        return params;
     }
 
     pub fn parseFnExpression(self: *Parser) ?*AST.Expression {
@@ -697,8 +696,8 @@ pub const Parser = struct {
 
         const params = self.parseFnParameters();
 
-        if (params != null) {
-            fnLiteral.parameters.appendSlice(params.?) catch |err| {
+        if (params) |p| {
+            fnLiteral.parameters.appendSlice(p.slice()) catch |err| {
                 errh.exitWithError("Unrecoverable error when trying to append slice of function parameters.", err);
             };
         }
@@ -916,8 +915,8 @@ pub const Parser = struct {
         }
 
         const params = self.parseFnParameters();
-        if (params != null) {
-            fnStmt.parameters.appendSlice(params.?) catch |err| {
+        if (params) |p| {
+            fnStmt.parameters.appendSlice(p.slice()) catch |err| {
                 errh.exitWithError("Unrecoverable error when trying to append slice of function parameters.", err);
             };
         }

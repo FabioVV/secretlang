@@ -10,7 +10,7 @@ pub const NativeFunctionArityTypes = enum {
 
 pub const nativeFunction = struct {
     name: []const u8,
-    arity: u8, // ?
+    arity: u8,
     function: union(NativeFunctionArityTypes) {
         arity0: *const fn () Value,
         arity1: *const fn (Value) Value,

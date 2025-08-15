@@ -1,6 +1,7 @@
 const std = @import("std");
 const expect = std.testing.expect;
 const mem = std.mem;
+const is_debug = @import("builtin").mode == .Debug;
 
 const dbg = @import("debug.zig");
 const errh = @import("error.zig");
@@ -636,7 +637,7 @@ pub const VM = struct {
     }
 
     pub fn run(self: *VM) bool {
-        @setRuntimeSafety(false);
+        @setRuntimeSafety(!is_debug);
 
         var frame: *CallFrame = &self.frames.slice()[self.frameIndex];
         var pc = frame.pc;
@@ -749,10 +750,7 @@ pub const VM = struct {
                 },
                 .PUSH => {
                     const RC = _instruction.DECODE_RC(curInstruction);
-                    _value.printStdOut("GOING TO TRY TO PUSH: {any}\n", .{self.currentCallFrameRegisters().get(RC)});
-
                     self.push(self.currentCallFrameRegisters().get(RC));
-                    _value.printStdOut("PUSHED: {any}\n", .{self.currentCallFrameRegisters().get(RC)});
                 },
                 .BCALL => {
                     const RC = _instruction.DECODE_RC(curInstruction);
@@ -760,11 +758,6 @@ pub const VM = struct {
                     const RB = _instruction.DECODE_RB(curInstruction);
 
                     const args_slice = self.stack.slice()[self.stack.len - RB .. self.stack.len];
-                    _value.printStdOut("before\n", .{});
-
-                    _value.printStdOut("{any}\n", .{args_slice});
-
-                    _value.printStdOut("after\n", .{});
 
                     switch (RA.NATIVEF.function) {
                         .arity1 => |nfn| {

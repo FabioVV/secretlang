@@ -54,7 +54,6 @@ pub fn launch() !void {
             var p: *Parser = Parser.init(allocator, l);
 
             const program = try p.parseProgram(allocator);
-            defer program.?.deinit();
 
             if (program == null) {
                 try stdout.print("Error parsing program\n", .{});
