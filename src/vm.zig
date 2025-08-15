@@ -637,11 +637,12 @@ pub const VM = struct {
     }
 
     pub fn run(self: *VM) bool {
-        @setRuntimeSafety(!is_debug);
+        //@setRuntimeSafety(!is_debug);
 
         var frame: *CallFrame = &self.frames.slice()[self.frameIndex];
         var pc = frame.pc;
 
+        _value.printStdOut("first\n", .{});
         while (true) {
             const curInstruction = frame.function.instructions.items[pc];
             pc += 1;
@@ -793,11 +794,9 @@ pub const VM = struct {
                         return false;
                     }
 
-                    const stack_start = self.stack.len - RB;
                     for (0..RB) |i| {
-                        callFrame.registers.set(i + 1, self.stack.slice()[stack_start + i]);
+                        callFrame.registers.set(i + 1, self.pop().?);
                     }
-                    self.stack.len -= RB;
 
                     self.pushCallFrame(callFrame);
 

@@ -511,6 +511,7 @@ pub const Compiler = struct {
 
                 self.emitInstruction(_instruction.ENCODE_CALL(result_reg, fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
 
+                _value.printStdOut("Here", .{});
                 return null;
             },
             AST.Expression.identifier_expr => |idenExpr| {
