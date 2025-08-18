@@ -651,10 +651,11 @@ pub const VM = struct {
         @setRuntimeSafety(false);
 
         var frame: *CallFrame = &self.frames.slice()[self.frameIndex];
+        var pc: usize = 0;
 
-        fetch: switch (_instruction.GET_OPCODE(frame.function.instructions.items[frame.pc])) {
+        fetch: switch (_instruction.GET_OPCODE(frame.function.instructions.items[pc])) {
             .LOADK => {
-                const instr = frame.function.instructions.items[frame.pc];
+                const instr = frame.function.instructions.items[pc];
 
                 const constantIdx = _instruction.DECODE_CONSTANT_IDX(instr);
                 const RC = _instruction.DECODE_RC(instr);
@@ -662,92 +663,92 @@ pub const VM = struct {
 
                 self.cregisters[RC] = contantValue;
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .LOADF => {
-                const RC = _instruction.DECODE_RC(frame.function.instructions.items[frame.pc]);
+                const RC = _instruction.DECODE_RC(frame.function.instructions.items[pc]);
                 self.cregisters[RC] = Value.createBoolean(false);
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .LOADT => {
-                const RC = _instruction.DECODE_RC(frame.function.instructions.items[frame.pc]);
+                const RC = _instruction.DECODE_RC(frame.function.instructions.items[pc]);
                 self.cregisters[RC] = Value.createBoolean(true);
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .LOADN => {
-                const RC = _instruction.DECODE_RC(frame.function.instructions.items[frame.pc]);
+                const RC = _instruction.DECODE_RC(frame.function.instructions.items[pc]);
                 self.cregisters[RC] = Value.createNil();
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .ADD => {
-                if (!self.mathAdd(frame.function.instructions.items[frame.pc])) return false;
+                if (!self.mathAdd(frame.function.instructions.items[pc])) return false;
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .SUB => {
-                if (!self.mathSub(frame.function.instructions.items[frame.pc])) return false;
+                if (!self.mathSub(frame.function.instructions.items[pc])) return false;
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .MUL => {
-                if (!self.mathMul(frame.function.instructions.items[frame.pc])) return false;
+                if (!self.mathMul(frame.function.instructions.items[pc])) return false;
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .DIV => {
-                if (!self.mathDiv(frame.function.instructions.items[frame.pc])) return false;
+                if (!self.mathDiv(frame.function.instructions.items[pc])) return false;
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .EQUAL => {
-                self.cmpEqual(frame.function.instructions.items[frame.pc]); // ==
+                self.cmpEqual(frame.function.instructions.items[pc]); // ==
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .NOTEQUAL => {
-                self.cmpNotEqual(frame.function.instructions.items[frame.pc]); // !=
+                self.cmpNotEqual(frame.function.instructions.items[pc]); // !=
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .LESSEQUAL => {
-                if (!self.cmpLessEqual(frame.function.instructions.items[frame.pc])) return false; // <=
+                if (!self.cmpLessEqual(frame.function.instructions.items[pc])) return false; // <=
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .GREATEREQUAL => {
-                if (!self.cmpGreaterEqual(frame.function.instructions.items[frame.pc])) return false; // >=
+                if (!self.cmpGreaterEqual(frame.function.instructions.items[pc])) return false; // >=
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .GREATERTHAN => {
-                if (!self.cmpGreaterThan(frame.function.instructions.items[frame.pc])) return false; // >
+                if (!self.cmpGreaterThan(frame.function.instructions.items[pc])) return false; // >
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .LESSTHAN => {
-                if (!self.cmpLessThan(frame.function.instructions.items[frame.pc])) return false; // <
+                if (!self.cmpLessThan(frame.function.instructions.items[pc])) return false; // <
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .BANG => {
-                const instr = frame.function.instructions.items[frame.pc];
+                const instr = frame.function.instructions.items[pc];
 
                 const RA = self.cregisters[_instruction.DECODE_RA(instr)];
                 const RC = _instruction.DECODE_RC(instr);
@@ -760,11 +761,11 @@ pub const VM = struct {
                     },
                 }
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .MINUS => {
-                const instr = frame.function.instructions.items[frame.pc];
+                const instr = frame.function.instructions.items[pc];
                 const RA = self.cregisters[_instruction.DECODE_RA(instr)];
                 const RC = _instruction.DECODE_RC(instr);
 
@@ -777,62 +778,62 @@ pub const VM = struct {
                     },
                 }
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .JMPF => {
-                const instr = frame.function.instructions.items[frame.pc];
+                const instr = frame.function.instructions.items[pc];
                 const RC = self.cregisters[_instruction.DECODE_RC(instr)];
 
                 if (!RC.isTruthy()) {
                     const jumpOffset = _instruction.DECODE_JUMP_OFFSET(instr);
-                    frame.pc += jumpOffset;
+                    pc += jumpOffset;
                 }
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .JMP => {
-                const instr = frame.function.instructions.items[frame.pc];
+                const instr = frame.function.instructions.items[pc];
 
                 const jumpOffset = _instruction.DECODE_JUMP_OFFSET(instr);
-                frame.pc += jumpOffset + 1;
+                pc += jumpOffset + 1;
 
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .SGLOBAL => {
-                const instr = frame.function.instructions.items[frame.pc];
+                const instr = frame.function.instructions.items[pc];
 
                 const RC = self.cregisters[_instruction.DECODE_RC(instr)];
                 const globalIdx = _instruction.DECODE_CONSTANT_IDX(instr);
 
                 self.globals.slice()[globalIdx] = RC;
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .GGLOBAL => {
-                const instr = frame.function.instructions.items[frame.pc];
+                const instr = frame.function.instructions.items[pc];
 
                 const RC = _instruction.DECODE_RC(instr);
                 const globalIdx = _instruction.DECODE_CONSTANT_IDX(instr);
 
                 self.cregisters[RC] = self.globals.slice()[globalIdx];
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .PUSH => {
-                const RC = _instruction.DECODE_RC(frame.function.instructions.items[frame.pc]);
+                const RC = _instruction.DECODE_RC(frame.function.instructions.items[pc]);
                 self.push(self.cregisters[RC]);
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .BCALL => {
-                const instr = frame.function.instructions.items[frame.pc];
+                const instr = frame.function.instructions.items[pc];
 
-                //const RC = _instruction.DECODE_RC(instr);
+                const RC = _instruction.DECODE_RC(instr);
                 const RA = self.cregisters[_instruction.DECODE_RA(instr)];
                 const RB = _instruction.DECODE_RB(instr);
 
@@ -847,18 +848,18 @@ pub const VM = struct {
 
                         const result: Value = nfn(args_slice[0]);
 
-                        self.cregisters[0] = result;
+                        self.cregisters[RC] = result;
                     },
                     else => unreachable,
                 }
 
                 self.stack.len -= RB;
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .CALL => {
-                const instr = frame.function.instructions.items[frame.pc];
+                const instr = frame.function.instructions.items[pc];
 
                 const RC = _instruction.DECODE_RC(instr);
                 const RA = self.cregisters[_instruction.DECODE_RA(instr)];
@@ -882,16 +883,17 @@ pub const VM = struct {
                 }
                 self.stack.len -= RB;
 
-                frame.pc += 1;
+                pc += 1;
+                frame.pc = pc;
 
                 self.pushCallFrame(CallFrame.init(f, RC, new_offset));
                 frame = self.currentCallFrame();
 
-                frame.pc = 0;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc = 0;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .RET => {
-                const RC = self.cregisters[_instruction.DECODE_RC(frame.function.instructions.items[frame.pc])];
+                const RC = self.cregisters[_instruction.DECODE_RC(frame.function.instructions.items[pc])];
 
                 const popped_frame = self.popCallFrame();
 
@@ -908,7 +910,8 @@ pub const VM = struct {
 
                 self.cregisters[popped_frame.return_register] = RC;
 
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc = frame.pc;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .RETN => {
                 const popped_frame = self.popCallFrame();
@@ -925,21 +928,22 @@ pub const VM = struct {
                 self.cregisters = self.wregisters[prev_offset .. prev_offset + MAX_REGISTERS];
                 self.cregisters[popped_frame.return_register] = NIL;
 
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc = frame.pc;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             .MOVE => {
-                const instr = frame.function.instructions.items[frame.pc];
+                const instr = frame.function.instructions.items[pc];
 
                 const RA = self.cregisters[_instruction.DECODE_RA(instr)];
                 const RC = _instruction.DECODE_RC(instr);
 
                 self.cregisters[RC] = RA;
 
-                frame.pc += 1;
-                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[pc]);
             },
             else => {
-                self.rError("Unhandled OPCODE: {any} \n", .{_instruction.GET_OPCODE(frame.function.instructions.items[frame.pc])});
+                self.rError("Unhandled OPCODE: {any} \n", .{_instruction.GET_OPCODE(frame.function.instructions.items[pc])});
                 return false;
             },
         }
