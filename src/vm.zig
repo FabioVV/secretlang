@@ -25,7 +25,7 @@ const Instruction = _instruction.Instruction;
 pub const MAX_REGISTERS = 255;
 pub const MAX_GLOBALS = 1024;
 //pub const MAX_GLOBALS = 65535;
-pub const MAX_FRAMES = 1024;
+pub const MAX_FRAMES = 128;
 pub const STACK_SIZE = 1024;
 
 pub const NIL = Value{ .NIL = void{} };
@@ -34,16 +34,16 @@ pub const FALSE = Value{ .BOOLEAN = false };
 
 const CallFrame = struct {
     function: *FunctionExpr,
-    registers: std.BoundedArray(Value, MAX_REGISTERS),
     pc: usize,
     return_register: u8,
+    register_offset: usize,
 
-    pub fn init(function: *FunctionExpr, return_register: u8) CallFrame {
+    pub fn init(function: *FunctionExpr, return_register: u8, register_offset: usize) CallFrame {
         return CallFrame{
             .pc = 0,
             .function = function,
-            .registers = std.BoundedArray(Value, MAX_REGISTERS).init(MAX_REGISTERS) catch unreachable,
             .return_register = return_register,
+            .register_offset = register_offset,
         };
     }
 
@@ -59,6 +59,9 @@ const CallFrame = struct {
 pub const VM = struct {
     stack: std.BoundedArray(Value, STACK_SIZE),
     frames: std.BoundedArray(CallFrame, MAX_FRAMES),
+
+    cregisters: []Value,
+    wregisters: [MAX_FRAMES * MAX_REGISTERS]Value,
 
     allocator: std.mem.Allocator,
     arena: ?std.heap.ArenaAllocator,
@@ -77,6 +80,9 @@ pub const VM = struct {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const vm = arena.allocator().create(VM) catch unreachable;
 
+        @memset(&vm.wregisters, NIL);
+        vm.cregisters = vm.wregisters[0..MAX_REGISTERS];
+
         vm.frameIndex = 1;
 
         vm.source = source;
@@ -94,7 +100,7 @@ pub const VM = struct {
         vm.objects = objects;
 
         const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, null, &vm.objects);
-        vm.frames.set(1, CallFrame.init(mainFunction.asFunctionExpr().?, 0));
+        vm.frames.set(1, CallFrame.init(mainFunction.asFunctionExpr().?, 0, 0));
 
         for (_nativef.native_functions, 0..) |_, i| {
             vm.defineNative(@as(u16, @intCast(i)));
@@ -105,6 +111,9 @@ pub const VM = struct {
 
     pub fn repl_init(allocator: std.mem.Allocator, constantsPool: *std.ArrayList(Value), compiledInst: *CompilationScope, globals: *std.BoundedArray(Value, MAX_GLOBALS), source: *[]const u8, strings: *std.StringHashMap(Value), objects: ?*Object) *VM {
         const vm = allocator.create(VM) catch unreachable;
+
+        @memset(&vm.wregisters, NIL);
+        vm.cregisters = vm.wregisters[0..MAX_REGISTERS];
 
         vm.frameIndex = 1;
 
@@ -123,7 +132,7 @@ pub const VM = struct {
         vm.objects = objects;
 
         const mainFunction = Value.createFunctionExpr(vm.allocator, compiledInst.*, null, &vm.objects);
-        vm.frames.set(1, CallFrame.init(mainFunction.asFunctionExpr().?, 0));
+        vm.frames.set(1, CallFrame.init(mainFunction.asFunctionExpr().?, 0, 0));
 
         for (_nativef.native_functions, 0..) |_, i| {
             vm.defineNative(@as(u16, @intCast(i)));
@@ -188,8 +197,8 @@ pub const VM = struct {
         return &self.frames.slice()[self.frameIndex];
     }
 
-    inline fn currentCallFrameRegisters(self: *VM) *std.BoundedArray(Value, MAX_REGISTERS) {
-        return &self.frames.slice()[self.frameIndex].registers;
+    inline fn currentCallFrameRegisters(self: *VM) *[]Value {
+        return &self.cregisters;
     }
 
     inline fn pushCallFrame(self: *VM, frame: CallFrame) void {
@@ -233,8 +242,8 @@ pub const VM = struct {
     }
 
     inline fn cmpEqual(self: *VM, instruction: Instruction) void {
-        const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instruction));
-        const RB = self.currentCallFrameRegisters().get(_instruction.DECODE_RB(instruction));
+        const RA = self.cregisters[_instruction.DECODE_RA(instruction)];
+        const RB = self.cregisters[_instruction.DECODE_RB(instruction)];
         const RC = _instruction.DECODE_RC(instruction);
 
         const result = switch (RA) {
@@ -267,12 +276,12 @@ pub const VM = struct {
             .NATIVEF => false,
         };
 
-        self.currentCallFrameRegisters().set(RC, Value.createBoolean(result));
+        self.cregisters[RC] = Value.createBoolean(result);
     }
 
     inline fn cmpNotEqual(self: *VM, instruction: Instruction) void {
-        const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instruction));
-        const RB = self.currentCallFrameRegisters().get(_instruction.DECODE_RB(instruction));
+        const RA = self.cregisters[_instruction.DECODE_RA(instruction)];
+        const RB = self.cregisters[_instruction.DECODE_RB(instruction)];
         const RC = _instruction.DECODE_RC(instruction);
 
         const result = switch (RA) {
@@ -305,12 +314,12 @@ pub const VM = struct {
             .NATIVEF => false,
         };
 
-        self.currentCallFrameRegisters().set(RC, Value.createBoolean(result));
+        self.cregisters[RC] = Value.createBoolean(result);
     }
 
     inline fn cmpLessThan(self: *VM, instruction: Instruction) bool {
-        const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instruction));
-        const RB = self.currentCallFrameRegisters().get(_instruction.DECODE_RB(instruction));
+        const RA = self.cregisters[_instruction.DECODE_RA(instruction)];
+        const RB = self.cregisters[_instruction.DECODE_RB(instruction)];
         const RC = _instruction.DECODE_RC(instruction);
 
         const result = switch (RA) {
@@ -336,13 +345,13 @@ pub const VM = struct {
             },
         };
 
-        self.currentCallFrameRegisters().set(RC, Value.createBoolean(result));
+        self.cregisters[RC] = Value.createBoolean(result);
         return true;
     }
 
     inline fn cmpGreaterThan(self: *VM, instruction: Instruction) bool {
-        const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instruction));
-        const RB = self.currentCallFrameRegisters().get(_instruction.DECODE_RB(instruction));
+        const RA = self.cregisters[_instruction.DECODE_RA(instruction)];
+        const RB = self.cregisters[_instruction.DECODE_RB(instruction)];
         const RC = _instruction.DECODE_RC(instruction);
 
         const result = switch (RA) {
@@ -368,13 +377,13 @@ pub const VM = struct {
             },
         };
 
-        self.currentCallFrameRegisters().set(RC, Value.createBoolean(result));
+        self.cregisters[RC] = Value.createBoolean(result);
         return true;
     }
 
     inline fn cmpLessEqual(self: *VM, instruction: Instruction) bool {
-        const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instruction));
-        const RB = self.currentCallFrameRegisters().get(_instruction.DECODE_RB(instruction));
+        const RA = self.cregisters[_instruction.DECODE_RA(instruction)];
+        const RB = self.cregisters[_instruction.DECODE_RB(instruction)];
         const RC = _instruction.DECODE_RC(instruction);
 
         const result = switch (RA) {
@@ -400,13 +409,13 @@ pub const VM = struct {
             },
         };
 
-        self.currentCallFrameRegisters().set(RC, Value.createBoolean(result));
+        self.cregisters[RC] = Value.createBoolean(result);
         return true;
     }
 
     inline fn cmpGreaterEqual(self: *VM, instruction: Instruction) bool {
-        const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instruction));
-        const RB = self.currentCallFrameRegisters().get(_instruction.DECODE_RB(instruction));
+        const RA = self.cregisters[_instruction.DECODE_RA(instruction)];
+        const RB = self.cregisters[_instruction.DECODE_RB(instruction)];
         const RC = _instruction.DECODE_RC(instruction);
 
         const result = switch (RA) {
@@ -432,22 +441,24 @@ pub const VM = struct {
             },
         };
 
-        self.currentCallFrameRegisters().set(RC, Value.createBoolean(result));
+        self.cregisters[RC] = Value.createBoolean(result);
         return true;
     }
 
     inline fn mathAdd(self: *VM, instruction: Instruction) bool {
-        const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instruction));
-        const RB = self.currentCallFrameRegisters().get(_instruction.DECODE_RB(instruction));
+        const RA = self.cregisters[(_instruction.DECODE_RA(instruction))];
+        const RB = self.cregisters[(_instruction.DECODE_RB(instruction))];
         const RC = _instruction.DECODE_RC(instruction);
+
+        if (RA.isInt() and RB.isInt()) {
+            self.cregisters[RC] = Value{ .INT64 = RB.INT64 + RA.INT64 };
+            return true;
+        }
 
         switch (RA) {
             .INT64 => |a| switch (RB) {
-                .INT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createI64(b + a));
-                },
                 .FLOAT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createF64(b + @as(f64, @floatFromInt(a))));
+                    self.cregisters[RC] = Value.createF64(b + @as(f64, @floatFromInt(a)));
                 },
                 .OBJECT => |o| {
                     self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(o.data), @tagName(RA) });
@@ -460,10 +471,10 @@ pub const VM = struct {
             },
             .FLOAT64 => |a| switch (RB) {
                 .INT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createF64(@as(f64, @floatFromInt(b)) + a));
+                    self.cregisters[RC] = Value.createF64(@as(f64, @floatFromInt(b)) + a);
                 },
                 .FLOAT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createF64(b + a));
+                    self.cregisters[RC] = Value.createF64(b + a);
                 },
                 .OBJECT => |o| {
                     self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(o.data), @tagName(RA) });
@@ -483,7 +494,7 @@ pub const VM = struct {
 
                         const value = Value.kidnapString(std.heap.page_allocator, result, self.strings, &self.objects);
 
-                        self.currentCallFrameRegisters().set(RC, value);
+                        self.cregisters[RC] = value;
                     } else {
                         self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(RB), @tagName(a.data) });
                         return false;
@@ -504,17 +515,17 @@ pub const VM = struct {
     }
 
     inline fn mathSub(self: *VM, instruction: Instruction) bool {
-        const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instruction));
-        const RB = self.currentCallFrameRegisters().get(_instruction.DECODE_RB(instruction));
+        const RA = self.cregisters[_instruction.DECODE_RA(instruction)];
+        const RB = self.cregisters[_instruction.DECODE_RB(instruction)];
         const RC = _instruction.DECODE_RC(instruction);
 
         switch (RA) {
             .INT64 => |a| switch (RB) {
                 .INT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createI64(b - a));
+                    self.cregisters[RC] = Value.createI64(b - a);
                 },
                 .FLOAT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createF64(b - @as(f64, @floatFromInt(a))));
+                    self.cregisters[RC] = Value.createF64(b - @as(f64, @floatFromInt(a)));
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
@@ -523,10 +534,10 @@ pub const VM = struct {
             },
             .FLOAT64 => |a| switch (RB) {
                 .INT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createF64(@as(f64, @floatFromInt(b)) - a));
+                    self.cregisters[RC] = Value.createF64(@as(f64, @floatFromInt(b)) - a);
                 },
                 .FLOAT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createF64(b - a));
+                    self.cregisters[RC] = Value.createF64(b - a);
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
@@ -543,17 +554,17 @@ pub const VM = struct {
     }
 
     inline fn mathMul(self: *VM, instruction: Instruction) bool { // add string multiplication
-        const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instruction));
-        const RB = self.currentCallFrameRegisters().get(_instruction.DECODE_RB(instruction));
+        const RA = self.cregisters[_instruction.DECODE_RA(instruction)];
+        const RB = self.cregisters[_instruction.DECODE_RB(instruction)];
         const RC = _instruction.DECODE_RC(instruction);
 
         switch (RA) {
             .INT64 => |a| switch (RB) {
                 .INT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createI64(b * a));
+                    self.cregisters[RC] = Value.createI64(b * a);
                 },
                 .FLOAT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createF64(b * @as(f64, @floatFromInt(a))));
+                    self.cregisters[RC] = Value.createF64(b * @as(f64, @floatFromInt(a)));
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
@@ -562,10 +573,10 @@ pub const VM = struct {
             },
             .FLOAT64 => |a| switch (RB) {
                 .INT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createF64(@as(f64, @floatFromInt(b)) * a));
+                    self.cregisters[RC] = Value.createF64(@as(f64, @floatFromInt(b)) * a);
                 },
                 .FLOAT64 => |b| {
-                    self.currentCallFrameRegisters().set(RC, Value.createF64(b * a));
+                    self.cregisters[RC] = Value.createF64(b * a);
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
@@ -582,8 +593,8 @@ pub const VM = struct {
     }
 
     inline fn mathDiv(self: *VM, instruction: Instruction) bool {
-        const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instruction));
-        const RB = self.currentCallFrameRegisters().get(_instruction.DECODE_RB(instruction));
+        const RA = self.cregisters[_instruction.DECODE_RA(instruction)];
+        const RB = self.cregisters[_instruction.DECODE_RB(instruction)];
         const RC = _instruction.DECODE_RC(instruction);
 
         switch (RA) {
@@ -592,14 +603,14 @@ pub const VM = struct {
                     if (a == 0) {
                         self.rError("numeric error: division by zero", .{});
                     } else {
-                        self.currentCallFrameRegisters().set(RC, Value{ .INT64 = @divTrunc(b, a) });
+                        self.cregisters[RC] = Value{ .INT64 = @divTrunc(b, a) };
                     }
                 },
                 .FLOAT64 => |b| {
                     if (a == 0) {
                         self.rError("numeric error: division by zero", .{});
                     } else {
-                        self.currentCallFrameRegisters().set(RC, Value.createF64(b / @as(f64, @floatFromInt(a))));
+                        self.cregisters[RC] = Value.createF64(b / @as(f64, @floatFromInt(a)));
                     }
                 },
                 else => |p| {
@@ -612,14 +623,14 @@ pub const VM = struct {
                     if (a == 0) {
                         self.rError("numeric error: division by zero", .{});
                     } else {
-                        self.currentCallFrameRegisters().set(RC, Value.createF64(@as(f64, @floatFromInt(b)) / a));
+                        self.cregisters[RC] = Value.createF64(@as(f64, @floatFromInt(b)) / a);
                     }
                 },
                 .FLOAT64 => |b| {
                     if (a == 0) {
                         self.rError("numeric error: division by zero", .{});
                     } else {
-                        self.currentCallFrameRegisters().set(RC, Value.createF64(b / a));
+                        self.cregisters[RC] = Value.createF64(b / a);
                     }
                 },
                 else => |p| {
@@ -637,7 +648,7 @@ pub const VM = struct {
     }
 
     pub fn run(self: *VM) bool {
-        @setRuntimeSafety(is_debug);
+        @setRuntimeSafety(false);
 
         var frame: *CallFrame = &self.frames.slice()[self.frameIndex];
 
@@ -649,28 +660,28 @@ pub const VM = struct {
                 const RC = _instruction.DECODE_RC(instr);
                 const contantValue = self.GET_CONSTANT(constantIdx).?;
 
-                self.currentCallFrameRegisters().set(RC, contantValue);
+                self.cregisters[RC] = contantValue;
 
                 frame.pc += 1;
                 continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
             },
             .LOADF => {
                 const RC = _instruction.DECODE_RC(frame.function.instructions.items[frame.pc]);
-                self.currentCallFrameRegisters().set(RC, Value.createBoolean(false));
+                self.cregisters[RC] = Value.createBoolean(false);
 
                 frame.pc += 1;
                 continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
             },
             .LOADT => {
                 const RC = _instruction.DECODE_RC(frame.function.instructions.items[frame.pc]);
-                self.currentCallFrameRegisters().set(RC, Value.createBoolean(true));
+                self.cregisters[RC] = Value.createBoolean(true);
 
                 frame.pc += 1;
                 continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
             },
             .LOADN => {
                 const RC = _instruction.DECODE_RC(frame.function.instructions.items[frame.pc]);
-                self.currentCallFrameRegisters().set(RC, Value.createNil());
+                self.cregisters[RC] = Value.createNil();
 
                 frame.pc += 1;
                 continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
@@ -738,11 +749,11 @@ pub const VM = struct {
             .BANG => {
                 const instr = frame.function.instructions.items[frame.pc];
 
-                const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instr));
+                const RA = self.cregisters[_instruction.DECODE_RA(instr)];
                 const RC = _instruction.DECODE_RC(instr);
 
                 switch (RA) {
-                    .BOOLEAN => |n| self.currentCallFrameRegisters().set(RC, Value.createBoolean(!n)),
+                    .BOOLEAN => |n| self.cregisters[RC] = Value.createBoolean(!n),
                     else => |p| {
                         self.rError("type error: operand must be boolean, got {s}", .{@tagName(p)});
                         return false;
@@ -754,12 +765,12 @@ pub const VM = struct {
             },
             .MINUS => {
                 const instr = frame.function.instructions.items[frame.pc];
-                const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instr));
+                const RA = self.cregisters[_instruction.DECODE_RA(instr)];
                 const RC = _instruction.DECODE_RC(instr);
 
                 switch (RA) {
-                    .INT64 => |n| self.currentCallFrameRegisters().set(RC, Value.createI64(-n)),
-                    .FLOAT64 => |n| self.currentCallFrameRegisters().set(RC, Value.createF64(-n)),
+                    .INT64 => |n| self.cregisters[RC] = Value.createI64(-n),
+                    .FLOAT64 => |n| self.cregisters[RC] = Value.createF64(-n),
                     else => |p| {
                         self.rError("type error: operand must be numeric, got {s}", .{@tagName(p)});
                         return false;
@@ -771,7 +782,7 @@ pub const VM = struct {
             },
             .JMPF => {
                 const instr = frame.function.instructions.items[frame.pc];
-                const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(instr));
+                const RC = self.cregisters[_instruction.DECODE_RC(instr)];
 
                 if (!RC.isTruthy()) {
                     const jumpOffset = _instruction.DECODE_JUMP_OFFSET(instr);
@@ -792,7 +803,7 @@ pub const VM = struct {
             .SGLOBAL => {
                 const instr = frame.function.instructions.items[frame.pc];
 
-                const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(instr));
+                const RC = self.cregisters[_instruction.DECODE_RC(instr)];
                 const globalIdx = _instruction.DECODE_CONSTANT_IDX(instr);
 
                 self.globals.slice()[globalIdx] = RC;
@@ -806,14 +817,14 @@ pub const VM = struct {
                 const RC = _instruction.DECODE_RC(instr);
                 const globalIdx = _instruction.DECODE_CONSTANT_IDX(instr);
 
-                self.currentCallFrameRegisters().set(RC, self.globals.slice()[globalIdx]);
+                self.cregisters[RC] = self.globals.slice()[globalIdx];
 
                 frame.pc += 1;
                 continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
             },
             .PUSH => {
                 const RC = _instruction.DECODE_RC(frame.function.instructions.items[frame.pc]);
-                self.push(self.currentCallFrameRegisters().get(RC));
+                self.push(self.cregisters[RC]);
 
                 frame.pc += 1;
                 continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
@@ -821,8 +832,8 @@ pub const VM = struct {
             .BCALL => {
                 const instr = frame.function.instructions.items[frame.pc];
 
-                const RC = _instruction.DECODE_RC(instr);
-                const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instr));
+                //const RC = _instruction.DECODE_RC(instr);
+                const RA = self.cregisters[_instruction.DECODE_RA(instr)];
                 const RB = _instruction.DECODE_RB(instr);
 
                 const args_slice = self.stack.slice()[self.stack.len - RB .. self.stack.len];
@@ -836,7 +847,7 @@ pub const VM = struct {
 
                         const result: Value = nfn(args_slice[0]);
 
-                        frame.registers.set(RC, result);
+                        self.cregisters[0] = result;
                     },
                     else => unreachable,
                 }
@@ -850,68 +861,79 @@ pub const VM = struct {
                 const instr = frame.function.instructions.items[frame.pc];
 
                 const RC = _instruction.DECODE_RC(instr);
-                const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instr));
+                const RA = self.cregisters[_instruction.DECODE_RA(instr)];
                 const RB = _instruction.DECODE_RB(instr);
-                const f = RA.asFunctionExpr();
-
-                if (f == null) {
+                const f = RA.asFunctionExpr() orelse {
                     self.rError("type error: tried calling non-function: {any}", .{@tagName(RA)});
                     return false;
-                }
+                };
 
-                var callFrame = CallFrame.init(f.?, RC);
-                callFrame.pc = frame.pc + 1;
+                const new_offset = frame.register_offset + MAX_REGISTERS;
 
-                if (f.?.params_registers != null and f.?.params_registers.?.len != RB) {
-                    self.rError("argument error: expected {d} arguments but got {d}", .{ f.?.params_registers.?.len, RB });
-                    return false;
-                }
+                //                 if (f.?.params_registers != null and f.?.params_registers.?.len != RB) {
+                //                     self.rError("argument error: expected {d} arguments but got {d}", .{ f.?.params_registers.?.len, RB });
+                //                     return false;
+                //                 }
+                self.cregisters = self.wregisters[new_offset .. new_offset + MAX_REGISTERS];
 
-                const stack_start = self.stack.len - RB;
+                const args_start = self.stack.len - RB;
                 for (0..RB) |i| {
-                    callFrame.registers.set(i + 1, self.stack.slice()[stack_start + i]);
+                    self.wregisters[new_offset + i + 1] = self.stack.buffer[args_start + i];
                 }
                 self.stack.len -= RB;
 
                 frame.pc += 1;
 
-                self.pushCallFrame(callFrame);
+                self.pushCallFrame(CallFrame.init(f, RC, new_offset));
                 frame = self.currentCallFrame();
-                frame.registers.set(0, self.currentCallFrameRegisters().get(0));
 
                 frame.pc = 0;
                 continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
             },
             .RET => {
-                const RC = self.currentCallFrameRegisters().get(_instruction.DECODE_RC(frame.function.instructions.items[frame.pc]));
+                const RC = self.cregisters[_instruction.DECODE_RC(frame.function.instructions.items[frame.pc])];
 
-                const poppedFrame = self.popCallFrame();
+                const popped_frame = self.popCallFrame();
 
                 if (self.frameIndex == 0) return true; // if we are in frame 0, the program has finished executing
 
                 frame = self.currentCallFrame();
-                self.currentCallFrameRegisters().set(poppedFrame.return_register, RC);
+
+                const prev_offset = if (self.frameIndex == 0)
+                    0
+                else
+                    self.frames.slice()[self.frameIndex].register_offset;
+
+                self.cregisters = self.wregisters[prev_offset .. prev_offset + MAX_REGISTERS];
+
+                self.cregisters[popped_frame.return_register] = RC;
 
                 continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
             },
             .RETN => {
-                const poppedFrame = self.popCallFrame();
+                const popped_frame = self.popCallFrame();
 
                 if (self.frameIndex == 0) return true; // if we are in frame 0, the program has finished executing
 
+                const prev_offset = if (self.frameIndex == 0)
+                    0
+                else
+                    self.frames.slice()[self.frameIndex].register_offset;
+
                 frame = self.currentCallFrame();
 
-                self.currentCallFrameRegisters().set(poppedFrame.return_register, NIL);
+                self.cregisters = self.wregisters[prev_offset .. prev_offset + MAX_REGISTERS];
+                self.cregisters[popped_frame.return_register] = NIL;
 
                 continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);
             },
             .MOVE => {
                 const instr = frame.function.instructions.items[frame.pc];
 
-                const RA = self.currentCallFrameRegisters().get(_instruction.DECODE_RA(instr));
+                const RA = self.cregisters[_instruction.DECODE_RA(instr)];
                 const RC = _instruction.DECODE_RC(instr);
 
-                self.currentCallFrameRegisters().set(RC, RA);
+                self.cregisters[RC] = RA;
 
                 frame.pc += 1;
                 continue :fetch _instruction.GET_OPCODE(frame.function.instructions.items[frame.pc]);

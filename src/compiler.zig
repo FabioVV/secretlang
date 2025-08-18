@@ -192,9 +192,9 @@ pub const Compiler = struct {
             .GREATEREQUAL,
             .MINUS,
             .BANG,
-            .GGLOBAL, // can runtime error
+            .GGLOBAL,
             .CALL,
-            => true,
+            => true, // can runtime error
             else => false, // won't error (problably)
         };
     }
@@ -202,17 +202,6 @@ pub const Compiler = struct {
     //     fn currentScopeInstructions(self: *Compiler) std.ArrayList(Instruction) {
     //         return self.scopes[self.cur_scope].instructions;
     //     }
-
-    fn registersState(self: *Compiler, op: []const u8) void {
-        std.debug.print("\n=== {s} ===\n", .{op});
-        std.debug.print("Allocated registers: ", .{});
-        for (0.._vm.MAX_REGISTERS) |i| {
-            if (self.registers.get(i)) {
-                std.debug.print("R{} ", .{i});
-            }
-        }
-        std.debug.print("\n", .{});
-    }
 
     /// allocates a single register for use and returns it, in case of no register available, a OutOfRegisters error is returned
     inline fn allocateRegister(self: *Compiler) !u8 {
@@ -232,7 +221,7 @@ pub const Compiler = struct {
         return error.OutOfRegisters;
     }
 
-    /// free`s the given register
+    /// free`s the given register, no-op if already freed
     inline fn freeRegister(self: *Compiler, reg: u8) void {
         if (dbg.DEBUG_REGISTER_ALLOCATION) {
             print("Freed R{d}\n", .{reg});
@@ -313,6 +302,7 @@ pub const Compiler = struct {
         const opcode = _instruction.GET_OPCODE(instruction);
         if (self.canOpError(opcode)) {
             const token = self.getCurrentToken();
+
             self.scopes.items[self.cur_scope].instructions_positions.put(@as(u32, @intCast(self.scopes.items[self.cur_scope].instructions.items.len - 1)), Position{ .line = token.position.line, .column = token.position.column, .filename = self.filename.* }) catch |err| {
                 errh.exitWithError("failed to store debug for instruction", err);
             };
@@ -465,8 +455,6 @@ pub const Compiler = struct {
 
                     param.resolved_symbol.?.register = local;
                     params_registers.append(local) catch unreachable;
-
-                    //self.emitInstruction(_instruction.ENCODE_NIL(local)); do i need this?
                 }
 
                 self.compileBlockStatement(fn_expr.body.?);
@@ -509,7 +497,7 @@ pub const Compiler = struct {
                 }
 
                 self.emitInstruction(_instruction.ENCODE_CALL(result_reg, fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
-
+                //elf.allocateReturnRegister();
                 return null;
             },
             AST.Expression.identifier_expr => |idenExpr| {
@@ -633,8 +621,7 @@ pub const Compiler = struct {
         for (0.._vm.MAX_REGISTERS) |i| {
             if (self.currentScope().registers.get(i)) {
                 print("R{d} never freed scope: {d}\n", .{ i, self.cur_scope });
-                assert(!self.currentScope().registers.get(i)); // All registers should be freed
-
+                assert(!self.currentScope().registers.get(i)); // All registers should be freed by the end of compilation
             }
         }
 

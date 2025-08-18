@@ -287,6 +287,14 @@ pub const Value = union(ValueType) {
         return self == .FLOAT64 or self == .INT64;
     }
 
+    pub inline fn isInt(self: Value) bool {
+        return self == .INT64;
+    }
+
+    pub inline fn isFloat(self: Value) bool {
+        return self == .FLOAT64;
+    }
+
     pub inline fn isBoolean(self: Value) bool {
         return self == .BOOLEAN;
     }
