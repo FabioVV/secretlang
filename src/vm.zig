@@ -32,6 +32,12 @@ pub const NIL = Value{ .NIL = void{} };
 pub const TRUE = Value{ .BOOLEAN = true };
 pub const FALSE = Value{ .BOOLEAN = false };
 
+const RegisterStrategySize = enum(u16) {
+    SMALL = 64,
+    MEDIUM = 128,
+    BIG = 255,
+};
+
 const CallFrame = struct {
     function: *FunctionExpr,
     pc: usize,
@@ -81,7 +87,8 @@ pub const VM = struct {
         const vm = arena.allocator().create(VM) catch unreachable;
 
         @memset(&vm.wregisters, NIL);
-        vm.cregisters = vm.wregisters[0..MAX_REGISTERS];
+
+        vm.cregisters = vm.wregisters[0..decideRegisterWindowSize(compiledInst.instructions.items)];
 
         vm.frameIndex = 1;
 
@@ -92,7 +99,6 @@ pub const VM = struct {
         vm.stack = std.BoundedArray(Value, STACK_SIZE).init(0) catch unreachable;
         vm.frames = std.BoundedArray(CallFrame, MAX_FRAMES).init(MAX_FRAMES) catch unreachable;
 
-        //vm.compiledInstructions = compiledInst;
         vm.constantsPool = constantsPool;
 
         vm.globals = std.BoundedArray(Value, MAX_GLOBALS).init(MAX_GLOBALS) catch unreachable;
@@ -113,7 +119,7 @@ pub const VM = struct {
         const vm = allocator.create(VM) catch unreachable;
 
         @memset(&vm.wregisters, NIL);
-        vm.cregisters = vm.wregisters[0..MAX_REGISTERS];
+        vm.cregisters = vm.wregisters[0..decideRegisterWindowSize(compiledInst.instructions.items)];
 
         vm.frameIndex = 1;
 
@@ -124,7 +130,6 @@ pub const VM = struct {
         vm.stack = std.BoundedArray(Value, STACK_SIZE).init(0) catch unreachable;
         vm.frames = std.BoundedArray(CallFrame, MAX_FRAMES).init(MAX_FRAMES) catch unreachable;
 
-        //vm.compiledInstructions = compiledInst;
         vm.constantsPool = constantsPool;
 
         vm.globals = globals.*;
@@ -187,6 +192,18 @@ pub const VM = struct {
         };
 
         errh.printError(errMsg);
+    }
+
+    inline fn decideRegisterWindowSize(instructions: []u32) u16 {
+        if (instructions.len > 500) {
+            return @intFromEnum(RegisterStrategySize.BIG);
+        } else if (instructions.len > 250) {
+            return @intFromEnum(RegisterStrategySize.MEDIUM);
+        } else {
+            return @intFromEnum(RegisterStrategySize.SMALL);
+        }
+
+        return @intFromEnum(RegisterStrategySize.BIG);
     }
 
     inline fn defineNative(self: *VM, globalSlot: u16) void {
@@ -689,13 +706,23 @@ pub const VM = struct {
                 continue :fetch _instruction.GET_OPCODE(instructions[pc]);
             },
             .ADD => {
-                if (!self.mathAdd(instructions[pc])) return false;
+                //                 if (!self.mathAdd(instructions[pc])) return false;
+                const instr = instructions[pc];
+                const RA = self.cregisters[(_instruction.DECODE_RA(instr))];
+                const RB = self.cregisters[(_instruction.DECODE_RB(instr))];
+                const RC = _instruction.DECODE_RC(instr);
+                self.cregisters[RC] = Value{ .INT64 = RB.INT64 + RA.INT64 };
 
                 pc += 1;
                 continue :fetch _instruction.GET_OPCODE(instructions[pc]);
             },
             .SUB => {
-                if (!self.mathSub(instructions[pc])) return false;
+                //                 if (!self.mathSub(instructions[pc])) return false;
+                const instr = instructions[pc];
+                const RA = self.cregisters[(_instruction.DECODE_RA(instr))];
+                const RB = self.cregisters[(_instruction.DECODE_RB(instr))];
+                const RC = _instruction.DECODE_RC(instr);
+                self.cregisters[RC] = Value{ .INT64 = RB.INT64 - RA.INT64 };
 
                 pc += 1;
                 continue :fetch _instruction.GET_OPCODE(instructions[pc]);
