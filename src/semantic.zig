@@ -12,6 +12,7 @@ const SymbolTable = _symbol_table.SymbolTable;
 const Symbol = _symbol_table.Symbol;
 const Scopes = _symbol_table.Scope;
 const vType = @import("value.zig").ValueType;
+const _value = @import("value.zig");
 const _nativef = @import("nativef.zig");
 const _token = @import("token.zig");
 const Token = _token.Token;
@@ -135,13 +136,28 @@ pub const SemanticAnalyzer = struct {
             return;
         }
 
-        const valueType = switch (stmt.*.expression.?.*) {
-            .int64_expr => vType.INT64,
-            .float64_expr => vType.FLOAT64,
-            .boolean_expr => vType.BOOLEAN,
-            .nil_expr => vType.NIL,
-            else => vType.OBJECT,
-        };
+        var valueType: ?vType = vType.OBJECT;
+
+        switch (stmt.*.expression.?.*) {
+            .int64_expr => {
+                valueType = vType.INT64;
+            },
+            .float64_expr => {
+                valueType = vType.FLOAT64;
+            },
+            .boolean_expr => {
+                valueType = vType.BOOLEAN;
+            },
+            .nil_expr => {
+                valueType = vType.NIL;
+            },
+            .identifier_expr => |iden| {
+                if (self.symbol_table.resolve(iden.literal)) |sb| {
+                    valueType = sb.type;
+                }
+            },
+            else => {},
+        }
 
         const symbol = self.symbol_table.define(stmt.identifier.token, stmt.identifier.literal, self.instruction_count, valueType);
         stmt.identifier.resolved_symbol = symbol;
@@ -239,6 +255,8 @@ pub const SemanticAnalyzer = struct {
                 }
 
                 self.analyzeExpression(callExpr.function);
+                // infer types maybe? or add gradual typing
+                _value.printStdOut("fn: {s}\n", .{callExpr.function.?.*.identifier_expr.literal});
             },
             else => {
                 self.sError("unhandled expression during semantic analysis: {any}", .{self.cur_node.expression});

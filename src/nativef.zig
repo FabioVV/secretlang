@@ -45,3 +45,7 @@ pub fn _print_(arg: Value) Value {
 pub const native_functions = [_]nativeFunction{
     nativeFunction.init(_print_, "@print"),
 };
+
+pub const NativeFunctionsMap = std.StaticStringMap(void).initComptime(.{
+    .{ "@print", void{} },
+});

@@ -355,6 +355,41 @@ pub const Compiler = struct {
         self.scopes.items[self.cur_scope].instructions.items[pos] = self.scopes.items[self.cur_scope].instructions.items[pos] | (@as(Instruction, @intCast(jump)) & 0x3FFFF);
     }
 
+    fn bothInt(self: *Compiler, expr_l: AST.Expression, expr_r: AST.Expression) bool {
+        _ = self;
+
+        switch (expr_l) {
+            .identifier_expr => |l| switch (expr_r) {
+                .identifier_expr => |r| {
+                    if ((l.resolved_symbol.?.type != null and l.resolved_symbol.?.type.? == ValueTypes.INT64) and (r.resolved_symbol.?.type != null and r.resolved_symbol.?.type.? == ValueTypes.INT64)) {
+                        return true;
+                    }
+                },
+                else => return false,
+            },
+            else => return false,
+        }
+
+        return false;
+    }
+
+    fn bothFloat(self: *Compiler, expr_l: AST.Expression, expr_r: AST.Expression) bool {
+        _ = self;
+        switch (expr_l) {
+            .identifier_expr => |l| switch (expr_r) {
+                .identifier_expr => |r| {
+                    if ((l.resolved_symbol.?.type != null and l.resolved_symbol.?.type.? == ValueTypes.FLOAT64) and (r.resolved_symbol.?.type != null and r.resolved_symbol.?.type.? == ValueTypes.FLOAT64)) {
+                        return true;
+                    }
+                },
+                else => return false,
+            },
+            else => return false,
+        }
+
+        return false;
+    }
+
     fn compileExpression(self: *Compiler, expr: ?*AST.Expression) ?u16 {
         self.cur_node = AST.CurrentNode{ .expression = @constCast(&expr.?.*) };
 
@@ -398,7 +433,13 @@ pub const Compiler = struct {
                     return null;
                 };
 
-                self.emitInstruction(_instruction.ENCODE_BINARY(operator, reg, left_register, right_register));
+                if (self.bothInt(infixExpr.left.?.*, infixExpr.right.?.*)) {
+                    self.emitInstruction(_instruction.ENCODE_BINARY_I(operator, reg, left_register, right_register));
+                } else if (self.bothFloat(infixExpr.left.?.*, infixExpr.right.?.*)) {
+                    self.emitInstruction(_instruction.ENCODE_BINARY_F(operator, reg, left_register, right_register));
+                } else {
+                    self.emitInstruction(_instruction.ENCODE_BINARY(operator, reg, left_register, right_register));
+                }
 
                 self.freeRegister(left_register);
                 self.freeRegister(right_register);
@@ -493,11 +534,13 @@ pub const Compiler = struct {
                             return null;
                         }
                     },
-                    else => unreachable,
+                    else => {
+                        self.cError("tried calling non-function");
+                        return null;
+                    },
                 }
 
                 self.emitInstruction(_instruction.ENCODE_CALL(result_reg, fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
-                //elf.allocateReturnRegister();
                 return null;
             },
             AST.Expression.identifier_expr => |idenExpr| {

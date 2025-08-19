@@ -168,7 +168,7 @@ pub const VM = struct {
 
     /// Emits a runtime error
     fn rError(self: *VM, comptime message: []const u8, varargs: anytype) void {
-        const pos = self.currentCallFrame().instructionsPositions().get(@intCast(self.currentCallFrame().pc - 1)).?;
+        const pos = self.currentCallFrame().instructionsPositions().get(@intCast(self.currentCallFrame().pc)).?;
         const source = dbg.getSourceLine(self.source.*, pos);
 
         const fmtCaret = dbg.formatSourceLineWithCaret(self.allocator, pos, source);
@@ -671,6 +671,11 @@ pub const VM = struct {
         var pc: usize = 0;
         var instructions = frame.function.instructions.items;
 
+//         _value.printStdOut("Main function> \n", .{});
+//         for (0..frame.function.instructions.items.len) |i| {
+//             _value.printStdOut("{d}: {s}\n", .{ i, @tagName(_instruction.GET_OPCODE(frame.function.instructions.items[i])) });
+//         }
+
         fetch: switch (_instruction.GET_OPCODE(instructions[pc])) {
             .LOADK => {
                 const instr = instructions[pc];
@@ -706,23 +711,13 @@ pub const VM = struct {
                 continue :fetch _instruction.GET_OPCODE(instructions[pc]);
             },
             .ADD => {
-                //                 if (!self.mathAdd(instructions[pc])) return false;
-                const instr = instructions[pc];
-                const RA = self.cregisters[(_instruction.DECODE_RA(instr))];
-                const RB = self.cregisters[(_instruction.DECODE_RB(instr))];
-                const RC = _instruction.DECODE_RC(instr);
-                self.cregisters[RC] = Value{ .INT64 = RB.INT64 + RA.INT64 };
+                if (!self.mathAdd(instructions[pc])) return false;
 
                 pc += 1;
                 continue :fetch _instruction.GET_OPCODE(instructions[pc]);
             },
             .SUB => {
-                //                 if (!self.mathSub(instructions[pc])) return false;
-                const instr = instructions[pc];
-                const RA = self.cregisters[(_instruction.DECODE_RA(instr))];
-                const RB = self.cregisters[(_instruction.DECODE_RB(instr))];
-                const RC = _instruction.DECODE_RC(instr);
-                self.cregisters[RC] = Value{ .INT64 = RB.INT64 - RA.INT64 };
+                if (!self.mathSub(instructions[pc])) return false;
 
                 pc += 1;
                 continue :fetch _instruction.GET_OPCODE(instructions[pc]);
@@ -735,6 +730,96 @@ pub const VM = struct {
             },
             .DIV => {
                 if (!self.mathDiv(instructions[pc])) return false;
+
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(instructions[pc]);
+            },
+            .ADDI => {
+                const instr = instructions[pc];
+                const RA = self.cregisters[(_instruction.DECODE_RA(instr))];
+                const RB = self.cregisters[(_instruction.DECODE_RB(instr))];
+                const RC = _instruction.DECODE_RC(instr);
+                self.cregisters[RC] = Value{ .INT64 = RB.INT64 + RA.INT64 };
+
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(instructions[pc]);
+            },
+            .SUBI => {
+                const instr = instructions[pc];
+                const RA = self.cregisters[(_instruction.DECODE_RA(instr))];
+                const RB = self.cregisters[(_instruction.DECODE_RB(instr))];
+                const RC = _instruction.DECODE_RC(instr);
+                self.cregisters[RC] = Value{ .INT64 = RB.INT64 - RA.INT64 };
+
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(instructions[pc]);
+            },
+            .MULI => {
+                const instr = instructions[pc];
+                const RA = self.cregisters[(_instruction.DECODE_RA(instr))];
+                const RB = self.cregisters[(_instruction.DECODE_RB(instr))];
+                const RC = _instruction.DECODE_RC(instr);
+                self.cregisters[RC] = Value{ .INT64 = RB.INT64 * RA.INT64 };
+
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(instructions[pc]);
+            },
+            .DIVI => {
+                const instr = instructions[pc];
+                const RA = self.cregisters[(_instruction.DECODE_RA(instr))];
+                const RB = self.cregisters[(_instruction.DECODE_RB(instr))];
+                const RC = _instruction.DECODE_RC(instr);
+
+                if (RA.INT64 == 0) {
+                    self.rError("numeric error: division by zero", .{});
+                } else {
+                    self.cregisters[RC] = Value{ .INT64 = @divTrunc(RB.INT64, RA.INT64) };
+                }
+
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(instructions[pc]);
+            },
+            .ADDF => {
+                const instr = instructions[pc];
+                const RA = self.cregisters[(_instruction.DECODE_RA(instr))];
+                const RB = self.cregisters[(_instruction.DECODE_RB(instr))];
+                const RC = _instruction.DECODE_RC(instr);
+                self.cregisters[RC] = Value{ .FLOAT64 = RB.FLOAT64 + RA.FLOAT64 };
+
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(instructions[pc]);
+            },
+            .SUBF => {
+                const instr = instructions[pc];
+                const RA = self.cregisters[(_instruction.DECODE_RA(instr))];
+                const RB = self.cregisters[(_instruction.DECODE_RB(instr))];
+                const RC = _instruction.DECODE_RC(instr);
+                self.cregisters[RC] = Value{ .FLOAT64 = RB.FLOAT64 - RA.FLOAT64 };
+
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(instructions[pc]);
+            },
+            .MULF => {
+                const instr = instructions[pc];
+                const RA = self.cregisters[(_instruction.DECODE_RA(instr))];
+                const RB = self.cregisters[(_instruction.DECODE_RB(instr))];
+                const RC = _instruction.DECODE_RC(instr);
+                self.cregisters[RC] = Value{ .FLOAT64 = RB.FLOAT64 * RA.FLOAT64 };
+
+                pc += 1;
+                continue :fetch _instruction.GET_OPCODE(instructions[pc]);
+            },
+            .DIVF => {
+                const instr = instructions[pc];
+                const RA = self.cregisters[(_instruction.DECODE_RA(instr))];
+                const RB = self.cregisters[(_instruction.DECODE_RB(instr))];
+                const RC = _instruction.DECODE_RC(instr);
+
+                if (RA.FLOAT64 == 0.0 or RA.FLOAT64 == 0) {
+                    self.rError("numeric error: division by zero", .{});
+                } else {
+                    self.cregisters[RC] = Value{ .FLOAT64 = @divTrunc(RB.FLOAT64, RA.FLOAT64) };
+                }
 
                 pc += 1;
                 continue :fetch _instruction.GET_OPCODE(instructions[pc]);
@@ -893,10 +978,16 @@ pub const VM = struct {
                 const RA = self.cregisters[_instruction.DECODE_RA(instr)];
                 const RB = _instruction.DECODE_RB(instr);
                 const f = RA.asFunctionExpr() orelse {
-                    self.rError("type error: tried calling non-function: {any}", .{@tagName(RA)});
+                    self.rError("type error: tried calling non-function: {s}", .{@tagName(RA)});
                     return false;
                 };
 
+                //                 _value.printStdOut("fib function> \n", .{});
+                //                 for (0..f.instructions.items.len) |i| {
+                //                     _value.printStdOut("{d}: {s}\n", .{ i, @tagName(_instruction.GET_OPCODE(f.instructions.items[i])) });
+                //                 }
+                //
+                //                 std.process.exit(1);
                 const new_offset = frame.register_offset + MAX_REGISTERS;
 
                 //                 if (f.?.params_registers != null and f.?.params_registers.?.len != RB) {
@@ -930,10 +1021,7 @@ pub const VM = struct {
 
                 frame = self.currentCallFrame();
 
-                const prev_offset = if (self.frameIndex == 0)
-                    0
-                else
-                    self.frames.slice()[self.frameIndex].register_offset;
+                const prev_offset = self.frames.slice()[self.frameIndex].register_offset;
 
                 self.cregisters = self.wregisters[prev_offset .. prev_offset + MAX_REGISTERS];
 
@@ -949,10 +1037,7 @@ pub const VM = struct {
 
                 if (self.frameIndex == 0) return true; // if we are in frame 0, the program has finished executing
 
-                const prev_offset = if (self.frameIndex == 0)
-                    0
-                else
-                    self.frames.slice()[self.frameIndex].register_offset;
+                const prev_offset = self.frames.slice()[self.frameIndex].register_offset;
 
                 frame = self.currentCallFrame();
 

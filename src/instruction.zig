@@ -29,29 +29,34 @@ pub const Opcode = enum(u8) {
     MULI = 12,
     DIVI = 13,
 
-    EQUAL = 14,
-    NOTEQUAL = 15,
-    GREATERTHAN = 16,
-    LESSTHAN = 17,
-    LESSEQUAL = 18,
-    GREATEREQUAL = 19,
+    ADDF = 14,
+    SUBF = 15,
+    MULF = 16,
+    DIVF = 17,
 
-    MINUS = 20,
-    BANG = 21,
+    EQUAL = 18,
+    NOTEQUAL = 19,
+    GREATERTHAN = 20,
+    LESSTHAN = 21,
+    LESSEQUAL = 22,
+    GREATEREQUAL = 23,
 
-    JMPF = 22,
-    JMP = 23,
+    MINUS = 24,
+    BANG = 25,
 
-    SGLOBAL = 24,
-    GGLOBAL = 25,
+    JMPF = 26,
+    JMP = 27,
 
-    CALL = 26,
-    BCALL = 27,
-    RET = 28,
-    RETN = 29,
+    SGLOBAL = 28,
+    GGLOBAL = 29,
 
-    MOVE = 30,
-    PUSH = 31,
+    CALL = 30,
+    BCALL = 31,
+    RET = 32,
+    RETN = 33,
+
+    MOVE = 34,
+    PUSH = 35,
 };
 
 // Maybe make a struct InstructionHandler to encode/decode
@@ -74,6 +79,45 @@ pub inline fn ENCODE_BINARY(operator: TokenType, r_dest: u8, ra: u8, rb: u8) Ins
         .MINUS => .SUB,
         .ASTERISK => .MUL,
         .FSLASH => .DIV,
+
+        .NOT_EQUAL => .NOTEQUAL,
+        .EQUAL_EQUAL => .EQUAL,
+        .GREATERT => .GREATERTHAN,
+        .LESST => .LESSTHAN,
+        .LESS_EQUAL => .LESSEQUAL,
+        .GREATER_EQUAL => .GREATEREQUAL,
+        else => return 0,
+    };
+
+    return I(@intFromEnum(opcode)) << 26 | (I(r_dest) << 18) | (I(ra) << 10) | rb;
+}
+
+pub inline fn ENCODE_BINARY_I(operator: TokenType, r_dest: u8, ra: u8, rb: u8) Instruction {
+    const opcode: Opcode = switch (operator) {
+        .PLUS => .ADDI,
+        .MINUS => .SUBI,
+        .ASTERISK => .MULI,
+        .FSLASH => .DIVI,
+
+        .NOT_EQUAL => .NOTEQUAL,
+        .EQUAL_EQUAL => .EQUAL,
+        .GREATERT => .GREATERTHAN,
+        .LESST => .LESSTHAN,
+        .LESS_EQUAL => .LESSEQUAL,
+        .GREATER_EQUAL => .GREATEREQUAL,
+        else => return 0,
+    };
+
+    return I(@intFromEnum(opcode)) << 26 | (I(r_dest) << 18) | (I(ra) << 10) | rb;
+}
+
+pub inline fn ENCODE_BINARY_F(operator: TokenType, r_dest: u8, ra: u8, rb: u8) Instruction {
+    const opcode: Opcode = switch (operator) {
+        .PLUS => .ADDF,
+        .MINUS => .SUBF,
+        .ASTERISK => .MULF,
+        .FSLASH => .DIVF,
+
         .NOT_EQUAL => .NOTEQUAL,
         .EQUAL_EQUAL => .EQUAL,
         .GREATERT => .GREATERTHAN,
