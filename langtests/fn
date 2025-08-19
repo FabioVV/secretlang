@@ -1,0 +1,2 @@
+@print(fn(a){return a * a}(5) / fn(b){return b * b}(5))
+

@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const is_debug = @import("builtin").mode == .Debug;
 
 const REPL = @import("repl.zig");
 const errh = @import("error.zig");
@@ -128,15 +129,21 @@ pub fn main() !void {
         }
     }
 
-    const allocator = gpa.allocator();
+    var allocator: std.mem.Allocator = undefined;
+    if (is_debug) {
+        allocator = gpa.allocator();
+    } else {
+        _ = gpa.deinit();
+        allocator = std.heap.raw_c_allocator;
+    }
 
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
 
     if (args.len < 2) {
         const binary_name = std.fs.path.basename(args[0]);
-        errh.printErrorComptime(allocator, "usage: {s} <filepath> [options] \n", .{binary_name});
-        errh.printErrorComptime(allocator, "     or: {s} --repl\n", .{binary_name});
+        errh.printErrorComptime(allocator, "\nusage: {s} <filepath> [options] \n", .{binary_name});
+        errh.printErrorComptime(allocator, "     or: {s} --repl\n\n", .{binary_name});
         return;
     }
 

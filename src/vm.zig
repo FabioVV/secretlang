@@ -462,20 +462,16 @@ pub const VM = struct {
         return true;
     }
 
-    inline fn mathAdd(self: *VM, instruction: Instruction) bool {
-        const RA = self.cregisters[(_instruction.DECODE_RA(instruction))];
-        const RB = self.cregisters[(_instruction.DECODE_RB(instruction))];
-        const RC = _instruction.DECODE_RC(instruction);
-
-        if (RA.isInt() and RB.isInt()) {
-            self.cregisters[RC] = Value{ .INT64 = RB.INT64 + RA.INT64 };
-            return true;
-        }
-
-        switch (RA) {
+    inline fn mathAdd(self: *VM, RA: Value, RB: Value, RC: u8) bool {
+        return switch (RA) {
             .INT64 => |a| switch (RB) {
+                .INT64 => |b| {
+                    self.cregisters[RC] = Value.createI64(b + a);
+                    return true;
+                },
                 .FLOAT64 => |b| {
                     self.cregisters[RC] = Value.createF64(b + @as(f64, @floatFromInt(a)));
+                    return true;
                 },
                 .OBJECT => |o| {
                     self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(o.data), @tagName(RA) });
@@ -489,9 +485,11 @@ pub const VM = struct {
             .FLOAT64 => |a| switch (RB) {
                 .INT64 => |b| {
                     self.cregisters[RC] = Value.createF64(@as(f64, @floatFromInt(b)) + a);
+                    return true;
                 },
                 .FLOAT64 => |b| {
                     self.cregisters[RC] = Value.createF64(b + a);
+                    return true;
                 },
                 .OBJECT => |o| {
                     self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(o.data), @tagName(RA) });
@@ -505,13 +503,14 @@ pub const VM = struct {
             .OBJECT => |a| switch (a.data) {
                 .STRING => |str_a| {
                     if (RB.asZigString()) |str_b| {
-                        const result = std.heap.page_allocator.alloc(u8, str_b.len + str_a.chars.len) catch unreachable;
+                        const result = self.allocator.alloc(u8, str_b.len + str_a.chars.len) catch unreachable;
                         @memcpy(result[0..str_b.len], str_b);
                         @memcpy(result[str_b.len..], str_a.chars);
 
-                        const value = Value.kidnapString(std.heap.page_allocator, result, self.strings, &self.objects);
+                        const value = Value.kidnapString(self.allocator, result, self.strings, &self.objects);
 
                         self.cregisters[RC] = value;
+                        return true;
                     } else {
                         self.rError("type error: operands must be both numeric or string, got {s} and {s}", .{ @tagName(RB), @tagName(a.data) });
                         return false;
@@ -526,23 +525,19 @@ pub const VM = struct {
                 self.rError("type error: operands must be both numeric or string, got {s}", .{@tagName(p)});
                 return false;
             },
-        }
-
-        return true;
+        };
     }
 
-    inline fn mathSub(self: *VM, instruction: Instruction) bool {
-        const RA = self.cregisters[_instruction.DECODE_RA(instruction)];
-        const RB = self.cregisters[_instruction.DECODE_RB(instruction)];
-        const RC = _instruction.DECODE_RC(instruction);
-
-        switch (RA) {
+    inline fn mathSub(self: *VM, RA: Value, RB: Value, RC: u8) bool {
+        return switch (RA) {
             .INT64 => |a| switch (RB) {
                 .INT64 => |b| {
                     self.cregisters[RC] = Value.createI64(b - a);
+                    return true;
                 },
                 .FLOAT64 => |b| {
                     self.cregisters[RC] = Value.createF64(b - @as(f64, @floatFromInt(a)));
+                    return true;
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
@@ -552,9 +547,11 @@ pub const VM = struct {
             .FLOAT64 => |a| switch (RB) {
                 .INT64 => |b| {
                     self.cregisters[RC] = Value.createF64(@as(f64, @floatFromInt(b)) - a);
+                    return true;
                 },
                 .FLOAT64 => |b| {
                     self.cregisters[RC] = Value.createF64(b - a);
+                    return true;
                 },
                 else => |p| {
                     self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
@@ -565,9 +562,7 @@ pub const VM = struct {
                 self.rError("type error: operands must be numeric, got {s}", .{@tagName(p)});
                 return false;
             },
-        }
-
-        return true;
+        };
     }
 
     inline fn mathMul(self: *VM, instruction: Instruction) bool { // add string multiplication
@@ -670,11 +665,12 @@ pub const VM = struct {
         var frame: *CallFrame = &self.frames.slice()[self.frameIndex];
         var pc: usize = 0;
         var instructions = frame.function.instructions.items;
+        //var cinstruction = instructions[pc];
 
-//         _value.printStdOut("Main function> \n", .{});
-//         for (0..frame.function.instructions.items.len) |i| {
-//             _value.printStdOut("{d}: {s}\n", .{ i, @tagName(_instruction.GET_OPCODE(frame.function.instructions.items[i])) });
-//         }
+        //         _value.printStdOut("Main function> \n", .{});
+        //         for (0..frame.function.instructions.items.len) |i| {
+        //             _value.printStdOut("{d}: {s}\n", .{ i, @tagName(_instruction.GET_OPCODE(frame.function.instructions.items[i])) });
+        //         }
 
         fetch: switch (_instruction.GET_OPCODE(instructions[pc])) {
             .LOADK => {
@@ -711,13 +707,23 @@ pub const VM = struct {
                 continue :fetch _instruction.GET_OPCODE(instructions[pc]);
             },
             .ADD => {
-                if (!self.mathAdd(instructions[pc])) return false;
+                const instr = instructions[pc];
+                const RA = self.cregisters[(_instruction.DECODE_RA(instr))];
+                const RB = self.cregisters[(_instruction.DECODE_RB(instr))];
+                const RC = _instruction.DECODE_RC(instr);
+
+                if (!self.mathAdd(RA, RB, RC)) return false;
 
                 pc += 1;
                 continue :fetch _instruction.GET_OPCODE(instructions[pc]);
             },
             .SUB => {
-                if (!self.mathSub(instructions[pc])) return false;
+                const instr = instructions[pc];
+                const RA = self.cregisters[(_instruction.DECODE_RA(instr))];
+                const RB = self.cregisters[(_instruction.DECODE_RB(instr))];
+                const RC = _instruction.DECODE_RC(instr);
+
+                if (!self.mathSub(RA, RB, RC)) return false;
 
                 pc += 1;
                 continue :fetch _instruction.GET_OPCODE(instructions[pc]);

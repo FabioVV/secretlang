@@ -530,17 +530,18 @@ pub const Compiler = struct {
                     AST.Expression.identifier_expr => |idenExpr| {
                         if (idenExpr.resolved_symbol != null and idenExpr.resolved_symbol.?.type == ValueTypes.NATIVEF) {
                             self.emitInstruction(_instruction.ENCODE_BCALL(result_reg, fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
-
-                            return null;
+                        } else {
+                            self.emitInstruction(_instruction.ENCODE_CALL(result_reg, fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
                         }
+                    },
+                    AST.Expression.fn_expr => {
+                        self.emitInstruction(_instruction.ENCODE_CALL(result_reg, fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
                     },
                     else => {
                         self.cError("tried calling non-function");
-                        return null;
                     },
                 }
 
-                self.emitInstruction(_instruction.ENCODE_CALL(result_reg, fn_register, @as(u8, @intCast(call_expr.arguments.slice().len))));
                 return null;
             },
             AST.Expression.identifier_expr => |idenExpr| {

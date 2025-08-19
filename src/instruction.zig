@@ -169,6 +169,10 @@ pub inline fn ENCODE_LOADK(r_dest: u8, constantIndex: u16) Instruction {
     return I(@intFromEnum(Opcode.LOADK)) << 26 | (I(r_dest) << 18) | I(constantIndex);
 }
 
+pub inline fn ENCODE_LOADI(r_dest: u8, num: u16) Instruction {
+    return I(@intFromEnum(Opcode.LOADI)) << 26 | (I(r_dest) << 18) | I(num);
+}
+
 pub inline fn ENCODE_MOVE(r_dest: u8, ra: u16) Instruction {
     return I(@intFromEnum(Opcode.MOVE)) << 26 | (I(r_dest) << 18) | (I(ra) << 10);
 }

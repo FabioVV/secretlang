@@ -255,8 +255,7 @@ pub const SemanticAnalyzer = struct {
                 }
 
                 self.analyzeExpression(callExpr.function);
-                // infer types maybe? or add gradual typing
-                _value.printStdOut("fn: {s}\n", .{callExpr.function.?.*.identifier_expr.literal});
+                //                 _value.printStdOut("fn: {s}\n", .{callExpr.function.?.*.identifier_expr.literal});
             },
             else => {
                 self.sError("unhandled expression during semantic analysis: {any}", .{self.cur_node.expression});

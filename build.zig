@@ -34,6 +34,9 @@ pub fn build(b: *std.Build) void {
         .root_module = exe_mod,
     });
 
+    // Linking libc for the C allocator
+    exe.linkLibC();
+
     //Generate ASM file
     const installAsm = b.addInstallBinFile(exe.getEmittedAsm(), "secret" ++ ".s");
     b.getInstallStep().dependOn(&installAsm.step);
